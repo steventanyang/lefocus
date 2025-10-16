@@ -1,49 +1,147 @@
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+type SoundType = "Binaural" | "BrownNoise" | "Rain";
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+function App() {
+  const [soundType, setSoundType] = useState<SoundType>("Binaural");
+  const [leftFreq, setLeftFreq] = useState(200);
+  const [rightFreq, setRightFreq] = useState(204);
+  const [volume, setVolume] = useState(0.5);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function startAudio() {
+    try {
+      const result = await invoke<string>("start_audio", {
+        soundType,
+        leftFreq: soundType === "Binaural" ? leftFreq : null,
+        rightFreq: soundType === "Binaural" ? rightFreq : null,
+      });
+      setMessage(result);
+      setIsPlaying(true);
+      setIsPaused(false);
+
+      // Set initial volume
+      await invoke("set_volume", { volume });
+    } catch (error) {
+      setMessage(`Error: ${error}`);
+    }
+  }
+
+  async function stopAudio() {
+    try {
+      const result = await invoke<string>("stop_audio");
+      setMessage(result);
+      setIsPlaying(false);
+      setIsPaused(false);
+    } catch (error) {
+      setMessage(`Error: ${error}`);
+    }
+  }
+
+  async function togglePause() {
+    try {
+      const paused = await invoke<boolean>("toggle_pause");
+      setIsPaused(paused);
+      setMessage(paused ? "Paused" : "Playing");
+    } catch (error) {
+      setMessage(`Error: ${error}`);
+    }
+  }
+
+  async function handleVolumeChange(newVolume: number) {
+    setVolume(newVolume);
+    if (isPlaying) {
+      try {
+        await invoke("set_volume", { volume: newVolume });
+      } catch (error) {
+        setMessage(`Error: ${error}`);
+      }
+    }
   }
 
   return (
     <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+      <h1>LeFocus Audio MVP</h1>
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+      <div className="controls">
+        <div className="control-group">
+          <label>Sound Type:</label>
+          <select
+            value={soundType}
+            onChange={(e) => setSoundType(e.target.value as SoundType)}
+            disabled={isPlaying}
+          >
+            <option value="Binaural">Binaural Beats</option>
+            <option value="Rain">Rain Sounds</option>
+            <option value="BrownNoise">Brown Noise</option>
+          </select>
+        </div>
+
+        {soundType === "Binaural" && (
+          <div className="frequency-controls">
+            <div className="control-group">
+              <label>Left Ear Frequency: {leftFreq} Hz</label>
+              <input
+                type="range"
+                min="100"
+                max="800"
+                value={leftFreq}
+                onChange={(e) => setLeftFreq(Number(e.target.value))}
+                disabled={isPlaying}
+              />
+            </div>
+            <div className="control-group">
+              <label>Right Ear Frequency: {rightFreq} Hz</label>
+              <input
+                type="range"
+                min="100"
+                max="800"
+                value={rightFreq}
+                onChange={(e) => setRightFreq(Number(e.target.value))}
+                disabled={isPlaying}
+              />
+            </div>
+            <div className="beat-frequency">
+              <small>Beat Frequency: {Math.abs(rightFreq - leftFreq)} Hz</small>
+            </div>
+          </div>
+        )}
+
+        <div className="control-group">
+          <label>Volume: {Math.round(volume * 100)}%</label>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={volume}
+            onChange={(e) => handleVolumeChange(Number(e.target.value))}
+          />
+        </div>
+
+        <div className="button-group">
+          {!isPlaying ? (
+            <button onClick={startAudio} className="btn-primary">
+              Play
+            </button>
+          ) : (
+            <>
+              <button onClick={togglePause} className="btn-secondary">
+                {isPaused ? "Resume" : "Pause"}
+              </button>
+              <button onClick={stopAudio} className="btn-danger">
+                Stop
+              </button>
+            </>
+          )}
+        </div>
+
+        {message && <div className="message">{message}</div>}
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
     </main>
   );
 }
