@@ -137,6 +137,7 @@ function App() {
                 borderRadius: "4px",
                 overflow: "auto",
                 fontSize: "0.85em",
+                color: "#000",
               }}
             >
               {JSON.stringify(windowMetadata, null, 2)}
@@ -156,7 +157,7 @@ function App() {
         {ocrResult && (
           <div style={{ marginTop: "1.5rem" }}>
             <h3 style={{ fontSize: "1em", marginBottom: "0.5rem" }}>OCR Result:</h3>
-            <div style={{ background: "#f5f5f5", padding: "1rem", borderRadius: "4px" }}>
+            <div style={{ background: "#f5f5f5", padding: "1rem", borderRadius: "4px", color: "#000" }}>
               <div style={{ marginBottom: "0.5rem" }}>
                 <strong>Confidence:</strong> {(ocrResult.confidence * 100).toFixed(1)}%
               </div>
@@ -173,6 +174,7 @@ function App() {
                     borderRadius: "4px",
                     whiteSpace: "pre-wrap",
                     fontSize: "0.85em",
+                    color: "#000",
                   }}
                 >
                   {ocrResult.text || "(empty)"}
