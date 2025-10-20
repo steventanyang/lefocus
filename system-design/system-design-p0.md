@@ -128,19 +128,27 @@ Build a **deterministic, on-device Pomodoro companion** that:
 ```
 Timer Start Event
     ↓
-Spawn Tokio Task (sensing_loop)
+Spawn Tokio Tasks:
+  - sensing_loop (polling window metadata every 5s)
+  - screenshot_worker (processes screenshot requests)
+  - ocr_worker (processes OCR requests)
     ↓
-Every 5s: Call Swift → Get window metadata (bundleId, title, bounds)
+Every 5s: Poll window metadata + heartbeat
     ↓
-If window changed: Call Swift → Capture screenshot
+Send event to bounded channel → screenshot_worker
     ↓
-Compute pHash + SSIM (Rust, image crate)
+screenshot_worker: Capture & compute pHash
     ↓
-If visual change detected: Call Swift → Run OCR (Vision.framework)
+If visual change OR OCR cooldown elapsed:
+  Send to bounded channel → ocr_worker
     ↓
-Accumulate readings in Vec<ContextReading> (in-memory)
+ocr_worker: Run Vision OCR (non-blocking)
+    ↓
+Accumulate readings in bounded channel (backpressure-aware)
     ↓
 Timer End Event
+    ↓
+Collect all readings from channel
     ↓
 Run segmentation algorithm → Vec<Segment>
     ↓
@@ -196,7 +204,7 @@ import ScreenCaptureKit  // macOS 13+ screen capture API
 
 | Technology | Rationale |
 |------------|-----------|
-| **Tokio** | Async runtime for polling loops, non-blocking I/O |
+| **Tokio** | Async runtime for polling loops, non-blocking I/O, bounded channels (mpsc) for backpressure |
 | **SQLite** | Local persistence with ACID, query support for historical data |
 | **image-hasher** | Battle-tested pHash impl, avoid reinventing |
 | **image-compare** | SSIM calculation for structural change detection |
@@ -240,26 +248,72 @@ impl TimerController {
 #### Threading Model
 - Timer ticks on dedicated tokio task (1s interval)
 - Emits progress events to frontend via Tauri event system
-- On start: Spawns `sensing_pipeline` task
-- On stop: Cancels sensing task, triggers segmentation
+- On start: Spawns worker tasks:
+  - `sensing_loop` (polls window metadata)
+  - `screenshot_worker` (captures & processes screenshots)
+  - `ocr_worker` (runs Vision OCR)
+- On stop: Cancels all workers via `CancellationToken`, triggers segmentation
 
 ---
 
 ### 4.2 Context Sensing Pipeline
 
-**Responsibility:** Poll window metadata, capture screenshots, detect changes.
+**Responsibility:** Poll window metadata, capture screenshots, detect changes with backpressure handling.
 
-#### High-Level Loop
+#### Architecture Overview
+
+The sensing pipeline uses a **multi-task worker architecture** with bounded channels to prevent memory bloat and handle backpressure:
+
+```
+┌─────────────────┐
+│  sensing_loop   │  (Polls metadata every 5s, emits heartbeats)
+└────────┬────────┘
+         │ SensingEvent
+         ↓
+   ┌────────────────┐  (bounded, capacity=10)
+   │ event_channel  │
+   └────────┬───────┘
+            │
+     ┌──────┴────────┐
+     │               │
+     ↓               ↓
+┌────────────┐  ┌─────────────┐
+│screenshot_ │  │  ocr_worker │  (Separate workers)
+│  worker    │  │             │
+└─────┬──────┘  └──────┬──────┘
+      │                │
+      │ ContextReading │
+      └────────┬───────┘
+               ↓
+         ┌──────────────┐  (bounded, capacity=500)
+         │reading_channel│
+         └───────────────┘
+```
+
+#### Event Types
 ```rust
-async fn sensing_pipeline(
+enum SensingEvent {
+    WindowChange {
+        window: WindowMetadata,
+        timestamp: DateTime<Utc>,
+    },
+    Heartbeat {
+        window: WindowMetadata,
+        timestamp: DateTime<Utc>,
+    },
+}
+```
+
+#### Main Polling Loop
+```rust
+async fn sensing_loop(
     session_id: Uuid,
-    readings_buffer: Arc<Mutex<Vec<ContextReading>>>,
+    event_tx: mpsc::Sender<SensingEvent>,
     cancel_token: CancellationToken,
 ) -> Result<()> {
-    let mut interval = tokio::time::interval(Duration::from_secs(5));
+    let mut interval = tokio::time::interval(Duration::from_secs(POLL_INTERVAL_SECS));
     let mut last_window: Option<WindowMetadata> = None;
-    let mut last_phash: Option<ImageHash> = None;
-    let mut last_ocr_time = Instant::now();
+    let mut heartbeat_counter = 0;
 
     loop {
         tokio::select! {
@@ -269,45 +323,122 @@ async fn sensing_pipeline(
 
                 // 2. Check if window changed
                 let window_changed = last_window.as_ref()
-                    .map(|w| w.bundle_id != window.bundle_id || w.title != window.title)
+                    .map(|w| w.window_id != window.window_id)  // Use stable window ID
                     .unwrap_or(true);
 
-                // 3. Capture screenshot if changed
-                if window_changed {
-                    let screenshot = capture_active_window_screenshot(&window).await?;
-                    let phash = compute_phash(&screenshot);
+                heartbeat_counter += 1;
 
-                    // 4. Compute visual change
-                    let visual_change = if let Some(ref prev) = last_phash {
-                        hamming_distance(prev, &phash) >= PHASH_THRESHOLD
-                    } else {
-                        true
-                    };
-
-                    // 5. Run OCR if visual change + cooldown elapsed
-                    let mut ocr_text = None;
-                    if visual_change && last_ocr_time.elapsed() >= Duration::from_secs(15) {
-                        ocr_text = Some(run_ocr(&screenshot).await.ok());
-                        last_ocr_time = Instant::now();
-                    }
-
-                    // 6. Record reading
-                    let reading = ContextReading {
+                // 3. Emit event (WindowChange or Heartbeat)
+                let event = if window_changed {
+                    heartbeat_counter = 0;  // Reset on window change
+                    SensingEvent::WindowChange {
+                        window: window.clone(),
                         timestamp: Utc::now(),
-                        window_metadata: window.clone(),
-                        phash: phash.clone(),
-                        ocr_text,
-                    };
+                    }
+                } else if heartbeat_counter >= HEARTBEAT_INTERVAL_TICKS {
+                    // Periodic heartbeat even if window unchanged
+                    heartbeat_counter = 0;
+                    SensingEvent::Heartbeat {
+                        window: window.clone(),
+                        timestamp: Utc::now(),
+                    }
+                } else {
+                    // Skip this tick (no change, not time for heartbeat)
+                    last_window = Some(window);
+                    continue;
+                };
 
-                    readings_buffer.lock().unwrap().push(reading);
-
-                    last_phash = Some(phash);
+                // 4. Send to event channel with backpressure handling
+                match event_tx.try_send(event) {
+                    Ok(_) => {}
+                    Err(mpsc::error::TrySendError::Full(_)) => {
+                        log::warn!("Event channel full, dropping event (backpressure)");
+                        // Intentionally drop event under load
+                    }
+                    Err(mpsc::error::TrySendError::Closed(_)) => {
+                        log::error!("Event channel closed");
+                        break;
+                    }
                 }
 
                 last_window = Some(window);
             }
             _ = cancel_token.cancelled() => {
-                log::info!("Sensing pipeline cancelled");
+                log::info!("Sensing loop cancelled");
+                break;
+            }
+        }
+    }
+
+    Ok(())
+}
+```
+
+#### Screenshot Worker
+```rust
+async fn screenshot_worker(
+    mut event_rx: mpsc::Receiver<SensingEvent>,
+    reading_tx: mpsc::Sender<ContextReading>,
+    cancel_token: CancellationToken,
+) -> Result<()> {
+    let mut last_phash: Option<ImageHash> = None;
+    let mut last_screenshot_time = Instant::now();
+
+    loop {
+        tokio::select! {
+            Some(event) = event_rx.recv() => {
+                let (window, timestamp, is_heartbeat) = match event {
+                    SensingEvent::WindowChange { window, timestamp } => (window, timestamp, false),
+                    SensingEvent::Heartbeat { window, timestamp } => (window, timestamp, true),
+                };
+
+                // Rate limit screenshots (avoid excessive capture on heartbeats)
+                if is_heartbeat && last_screenshot_time.elapsed() < Duration::from_secs(15) {
+                    continue;  // Skip heartbeat screenshot if too soon
+                }
+
+                // 1. Capture screenshot (PNG/BGRA from Swift)
+                let screenshot_data = capture_active_window_screenshot(&window).await?;
+                let screenshot = image::load_from_memory(&screenshot_data)?;
+                last_screenshot_time = Instant::now();
+
+                // 2. Compute pHash
+                let phash = compute_phash(&screenshot);
+
+                // 3. Check for visual change
+                let visual_change = if let Some(ref prev) = last_phash {
+                    hamming_distance(prev, &phash) >= PHASH_THRESHOLD
+                } else {
+                    true
+                };
+
+                // 4. Create reading (OCR will be added later by ocr_worker)
+                let reading = ContextReading {
+                    timestamp,
+                    window_metadata: window.clone(),
+                    phash: phash.clone(),
+                    ssim_grid: None,
+                    ocr_text: None,
+                    ocr_confidence: None,
+                };
+
+                // 5. Send to reading channel
+                match reading_tx.try_send(reading) {
+                    Ok(_) => {}
+                    Err(mpsc::error::TrySendError::Full(_)) => {
+                        log::warn!("Reading channel full, coalescing heartbeat");
+                        // Under load, drop this reading (graceful degradation)
+                    }
+                    Err(mpsc::error::TrySendError::Closed(_)) => break,
+                }
+
+                // 6. If visual change, trigger OCR (via separate channel)
+                // (OCR worker implementation not shown here)
+
+                last_phash = Some(phash);
+            }
+            _ = cancel_token.cancelled() => {
+                log::info!("Screenshot worker cancelled");
                 break;
             }
         }
@@ -319,12 +450,30 @@ async fn sensing_pipeline(
 
 #### Sensing Configuration
 ```rust
-const POLL_INTERVAL_SECS: u64 = 5;
-const OCR_COOLDOWN_SECS: u64 = 15;
-const PHASH_THRESHOLD: u32 = 12;  // Hamming distance
-const SSIM_TILE_THRESHOLD: f64 = 0.75;  // Per-tile similarity
-const SCREENSHOT_MAX_WIDTH: u32 = 1280;  // Downscale target
+const POLL_INTERVAL_SECS: u64 = 5;           // Window metadata polling
+const HEARTBEAT_INTERVAL_TICKS: u32 = 3;     // Every 3 ticks (15s) without window change
+const OCR_COOLDOWN_SECS: u64 = 15;           // Min time between OCR runs
+const PHASH_THRESHOLD: u32 = 12;             // Hamming distance for visual change
+const SSIM_TILE_THRESHOLD: f64 = 0.75;       // Per-tile similarity (if used)
+const SCREENSHOT_MAX_WIDTH: u32 = 1280;      // Downscale target
+
+// Channel capacities (backpressure control)
+const EVENT_CHANNEL_CAPACITY: usize = 10;    // Sensing events
+const READING_CHANNEL_CAPACITY: usize = 500; // Context readings (25min @ 5s = 300)
+const OCR_CHANNEL_CAPACITY: usize = 20;      // OCR requests
 ```
+
+#### Backpressure Handling Strategy
+
+**When channels fill up:**
+1. **Event channel full** → Drop new events (prefer keeping system responsive)
+2. **Reading channel full** → Coalesce heartbeats (drop, keep window changes)
+3. **OCR channel full** → Skip OCR for this reading (degrade gracefully)
+
+**Rationale:** Under load (e.g., rapid window switching), we prioritize:
+- System responsiveness (don't block)
+- Key events (window changes > heartbeats)
+- Graceful degradation (lower confidence > crash)
 
 ---
 
@@ -337,53 +486,89 @@ const SCREENSHOT_MAX_WIDTH: u32 = 1280;  // Downscale target
 // TauriPlugin_MacOSSensing/Sources/MacOSSensing.swift
 
 @objc class MacOSSensingPlugin: NSObject {
+    // Cache SCWindow references by ID for fast lookup
+    private var windowCache: [CGWindowID: SCWindow] = [:]
+    private var lastCacheUpdate: Date = .distantPast
 
     // Get metadata of active window
-    @objc func getActiveWindowMetadata() -> [String: Any]? {
-        guard let app = NSWorkspace.shared.frontmostApplication,
-              let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else {
+    @objc func getActiveWindowMetadata() async -> [String: Any]? {
+        guard let app = NSWorkspace.shared.frontmostApplication else {
             return nil
         }
 
-        for window in windowList {
-            if window[kCGWindowOwnerPID as String] as? pid_t == app.processIdentifier {
-                return [
-                    "bundleId": app.bundleIdentifier ?? "",
-                    "title": window[kCGWindowName as String] as? String ?? "",
-                    "bounds": window[kCGWindowBounds as String] as? [String: CGFloat] ?? [:],
-                    "ownerName": window[kCGWindowOwnerName as String] as? String ?? ""
-                ]
-            }
+        // Refresh window cache if stale (every 5s)
+        if Date().timeIntervalSince(lastCacheUpdate) > 5.0 {
+            try? await refreshWindowCache()
         }
-        return nil
+
+        // Use ScreenCaptureKit to get window with stable ID
+        guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true),
+              let window = content.windows.first(where: {
+                  $0.owningApplication?.bundleIdentifier == app.bundleIdentifier &&
+                  $0.isOnScreen
+              }) else {
+            return nil
+        }
+
+        return [
+            "windowId": window.windowID,  // Stable CGWindowID (NOT frame equality!)
+            "bundleId": app.bundleIdentifier ?? "",
+            "title": window.title ?? "",
+            "bounds": [
+                "x": window.frame.origin.x,
+                "y": window.frame.origin.y,
+                "width": window.frame.size.width,
+                "height": window.frame.size.height
+            ],
+            "ownerName": window.owningApplication?.applicationName ?? ""
+        ]
     }
 
-    // Capture screenshot of active window
-    @objc func captureActiveWindowScreenshot(bounds: CGRect) async -> Data? {
-        // Use ScreenCaptureKit (macOS 13+)
-        guard let content = try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true) else {
-            return nil
+    // Capture screenshot of specific window by ID
+    @objc func captureActiveWindowScreenshot(windowId: CGWindowID) async -> Data? {
+        // Use cached window or refresh
+        if windowCache[windowId] == nil {
+            try? await refreshWindowCache()
         }
 
-        // Find window matching bounds
-        guard let window = content.windows.first(where: { $0.frame == bounds }) else {
+        guard let window = windowCache[windowId] else {
             return nil
         }
 
         let filter = SCContentFilter(desktopIndependentWindow: window)
         let config = SCStreamConfiguration()
-        config.width = Int(min(bounds.width, 1280))  // Respect max width
-        config.height = Int(bounds.height * (config.width / bounds.width))
+
+        // Downscale to max width (preserve aspect ratio)
+        let targetWidth = min(Int(window.frame.width), 1280)
+        let scale = CGFloat(targetWidth) / window.frame.width
+        config.width = targetWidth
+        config.height = Int(window.frame.height * scale)
         config.pixelFormat = kCVPixelFormatType_32BGRA
         config.showsCursor = false
 
-        guard let cgImage = try? await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config) else {
+        guard let cgImage = try? await SCScreenshotManager.captureImage(
+            contentFilter: filter,
+            configuration: config
+        ) else {
             return nil
         }
 
-        // Convert to grayscale PNG data
-        let nsImage = NSImage(cgImage: cgImage, size: NSSize(width: config.width, height: config.height))
-        return nsImage.tiffRepresentation  // Rust will decode + grayscale
+        // Convert to PNG (more efficient than TIFF, smaller size)
+        guard let bitmapRep = NSBitmapImageRep(cgImage: cgImage) else {
+            return nil
+        }
+
+        return bitmapRep.representation(using: .png, properties: [:])
+    }
+
+    // Helper: Refresh window cache
+    private func refreshWindowCache() async throws {
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        windowCache.removeAll()
+        for window in content.windows where window.isOnScreen {
+            windowCache[window.windowID] = window
+        }
+        lastCacheUpdate = Date()
     }
 
     // Run OCR on screenshot
@@ -440,9 +625,9 @@ async fn get_active_window_metadata<R: Runtime>(
 #[tauri::command]
 async fn capture_screenshot<R: Runtime>(
     app: tauri::AppHandle<R>,
-    bounds: WindowBounds,
+    window_id: u32,  // CGWindowID
 ) -> Result<Vec<u8>, String> {
-    app.call_plugin("macos-sensing", "captureActiveWindowScreenshot", bounds)
+    app.call_plugin("macos-sensing", "captureActiveWindowScreenshot", window_id)
         .await
         .map_err(|e| e.to_string())
 }
@@ -740,6 +925,7 @@ struct ContextReading {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct WindowMetadata {
+    window_id: u32,      // CGWindowID - stable identifier for window matching
     bundle_id: String,
     title: String,
     owner_name: String,
@@ -804,6 +990,7 @@ CREATE TABLE context_readings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT NOT NULL,
     timestamp TEXT NOT NULL,
+    window_id INTEGER NOT NULL,  -- CGWindowID for stable window identification
     bundle_id TEXT NOT NULL,
     window_title TEXT NOT NULL,
     owner_name TEXT NOT NULL,
@@ -1119,15 +1306,17 @@ mod db {
 - Migrations handled via schema version check
 
 **During Session:**
-- Readings accumulated in memory (`Vec<ContextReading>`)
+- Readings accumulated in bounded channel (`reading_channel`, capacity 500)
 - NOT persisted until session end (P0 simplification)
+- Channel backpressure prevents unbounded memory growth
 
 **On Session End:**
-1. Write all readings to `context_readings` table (batch insert)
-2. Run segmentation algorithm
-3. Write segments to `segments` table
-4. Update session status to `Completed`
-5. Drop in-memory readings (reclaim RAM)
+1. Drain `reading_channel` → collect all readings into `Vec<ContextReading>`
+2. Write all readings to `context_readings` table (batch insert, single transaction)
+3. Run segmentation algorithm on collected readings
+4. Write segments to `segments` table
+5. Update session status to `Completed`
+6. Drop channel and collected readings (reclaim RAM)
 
 **Retention Policy (Future):**
 - P0: Keep all sessions indefinitely
@@ -1160,16 +1349,30 @@ mod db {
 |-----------|--------------|------|-------|
 | React app | ~50 MB | ~70 MB | DOM + state |
 | Tauri runtime | ~30 MB | ~40 MB | WebView bridge |
-| Rust backend | ~50 MB | ~80 MB | Tokio threads + buffers |
-| In-memory readings | ~20 MB | ~50 MB | 300 readings @ ~100KB each |
-| Screenshot buffers | ~10 MB | ~30 MB | 2-3 concurrent buffers |
+| Rust backend | ~50 MB | ~80 MB | Tokio threads + task overhead |
+| **Bounded channels** | **~15 MB** | **~25 MB** | **See breakdown below** |
+| Screenshot buffers | ~10 MB | ~20 MB | 1-2 concurrent (processed immediately) |
 | SQLite cache | ~20 MB | ~30 MB | Read cache |
-| **Total** | **~180 MB** | **~300 MB** | **Target met** |
+| **Total** | **~175 MB** | **~295 MB** | **Target met** |
+
+#### Channel Memory Breakdown
+
+| Channel | Capacity | Item Size | Memory |
+|---------|----------|-----------|--------|
+| `event_channel` | 10 | ~200 bytes | ~2 KB |
+| `reading_channel` | 500 | ~100 KB | ~50 MB (peak) |
+| `ocr_channel` | 20 | ~50 KB | ~1 MB |
+
+**Note:** `reading_channel` peak assumes worst-case (all slots filled). In practice:
+- Heartbeats coalesced under load (fewer items)
+- Channel drains at session end → memory freed
+- Steady-state: ~150-200 readings (15-20 MB)
 
 **Mitigation strategies:**
-- Drop screenshot data immediately after pHash/OCR
-- Use `Arc<Mutex<Vec>>` for readings (single allocation)
-- Batch database writes (avoid per-reading transaction overhead)
+- Drop screenshot data immediately after pHash computation
+- Use bounded channels with backpressure (prevent unbounded growth)
+- Coalesce heartbeats when channels approach capacity
+- Batch database writes at session end (avoid per-reading overhead)
 
 ### 9.3 Battery Impact
 
@@ -1271,17 +1474,33 @@ let title = metadata.title.unwrap_or_else(|| "[Untitled]".to_string());
 
 ### 10.5 Memory Pressure
 
-#### Scenario: Readings buffer exceeds 300 MB
+#### Scenario: Reading channel approaching capacity
 
-**Mitigation:**
+**Mitigation:** Built-in via bounded channels with backpressure.
+
 ```rust
-if readings_buffer.lock().unwrap().len() > 3000 {
-    log::warn!("Readings buffer overflow, dropping oldest 1000 entries");
-    readings_buffer.lock().unwrap().drain(0..1000);
+// In screenshot_worker, when sending readings:
+match reading_tx.try_send(reading) {
+    Ok(_) => {}
+    Err(mpsc::error::TrySendError::Full(reading)) => {
+        // Channel full - apply backpressure
+        if reading.is_heartbeat {
+            log::warn!("Reading channel full, dropping heartbeat (backpressure)");
+            // Drop heartbeats first (least important)
+        } else {
+            // If window change, wait briefly then retry
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let _ = reading_tx.send(reading).await;  // Blocking send
+        }
+    }
+    Err(mpsc::error::TrySendError::Closed(_)) => break,
 }
 ```
 
-**Impact:** Oldest context data lost, but session continues. Summary will have gap.
+**Impact:**
+- Heartbeats dropped first (graceful degradation)
+- Window changes preserved (blocking send with backpressure)
+- Memory bounded at `READING_CHANNEL_CAPACITY * ~100KB = 50 MB` max
 
 ---
 
@@ -1314,17 +1533,17 @@ if readings_buffer.lock().unwrap().len() > 3000 {
 
 ### Phase 3: Sensing Pipeline (Week 3)
 
-**Goal:** Context readings collected during session
+**Goal:** Context readings collected during session with worker architecture
 
-- [ ] Implement `sensing_pipeline` tokio task
-- [ ] Poll window metadata every 5s
-- [ ] Capture screenshot on window change
-- [ ] Compute pHash using `image-hasher`
-- [ ] Run OCR with 15s cooldown
-- [ ] Accumulate readings in `Arc<Mutex<Vec<ContextReading>>>`
-- [ ] Persist readings to SQLite on session end
+- [ ] Implement bounded channels (`event_channel`, `reading_channel`, `ocr_channel`)
+- [ ] Implement `sensing_loop` tokio task (polls metadata, emits heartbeats)
+- [ ] Implement `screenshot_worker` task (captures + pHash)
+- [ ] Implement `ocr_worker` task (Vision OCR processing)
+- [ ] Add backpressure handling (try_send, drop heartbeats on full)
+- [ ] Wire up window_id-based window matching (via cache)
+- [ ] Persist readings to SQLite on session end (drain channel)
 
-**Deliverable:** Session produces `context_readings` table rows.
+**Deliverable:** Session produces `context_readings` table rows with stable window IDs.
 
 ### Phase 4: Segmentation (Week 4)
 
@@ -1477,18 +1696,19 @@ if cfg!(debug_assertions) {
    - Option B: Query `NSWorkspace.shared.runningApplications` for localized name
    - **Decision:** Use Option B for P0.
 
-2. **Screenshot grayscale conversion:** Where to do it?
-   - Option A: Swift plugin returns grayscale PNG
-   - Option B: Rust decodes color, converts to grayscale
-   - **Decision:** Rust-side (more control over format).
+2. **Screenshot format:** PNG or TIFF? Color or grayscale?
+   - **Decision:** Swift returns PNG (smaller, faster to decode). Rust converts to grayscale for pHash.
 
-3. **pHash caching:** Should we cache pHash of previous frame?
-   - **Decision:** Yes, store `last_phash: Option<ImageHash>` in sensing loop.
+3. **Window matching:** Use frame bounds or stable identifier?
+   - **Decision:** Use `CGWindowID` (stable identifier) with cached `SCWindow` references. Avoids fragile float equality.
 
-4. **SSIM grid usage:** Do we need it for P0, or is pHash sufficient?
+4. **pHash caching:** Should we cache pHash of previous frame?
+   - **Decision:** Yes, store `last_phash: Option<ImageHash>` in screenshot_worker.
+
+5. **SSIM grid usage:** Do we need it for P0, or is pHash sufficient?
    - **Decision:** Implement pHash first, add SSIM only if accuracy issues arise.
 
-5. **Database vacuuming:** When to compact SQLite DB?
+6. **Database vacuuming:** When to compact SQLite DB?
    - **Decision:** P1 concern. P0 DB stays small (< 10 MB).
 
 ### 13.2 Assumptions to Validate
@@ -1594,6 +1814,9 @@ lefocus/
 | **Confidence score** | 0.0-1.0 metric indicating reliability of segment classification |
 | **Sandwich merge** | Merging segments when brief interruption occurs (A → B → A becomes A with interruption) |
 | **Transitioning segment** | Special segment capturing rapid switching behavior (≥3 switches/60s) |
+| **Heartbeat** | Periodic context sample taken even when window hasn't changed (every 15s) |
+| **Backpressure** | Flow control mechanism where bounded channels drop/delay events when full |
+| **CGWindowID** | Stable macOS window identifier used instead of frame bounds for matching |
 
 ---
 
