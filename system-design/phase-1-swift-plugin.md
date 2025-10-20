@@ -264,6 +264,7 @@ public class MacOSSensingPlugin {
     private var windowCache: [CGWindowID: SCWindow] = [:]
     private var lastCacheUpdate: Date = .distantPast
     private var lastActiveWindowId: CGWindowID?
+    private let stateQueue = DispatchQueue(label: "MacOSSensing.State")
 
     // Reusable OCR request (pre-warmed)
     private lazy var ocrRequest: VNRecognizeTextRequest = {
@@ -295,7 +296,11 @@ public class MacOSSensingPlugin {
         }
 
         // 3. Resolve window by stable ID if available, otherwise pick first on-screen for frontmost app
-        if let last = lastActiveWindowId, let cached = windowCache[last] {
+        let cachedFromId: SCWindow? = stateQueue.sync {
+            if let last = lastActiveWindowId { return windowCache[last] }
+            return nil
+        }
+        if let cached = cachedFromId {
             let bundleId = app.bundleIdentifier ?? ""
             if cached.owningApplication?.bundleIdentifier == bundleId {
                 return WindowMetadataFFI(
@@ -325,7 +330,7 @@ public class MacOSSensingPlugin {
         }
 
         // 4. Cache ID and convert to FFI struct
-        lastActiveWindowId = window.windowID
+        stateQueue.sync { lastActiveWindowId = window.windowID }
         let bundleId = app.bundleIdentifier ?? ""
         let title = window.title ?? ""
         let ownerName = window.owningApplication?.applicationName ?? ""
@@ -347,11 +352,13 @@ public class MacOSSensingPlugin {
             false,
             onScreenWindowsOnly: true
         )
-        windowCache.removeAll()
-        for window in content.windows where window.isOnScreen {
-            windowCache[window.windowID] = window
+        stateQueue.sync {
+            windowCache.removeAll()
+            for window in content.windows where window.isOnScreen {
+                windowCache[window.windowID] = window
+            }
+            lastCacheUpdate = Date()
         }
-        lastCacheUpdate = Date()
     }
 
     // MARK: - Screenshot Capture
@@ -362,11 +369,10 @@ public class MacOSSensingPlugin {
         defer { captureSemaphore.signal() }
 
         // 1. Get window from cache
-        if windowCache[windowId] == nil {
-            try await refreshWindowCache()
-        }
+        let hasWindow = stateQueue.sync { windowCache[windowId] != nil }
+        if !hasWindow { try await refreshWindowCache() }
 
-        guard let window = windowCache[windowId] else {
+        guard let window = stateQueue.sync(execute: { windowCache[windowId] }) else {
             throw NSError(domain: "MacOSSensing", code: 3, userInfo: [
                 NSLocalizedDescriptionKey: "Window not found: \(windowId)"
             ])
@@ -421,36 +427,25 @@ public class MacOSSensingPlugin {
                     ])
                 }
 
-                // 2. Perform OCR (reuse pre-warmed request) on serial queue
-                let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-                try ocrQueue.sync {
+                // 2. Perform OCR and extract results under serial queue
+                let (recognizedText, avgConfidence, wordCount): (String, Double, Int) = try ocrQueue.sync {
+                    let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
                     try handler.perform([self.ocrRequest])
+                    guard let observations = self.ocrRequest.results as? [VNRecognizedTextObservation] else {
+                        return ("", 0.0, 0)
+                    }
+                    let text = observations
+                        .compactMap { $0.topCandidates(1).first?.string }
+                        .joined(separator: "\n")
+                    let confidences = observations.compactMap { $0.topCandidates(1).first?.confidence }
+                    let avg = confidences.isEmpty ? 0.0 : confidences.reduce(0, +) / Double(confidences.count)
+                    return (text, avg, observations.count)
                 }
-
-                guard let observations = self.ocrRequest.results as? [VNRecognizedTextObservation] else {
-                    return OCRResultFFI(
-                        textPtr: strdup(""),
-                        confidence: 0.0,
-                        wordCount: 0
-                    )
-                }
-
-                // 3. Extract results
-                let recognizedText = observations
-                    .compactMap { $0.topCandidates(1).first?.string }
-                    .joined(separator: "\n")
-
-                let confidences = observations.compactMap {
-                    $0.topCandidates(1).first?.confidence
-                }
-                let avgConfidence = confidences.isEmpty
-                    ? 0.0
-                    : confidences.reduce(0, +) / Double(confidences.count)
 
                 return OCRResultFFI(
                     textPtr: recognizedText.withCString { strdup($0) },
                     confidence: avgConfidence,
-                    wordCount: observations.count
+                    wordCount: wordCount
                 )
             }  // autoreleasepool ends here - Vision objects drained
         }.value
