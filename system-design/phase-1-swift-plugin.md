@@ -13,6 +13,7 @@
 This document specifies **Phase 1** of the LeFocus P0 implementation: building a compiled Swift plugin (dylib) that exposes macOS screen APIs to Rust via FFI.
 
 **Phase 1 Goal:** By the end of this phase, we have a working `.dylib` that Rust can call directly to:
+
 1. Get active window metadata (bundle ID, title, window ID)
 2. Capture screenshots of specific windows (PNG format)
 3. Run OCR on images (Vision.framework)
@@ -41,6 +42,7 @@ This document specifies **Phase 1** of the LeFocus P0 implementation: building a
 ### 1.1 Why Compiled Plugin from Start?
 
 Building the compiled plugin upfront provides:
+
 - **Production-ready performance:** < 1ms FFI overhead (vs 50-100ms process spawn)
 - **State persistence:** Window cache + reusable OCR request handler
 - **No migration work:** 9 days upfront vs 6+4 days (script + migration)
@@ -49,6 +51,7 @@ Building the compiled plugin upfront provides:
 ### 1.2 What We're Learning
 
 This phase teaches you:
+
 - Swift-Rust FFI (C ABI bridge)
 - `build.rs` for compiling Swift code
 - Memory management across FFI boundary
@@ -162,6 +165,9 @@ fn main() {
         println!("cargo:rustc-link-search=native={}/plugins/macos-sensing/.build/release", manifest_dir);
         println!("cargo:rustc-link-lib=dylib=MacOSSensing");
 
+        // Ensure the dynamic loader can find the dylib in bundle Frameworks at runtime
+        println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../Frameworks");
+
         // 3. Recompile if Swift source changes
         println!("cargo:rerun-if-changed={}/plugins/macos-sensing/Sources", manifest_dir);
     }
@@ -221,22 +227,6 @@ src-tauri/plugins/macos-sensing/.swiftpm/
 
 import Foundation
 
-// C-compatible result buffer
-public struct FFIBuffer {
-    public let data: UnsafeMutablePointer<UInt8>
-    public let length: Int
-
-    init(data: Data) {
-        self.length = data.count
-        self.data = UnsafeMutablePointer<UInt8>.allocate(capacity: data.count)
-        data.copyBytes(to: self.data, count: data.count)
-    }
-
-    func toPointer() -> UnsafeMutableRawPointer {
-        UnsafeMutableRawPointer(self.data)
-    }
-}
-
 // Result struct for window metadata
 public struct WindowMetadataFFI {
     public var windowId: UInt32
@@ -273,6 +263,7 @@ public class MacOSSensingPlugin {
     // Window cache (refreshed every 5s)
     private var windowCache: [CGWindowID: SCWindow] = [:]
     private var lastCacheUpdate: Date = .distantPast
+    private var lastActiveWindowId: CGWindowID?
 
     // Reusable OCR request (pre-warmed)
     private lazy var ocrRequest: VNRecognizeTextRequest = {
@@ -281,6 +272,10 @@ public class MacOSSensingPlugin {
         req.usesLanguageCorrection = false
         return req
     }()
+
+    // Concurrency caps
+    private let captureSemaphore = DispatchSemaphore(value: 1)
+    private let ocrQueue = DispatchQueue(label: "MacOSSensing.OCR")
 
     private init() {}
 
@@ -299,7 +294,23 @@ public class MacOSSensingPlugin {
             try await refreshWindowCache()
         }
 
-        // 3. Find window by bundle ID
+        // 3. Resolve window by stable ID if available, otherwise pick first on-screen for frontmost app
+        if let last = lastActiveWindowId, let cached = windowCache[last] {
+            let bundleId = app.bundleIdentifier ?? ""
+            if cached.owningApplication?.bundleIdentifier == bundleId {
+                return WindowMetadataFFI(
+                    windowId: cached.windowID,
+                    bundleIdPtr: bundleId.withCString { strdup($0) },
+                    titlePtr: (cached.title ?? "").withCString { strdup($0) },
+                    ownerNamePtr: (cached.owningApplication?.applicationName ?? "").withCString { strdup($0) },
+                    boundsX: cached.frame.origin.x,
+                    boundsY: cached.frame.origin.y,
+                    boundsWidth: cached.frame.size.width,
+                    boundsHeight: cached.frame.size.height
+                )
+            }
+        }
+
         guard let content = try? await SCShareableContent.excludingDesktopWindows(
             false,
             onScreenWindowsOnly: true
@@ -313,16 +324,17 @@ public class MacOSSensingPlugin {
             ])
         }
 
-        // 4. Convert to FFI struct
+        // 4. Cache ID and convert to FFI struct
+        lastActiveWindowId = window.windowID
         let bundleId = app.bundleIdentifier ?? ""
         let title = window.title ?? ""
         let ownerName = window.owningApplication?.applicationName ?? ""
 
         return WindowMetadataFFI(
             windowId: window.windowID,
-            bundleIdPtr: strdup(bundleId),
-            titlePtr: strdup(title),
-            ownerNamePtr: strdup(ownerName),
+            bundleIdPtr: bundleId.withCString { strdup($0) },
+            titlePtr: title.withCString { strdup($0) },
+            ownerNamePtr: ownerName.withCString { strdup($0) },
             boundsX: window.frame.origin.x,
             boundsY: window.frame.origin.y,
             boundsWidth: window.frame.size.width,
@@ -345,6 +357,10 @@ public class MacOSSensingPlugin {
     // MARK: - Screenshot Capture
 
     public func captureScreenshot(windowId: UInt32) async throws -> Data {
+        // Serialize captures to avoid overlap
+        captureSemaphore.wait()
+        defer { captureSemaphore.signal() }
+
         // 1. Get window from cache
         if windowCache[windowId] == nil {
             try await refreshWindowCache()
@@ -405,9 +421,11 @@ public class MacOSSensingPlugin {
                     ])
                 }
 
-                // 2. Perform OCR (reuse pre-warmed request)
+                // 2. Perform OCR (reuse pre-warmed request) on serial queue
                 let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-                try handler.perform([self.ocrRequest])
+                try ocrQueue.sync {
+                    try handler.perform([self.ocrRequest])
+                }
 
                 guard let observations = self.ocrRequest.results as? [VNRecognizedTextObservation] else {
                     return OCRResultFFI(
@@ -430,7 +448,7 @@ public class MacOSSensingPlugin {
                     : confidences.reduce(0, +) / Double(confidences.count)
 
                 return OCRResultFFI(
-                    textPtr: strdup(recognizedText),
+                    textPtr: recognizedText.withCString { strdup($0) },
                     confidence: avgConfidence,
                     wordCount: observations.count
                 )
@@ -451,24 +469,24 @@ import Foundation
 
 @_cdecl("get_active_window_metadata_ffi")
 public func getActiveWindowMetadataFFI() -> UnsafeMutablePointer<WindowMetadataFFI>? {
-    let result = UnsafeMutablePointer<WindowMetadataFFI>.allocate(capacity: 1)
+    var metadata: WindowMetadataFFI?
+    let semaphore = DispatchSemaphore(value: 0)
 
     Task {
+        defer { semaphore.signal() }
         do {
-            let metadata = try await MacOSSensingPlugin.shared.getActiveWindowMetadata()
-            result.pointee = metadata
+            metadata = try await MacOSSensingPlugin.shared.getActiveWindowMetadata()
         } catch {
-            // Return null on error
-            result.deallocate()
-            return
+            metadata = nil
         }
     }
 
-    // Note: This is blocking the calling thread until async completes
-    // We need to use a semaphore for proper async-to-sync bridge
-    RunLoop.current.run(until: Date(timeIntervalSinceNow: 2.0))
+    semaphore.wait()
 
-    return result
+    guard let md = metadata else { return nil }
+    let ptr = UnsafeMutablePointer<WindowMetadataFFI>.allocate(capacity: 1)
+    ptr.pointee = md
+    return ptr
 }
 
 @_cdecl("capture_screenshot_ffi")
@@ -883,6 +901,7 @@ export default App;
 ### 8.3 Manual Testing Workflow
 
 **Step 1: Test Get Window**
+
 1. Open VS Code (or any app with visible text)
 2. Click "Test Get Window"
 3. Verify output contains:
@@ -892,6 +911,7 @@ export default App;
    - Non-zero `bounds`
 
 **Step 2: Test Screenshot**
+
 1. Ensure window from Step 1 is visible
 2. Click "Test Capture"
 3. Verify:
@@ -901,6 +921,7 @@ export default App;
    - Check dimensions ≤ 1280px width
 
 **Step 3: Test OCR**
+
 1. Ensure screenshot from Step 2 exists
 2. Click "Test OCR"
 3. Verify:
@@ -917,6 +938,7 @@ export default App;
 **Error: `dyld: Library not loaded: @rpath/libMacOSSensing.dylib`**
 
 Solution: Add to `build.rs`:
+
 ```rust
 println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../Frameworks");
 ```
@@ -924,6 +946,7 @@ println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../Frameworks");
 **Error: Swift compilation failed**
 
 Check:
+
 - macOS version ≥ 13.0
 - Xcode command line tools installed: `xcode-select --install`
 - Swift version ≥ 5.9: `swift --version`
@@ -931,6 +954,7 @@ Check:
 **Error: `ScreenCaptureKit not found`**
 
 Solution: Ensure `Package.swift` has:
+
 ```swift
 .linkedFramework("ScreenCaptureKit")
 ```
@@ -940,13 +964,14 @@ Solution: Ensure `Package.swift` has:
 **Error: Window metadata returns null**
 
 Check:
+
 - Screen Recording permission granted
 - Active app has visible windows
-- ScreenCaptureKit permission in `Info.plist`
 
 **Error: Screenshot capture fails**
 
 Debug:
+
 1. Check window ID is valid (from Step 1)
 2. Check window is still on screen
 3. Add logging to Swift code
@@ -954,6 +979,7 @@ Debug:
 **Error: OCR returns empty text**
 
 Check:
+
 - Image data is valid PNG
 - Image contains readable text
 - Vision framework permission
@@ -962,20 +988,20 @@ Check:
 
 ## 10. Acceptance Criteria
 
-| Criterion | Pass Condition |
-|-----------|----------------|
-| **Build Success** | `cargo build` completes, dylib exists |
-| **FFI Call Works** | No crashes, returns valid data |
-| **Get Window** | Returns valid metadata for frontmost window |
-| **Window ID** | `window_id` is non-zero and type `u32` |
-| **Bundle ID** | Matches actual frontmost app |
-| **Screenshot Format** | PNG file, valid image, opens correctly |
-| **Screenshot Size** | Width ≤ 1280px, aspect ratio preserved |
-| **Screenshot Content** | Visual content matches active window |
-| **OCR Text** | Recognizes visible text from screenshot |
-| **OCR Confidence** | Value between 0.0-1.0 |
-| **Memory Safety** | No leaks detected (via Instruments) |
-| **Performance** | Get window: < 10ms, Screenshot: < 500ms, OCR: < 1s |
+| Criterion              | Pass Condition                                     |
+| ---------------------- | -------------------------------------------------- |
+| **Build Success**      | `cargo build` completes, dylib exists              |
+| **FFI Call Works**     | No crashes, returns valid data                     |
+| **Get Window**         | Returns valid metadata for frontmost window        |
+| **Window ID**          | `window_id` is non-zero and type `u32`             |
+| **Bundle ID**          | Matches actual frontmost app                       |
+| **Screenshot Format**  | PNG file, valid image, opens correctly             |
+| **Screenshot Size**    | Width ≤ 1280px, aspect ratio preserved             |
+| **Screenshot Content** | Visual content matches active window               |
+| **OCR Text**           | Recognizes visible text from screenshot            |
+| **OCR Confidence**     | Value between 0.0-1.0                              |
+| **Memory Safety**      | No leaks detected (via Instruments)                |
+| **Performance**        | Get window: < 10ms, Screenshot: < 500ms, OCR: < 1s |
 
 ---
 
