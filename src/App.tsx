@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
@@ -27,6 +27,10 @@ function App() {
   const [ocrResult, setOCRResult] = useState<OCRResult | null>(null);
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState<string>("");
+  const [isAutoLooping, setIsAutoLooping] = useState(false);
+  const [countdown, setCountdown] = useState(5);
+  const intervalRef = useRef<number | null>(null);
+  const countdownRef = useRef<number | null>(null);
 
   async function handleGetWindow() {
     setError("");
@@ -87,6 +91,74 @@ function App() {
     }
   }
 
+  async function runFullPipeline() {
+    try {
+      // Step 1: Get window
+      setError("");
+      setLoading("Getting active window...");
+      const metadata = await invoke<WindowMetadata>("test_get_window");
+      setWindowMetadata(metadata);
+
+      // Step 2: Capture screenshot
+      setLoading("Capturing screenshot...");
+      const screenshotMsg = await invoke<string>("test_capture_screenshot", {
+        windowId: metadata.window_id,
+      });
+      setScreenshotStatus(screenshotMsg);
+
+      // Step 3: Run OCR
+      setLoading("Running OCR...");
+      const ocr = await invoke<OCRResult>("test_run_ocr", {
+        imagePath: "/tmp/lefocus_test_screenshot.png",
+      });
+      setOCRResult(ocr);
+      setLoading("");
+    } catch (err) {
+      setError(`Pipeline failed: ${err}`);
+      setLoading("");
+    }
+  }
+
+  function toggleAutoLoop() {
+    if (isAutoLooping) {
+      // Stop the loop
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+      setIsAutoLooping(false);
+      setCountdown(5);
+    } else {
+      // Start the loop
+      setIsAutoLooping(true);
+      runFullPipeline(); // Run immediately
+      setCountdown(5);
+
+      // Run every 5 seconds
+      intervalRef.current = window.setInterval(() => {
+        runFullPipeline();
+        setCountdown(5);
+      }, 5000);
+
+      // Countdown timer
+      countdownRef.current = window.setInterval(() => {
+        setCountdown((prev) => (prev > 0 ? prev - 1 : 5));
+      }, 1000);
+    }
+  }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, []);
+
   return (
     <main className="container">
       <h1>LeFocus Swift Plugin Test</h1>
@@ -95,21 +167,31 @@ function App() {
       </p>
 
       <div className="controls">
+        <div style={{ marginBottom: "1.5rem" }}>
+          <button
+            onClick={toggleAutoLoop}
+            className={isAutoLooping ? "btn-danger" : "btn-primary"}
+            style={{ fontSize: "1.1em", padding: "0.75rem 1.5rem" }}
+          >
+            {isAutoLooping ? `Stop Auto Loop (next in ${countdown}s)` : "Start Auto Loop (5s)"}
+          </button>
+        </div>
+
         <div className="button-group" style={{ gap: "1rem", marginBottom: "1.5rem" }}>
-          <button onClick={handleGetWindow} className="btn-primary" disabled={!!loading}>
+          <button onClick={handleGetWindow} className="btn-primary" disabled={!!loading || isAutoLooping}>
             1. Get Active Window
           </button>
           <button
             onClick={handleCaptureScreenshot}
             className="btn-primary"
-            disabled={!windowMetadata || !!loading}
+            disabled={!windowMetadata || !!loading || isAutoLooping}
           >
             2. Capture Screenshot
           </button>
           <button
             onClick={handleRunOCR}
             className="btn-primary"
-            disabled={!screenshotStatus || !!loading}
+            disabled={!screenshotStatus || !!loading || isAutoLooping}
           >
             3. Run OCR
           </button>
