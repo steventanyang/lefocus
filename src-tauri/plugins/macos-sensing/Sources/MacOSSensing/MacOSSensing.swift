@@ -162,8 +162,8 @@ public final class MacOSSensingPlugin {
             )
         }
 
-        guard let bitmap = NSBitmapImageRep(cgImage: cgImage),
-              let png = bitmap.representation(using: .png, properties: [:]) else {
+        let bitmap = NSBitmapImageRep(cgImage: cgImage)
+        guard let png = bitmap.representation(using: .png, properties: [:]) else {
             throw NSError(
                 domain: "MacOSSensing",
                 code: 5,
@@ -188,20 +188,22 @@ public final class MacOSSensingPlugin {
                     )
                 }
 
-                let metrics: (String, Double, Int) = ocrQueue.sync {
+                let metrics: (String, Double, UInt64) = ocrQueue.sync {
                     do {
-                        ocrRequest.results = nil
                         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
                         try handler.perform([ocrRequest])
 
-                        let observations = (ocrRequest.results as? [VNRecognizedTextObservation]) ?? []
+                        guard let observations = ocrRequest.results as? [VNRecognizedTextObservation] else {
+                            return ("", 0.0, 0)
+                        }
+
                         let lines = observations.compactMap { $0.topCandidates(1).first?.string }
                         let confidences = observations.compactMap { $0.topCandidates(1).first?.confidence }
 
                         let text = lines.joined(separator: "\n")
                         let average = confidences.isEmpty ? 0.0 : confidences.reduce(0, +) / Double(confidences.count)
 
-                        return (text, average, observations.count)
+                        return (text, average, UInt64(observations.count))
                     } catch {
                         return ("", 0.0, 0)
                     }
@@ -212,7 +214,7 @@ public final class MacOSSensingPlugin {
                 return OCRResultFFI(
                     textPtr: text.withCString { strdup($0) },
                     confidence: confidence,
-                    wordCount: Int64(wordCount)
+                    wordCount: wordCount
                 )
             }
         }.value

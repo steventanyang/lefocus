@@ -118,8 +118,13 @@ src-tauri/
         ├── Sources/
         │   └── MacOSSensing/
         │       ├── MacOSSensing.swift       # Main plugin class
-        │       ├── FFIExports.swift         # @_cdecl C exports
-        │       └── FFITypes.swift           # C-compatible types
+        │       ├── FFIExports.swift         # Swift -> C hooks
+        │       └── FFITypes.swift           # Shared data structs
+        ├── Sources/
+        │   └── CMacOSSensing/
+        │       ├── include/
+        │       │   └── MacOSSensingFFI.h    # C ABI header (exported)
+        │       └── MacOSSensingFFI.c        # C shim wrapping Swift
         └── .build/                   # Swift build artifacts (gitignored)
             └── release/
                 └── libMacOSSensing.dylib
@@ -196,8 +201,16 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "CMacOSSensing",
+            path: "Sources/CMacOSSensing",
+            publicHeadersPath: "include"
+        ),
+        .target(
             name: "MacOSSensing",
-            dependencies: [],
+            dependencies: ["CMacOSSensing"],
+            cSettings: [
+                .headerSearchPath("../CMacOSSensing/include")
+            ],
             linkerSettings: [
                 .linkedFramework("Cocoa"),
                 .linkedFramework("Vision"),
@@ -226,25 +239,10 @@ src-tauri/plugins/macos-sensing/.swiftpm/
 // src-tauri/plugins/macos-sensing/Sources/MacOSSensing/FFITypes.swift
 
 import Foundation
+import CMacOSSensing
 
-// Result struct for window metadata
-public struct WindowMetadataFFI {
-    public var windowId: UInt32
-    public var bundleIdPtr: UnsafeMutablePointer<CChar>?
-    public var titlePtr: UnsafeMutablePointer<CChar>?
-    public var ownerNamePtr: UnsafeMutablePointer<CChar>?
-    public var boundsX: Double
-    public var boundsY: Double
-    public var boundsWidth: Double
-    public var boundsHeight: Double
-}
-
-// Result struct for OCR
-public struct OCRResultFFI {
-    public var textPtr: UnsafeMutablePointer<CChar>?
-    public var confidence: Double
-    public var wordCount: Int64  // explicit 64-bit for ABI clarity
-}
+public typealias WindowMetadataFFI = CMacOSSensing_WindowMetadataFFI
+public typealias OCRResultFFI = CMacOSSensing_OCRResultFFI
 ```
 
 ### 5.2 Main Plugin Class (`MacOSSensing.swift`)
@@ -262,8 +260,8 @@ public class MacOSSensingPlugin {
     public static let shared = MacOSSensingPlugin()
 
     // Window cache (refreshed every 5s)
-private var windowCache: [CGWindowID: SCWindow] = [:]
-private var lastCacheUpdate: Date = .distantPast
+    private var windowCache: [CGWindowID: SCWindow] = [:]
+    private var lastCacheUpdate: Date = .distantPast
     private var lastActiveWindowId: CGWindowID?
     private let stateQueue = DispatchQueue(label: "MacOSSensing.State")
 
@@ -284,12 +282,12 @@ private var lastCacheUpdate: Date = .distantPast
     // MARK: - Window Metadata
 
     public func getActiveWindowMetadata() async throws -> WindowMetadataFFI {
-    // 1. Get frontmost app
-    guard let app = NSWorkspace.shared.frontmostApplication else {
-        throw NSError(domain: "MacOSSensing", code: 1, userInfo: [
-            NSLocalizedDescriptionKey: "No active application"
-        ])
-    }
+        // 1. Get frontmost app
+        guard let app = NSWorkspace.shared.frontmostApplication else {
+            throw NSError(domain: "MacOSSensing", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "No active application"
+            ])
+        }
 
         // 2. Refresh cache if stale (read under stateQueue)
         let cacheAge = stateQueue.sync { Date().timeIntervalSince(lastCacheUpdate) }
@@ -318,18 +316,18 @@ private var lastCacheUpdate: Date = .distantPast
             }
         }
 
-    guard let content = try? await SCShareableContent.excludingDesktopWindows(
-        false,
-        onScreenWindowsOnly: true
-    ),
-    let window = content.windows.first(where: {
-        $0.owningApplication?.bundleIdentifier == app.bundleIdentifier &&
-        $0.isOnScreen
-    }) else {
-        throw NSError(domain: "MacOSSensing", code: 2, userInfo: [
-            NSLocalizedDescriptionKey: "No window found for active app"
-        ])
-    }
+        guard let content = try? await SCShareableContent.excludingDesktopWindows(
+            false,
+            onScreenWindowsOnly: true
+        ),
+        let window = content.windows.first(where: {
+            $0.owningApplication?.bundleIdentifier == app.bundleIdentifier &&
+            $0.isOnScreen
+        }) else {
+            throw NSError(domain: "MacOSSensing", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "No window found for active app"
+            ])
+        }
 
         // 4. Cache ID and convert to FFI struct
         stateQueue.sync { lastActiveWindowId = window.windowID }
@@ -347,20 +345,20 @@ private var lastCacheUpdate: Date = .distantPast
             boundsWidth: window.frame.size.width,
             boundsHeight: window.frame.size.height
         )
-}
-
-private func refreshWindowCache() async throws {
-    let content = try await SCShareableContent.excludingDesktopWindows(
-        false,
-        onScreenWindowsOnly: true
-    )
-        stateQueue.sync {
-    windowCache.removeAll()
-    for window in content.windows where window.isOnScreen {
-        windowCache[window.windowID] = window
     }
-    lastCacheUpdate = Date()
-}
+
+    private func refreshWindowCache() async throws {
+        let content = try await SCShareableContent.excludingDesktopWindows(
+            false,
+            onScreenWindowsOnly: true
+        )
+        stateQueue.sync {
+            windowCache.removeAll()
+            for window in content.windows where window.isOnScreen {
+                windowCache[window.windowID] = window
+            }
+            lastCacheUpdate = Date()
+        }
     }
 
     // MARK: - Screenshot Capture
@@ -370,47 +368,47 @@ private func refreshWindowCache() async throws {
         captureSemaphore.wait()
         defer { captureSemaphore.signal() }
 
-    // 1. Get window from cache
+        // 1. Get window from cache
         let hasWindow = stateQueue.sync { windowCache[windowId] != nil }
         if !hasWindow { try await refreshWindowCache() }
 
         guard let window = stateQueue.sync(execute: { windowCache[windowId] }) else {
-        throw NSError(domain: "MacOSSensing", code: 3, userInfo: [
-            NSLocalizedDescriptionKey: "Window not found: \(windowId)"
-        ])
+            throw NSError(domain: "MacOSSensing", code: 3, userInfo: [
+                NSLocalizedDescriptionKey: "Window not found: \(windowId)"
+            ])
+        }
+
+        // 2. Configure capture
+        let filter = SCContentFilter(desktopIndependentWindow: window)
+        let config = SCStreamConfiguration()
+
+        let targetWidth = min(Int(window.frame.width), 1280)
+        let scale = CGFloat(targetWidth) / window.frame.width
+        config.width = targetWidth
+        config.height = Int(window.frame.height * scale)
+        config.pixelFormat = kCVPixelFormatType_32BGRA
+        config.showsCursor = false
+
+        // 3. Capture
+        guard let cgImage = try? await SCScreenshotManager.captureImage(
+            contentFilter: filter,
+            configuration: config
+        ) else {
+            throw NSError(domain: "MacOSSensing", code: 4, userInfo: [
+                NSLocalizedDescriptionKey: "Screenshot capture failed"
+            ])
+        }
+
+        // 4. Convert to PNG
+        let bitmap = NSBitmapImageRep(cgImage: cgImage)
+        guard let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            throw NSError(domain: "MacOSSensing", code: 5, userInfo: [
+                NSLocalizedDescriptionKey: "PNG encoding failed"
+            ])
+        }
+
+        return pngData
     }
-
-    // 2. Configure capture
-    let filter = SCContentFilter(desktopIndependentWindow: window)
-    let config = SCStreamConfiguration()
-
-    let targetWidth = min(Int(window.frame.width), 1280)
-    let scale = CGFloat(targetWidth) / window.frame.width
-    config.width = targetWidth
-    config.height = Int(window.frame.height * scale)
-    config.pixelFormat = kCVPixelFormatType_32BGRA
-    config.showsCursor = false
-
-    // 3. Capture
-    guard let cgImage = try? await SCScreenshotManager.captureImage(
-        contentFilter: filter,
-        configuration: config
-    ) else {
-        throw NSError(domain: "MacOSSensing", code: 4, userInfo: [
-            NSLocalizedDescriptionKey: "Screenshot capture failed"
-        ])
-    }
-
-    // 4. Convert to PNG
-    guard let bitmapRep = NSBitmapImageRep(cgImage: cgImage),
-          let pngData = bitmapRep.representation(using: .png, properties: [:]) else {
-        throw NSError(domain: "MacOSSensing", code: 5, userInfo: [
-            NSLocalizedDescriptionKey: "PNG encoding failed"
-        ])
-    }
-
-    return pngData
-}
 
     // MARK: - OCR
 
@@ -426,7 +424,7 @@ private func refreshWindowCache() async throws {
                 }
 
                 // 2. Perform OCR and extract results under serial queue
-                let (recognizedText, avgConfidence, wordCount): (String, Double, Int) = ocrQueue.sync {
+                let (recognizedText, avgConfidence, wordCount): (String, Double, UInt64) = ocrQueue.sync {
                     do {
             let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
                         try handler.perform([self.ocrRequest])
@@ -436,16 +434,16 @@ private func refreshWindowCache() async throws {
                 .joined(separator: "\n")
                         let confidences = observations.compactMap { $0.topCandidates(1).first?.confidence }
                         let avg = confidences.isEmpty ? 0.0 : confidences.reduce(0, +) / Double(confidences.count)
-                        return (text, avg, Int(observations.count))
+                        return (text, avg, UInt64(observations.count))
                     } catch {
-                        return ("", 0.0, 0)
+                        return ("", 0.0, UInt64(0))
                     }
                 }
 
                 return OCRResultFFI(
                     textPtr: recognizedText.withCString { strdup($0) },
                     confidence: avgConfidence,
-                    wordCount: Int64(wordCount)
+                    wordCount: wordCount
                 )
         }  // autoreleasepool ends here - Vision objects drained
     }.value
@@ -462,7 +460,7 @@ import Foundation
 
 // MARK: - C-Compatible Exports
 
-@_cdecl("get_active_window_metadata_ffi")
+@_cdecl("macos_sensing_swift_get_window")
 public func getActiveWindowMetadataFFI() -> UnsafeMutablePointer<WindowMetadataFFI>? {
     var metadata: WindowMetadataFFI?
     let semaphore = DispatchSemaphore(value: 0)
@@ -484,7 +482,7 @@ public func getActiveWindowMetadataFFI() -> UnsafeMutablePointer<WindowMetadataF
     return ptr
 }
 
-@_cdecl("capture_screenshot_ffi")
+@_cdecl("macos_sensing_swift_capture_screenshot")
 public func captureScreenshotFFI(
     windowId: UInt32,
     outLength: UnsafeMutablePointer<Int>
@@ -517,7 +515,7 @@ public func captureScreenshotFFI(
     return buffer
 }
 
-@_cdecl("run_ocr_ffi")
+@_cdecl("macos_sensing_swift_run_ocr")
 public func runOCRFFI(
     imageData: UnsafePointer<UInt8>,
     imageLength: Int
@@ -544,7 +542,7 @@ public func runOCRFFI(
     return result
 }
 
-@_cdecl("free_window_metadata_ffi")
+@_cdecl("macos_sensing_swift_free_window_metadata")
 public func freeWindowMetadataFFI(_ ptr: UnsafeMutablePointer<WindowMetadataFFI>) {
     if let bundleIdPtr = ptr.pointee.bundleIdPtr {
         free(bundleIdPtr)
@@ -558,12 +556,12 @@ public func freeWindowMetadataFFI(_ ptr: UnsafeMutablePointer<WindowMetadataFFI>
     ptr.deallocate()
 }
 
-@_cdecl("free_screenshot_buffer_ffi")
+@_cdecl("macos_sensing_swift_free_screenshot_buffer")
 public func freeScreenshotBufferFFI(_ ptr: UnsafeMutablePointer<UInt8>) {
     ptr.deallocate()
 }
 
-@_cdecl("free_ocr_result_ffi")
+@_cdecl("macos_sensing_swift_free_ocr_result")
 public func freeOCRResultFFI(_ ptr: UnsafeMutablePointer<OCRResultFFI>) {
     if let textPtr = ptr.pointee.textPtr {
         free(textPtr)
@@ -571,6 +569,85 @@ public func freeOCRResultFFI(_ ptr: UnsafeMutablePointer<OCRResultFFI>) {
     ptr.deallocate()
 }
 ```
+
+### 5.4 C Shim (`Sources/CMacOSSensing/…`)
+
+Swift cannot expose `@_cdecl` functions whose signatures include Swift-only structs, so the public C ABI lives in a tiny shim target. The shim defines the canonical structs, calls into the Swift implementations, and keeps Rust's interface purely C99.
+
+**Header** — `src-tauri/plugins/macos-sensing/Sources/CMacOSSensing/include/MacOSSensingFFI.h`
+
+```c
+#pragma once
+
+#include <stddef.h>
+#include <stdint.h>
+
+typedef struct {
+    uint32_t windowId;
+    char *bundleIdPtr;
+    char *titlePtr;
+    char *ownerNamePtr;
+    double boundsX;
+    double boundsY;
+    double boundsWidth;
+    double boundsHeight;
+} CMacOSSensing_WindowMetadataFFI;
+
+typedef struct {
+    char *textPtr;
+    double confidence;
+    uint64_t wordCount;
+} CMacOSSensing_OCRResultFFI;
+
+CMacOSSensing_WindowMetadataFFI *macos_sensing_get_active_window_metadata(void);
+uint8_t *macos_sensing_capture_screenshot(uint32_t window_id, size_t *out_len);
+CMacOSSensing_OCRResultFFI *macos_sensing_run_ocr(const uint8_t *image_data, size_t image_len);
+
+void macos_sensing_free_window_metadata(CMacOSSensing_WindowMetadataFFI *ptr);
+void macos_sensing_free_screenshot_buffer(uint8_t *ptr);
+void macos_sensing_free_ocr_result(CMacOSSensing_OCRResultFFI *ptr);
+```
+
+**Implementation** — `src-tauri/plugins/macos-sensing/Sources/CMacOSSensing/MacOSSensingFFI.c`
+
+```c
+#include "MacOSSensingFFI.h"
+
+// Swift entry points (see FFIExports.swift)
+extern CMacOSSensing_WindowMetadataFFI *macos_sensing_swift_get_window(void);
+extern uint8_t *macos_sensing_swift_capture_screenshot(uint32_t window_id, size_t *out_len);
+extern CMacOSSensing_OCRResultFFI *macos_sensing_swift_run_ocr(const uint8_t *image_data, size_t image_len);
+
+extern void macos_sensing_swift_free_window_metadata(CMacOSSensing_WindowMetadataFFI *ptr);
+extern void macos_sensing_swift_free_screenshot_buffer(uint8_t *ptr);
+extern void macos_sensing_swift_free_ocr_result(CMacOSSensing_OCRResultFFI *ptr);
+
+CMacOSSensing_WindowMetadataFFI *macos_sensing_get_active_window_metadata(void) {
+    return macos_sensing_swift_get_window();
+}
+
+uint8_t *macos_sensing_capture_screenshot(uint32_t window_id, size_t *out_len) {
+    return macos_sensing_swift_capture_screenshot(window_id, out_len);
+}
+
+CMacOSSensing_OCRResultFFI *macos_sensing_run_ocr(const uint8_t *image_data, size_t image_len) {
+    return macos_sensing_swift_run_ocr(image_data, image_len);
+}
+
+void macos_sensing_free_window_metadata(CMacOSSensing_WindowMetadataFFI *ptr) {
+    macos_sensing_swift_free_window_metadata(ptr);
+}
+
+void macos_sensing_free_screenshot_buffer(uint8_t *ptr) {
+    macos_sensing_swift_free_screenshot_buffer(ptr);
+}
+
+void macos_sensing_free_ocr_result(CMacOSSensing_OCRResultFFI *ptr) {
+    macos_sensing_swift_free_ocr_result(ptr);
+}
+```
+
+The Rust layer links against the shim symbols (`macos_sensing_*`), while Swift keeps the async logic and memory management internal.
 
 ---
 
@@ -606,13 +683,13 @@ struct OCRResultFFI {
 
 // External C functions from Swift dylib
 extern "C" {
-    fn get_active_window_metadata_ffi() -> *mut WindowMetadataFFI;
-    fn capture_screenshot_ffi(window_id: u32, out_length: *mut usize) -> *mut u8;
-    fn run_ocr_ffi(image_data: *const u8, image_length: usize) -> *mut OCRResultFFI;
+    fn macos_sensing_get_active_window_metadata() -> *mut WindowMetadataFFI;
+    fn macos_sensing_capture_screenshot(window_id: u32, out_length: *mut usize) -> *mut u8;
+    fn macos_sensing_run_ocr(image_data: *const u8, image_length: usize) -> *mut OCRResultFFI;
 
-    fn free_window_metadata_ffi(ptr: *mut WindowMetadataFFI);
-    fn free_screenshot_buffer_ffi(ptr: *mut u8);
-    fn free_ocr_result_ffi(ptr: *mut OCRResultFFI);
+    fn macos_sensing_free_window_metadata(ptr: *mut WindowMetadataFFI);
+    fn macos_sensing_free_screenshot_buffer(ptr: *mut u8);
+    fn macos_sensing_free_ocr_result(ptr: *mut OCRResultFFI);
 }
 
 // Safe Rust types
@@ -643,7 +720,7 @@ pub struct OCRResult {
 // Safe wrapper functions
 pub fn get_active_window_metadata() -> Result<WindowMetadata> {
     unsafe {
-        let ptr = get_active_window_metadata_ffi();
+        let ptr = macos_sensing_get_active_window_metadata();
         if ptr.is_null() {
             anyhow::bail!("Failed to get window metadata");
         }
@@ -689,7 +766,7 @@ pub fn get_active_window_metadata() -> Result<WindowMetadata> {
         };
 
         // Free FFI memory
-        free_window_metadata_ffi(ptr);
+        macos_sensing_free_window_metadata(ptr);
 
         Ok(result)
     }
@@ -698,7 +775,7 @@ pub fn get_active_window_metadata() -> Result<WindowMetadata> {
 pub fn capture_screenshot(window_id: u32) -> Result<Vec<u8>> {
     unsafe {
         let mut length: usize = 0;
-        let ptr = capture_screenshot_ffi(window_id, &mut length as *mut usize);
+        let ptr = macos_sensing_capture_screenshot(window_id, &mut length as *mut usize);
 
         if ptr.is_null() || length == 0 {
             anyhow::bail!("Screenshot capture failed");
@@ -709,7 +786,7 @@ pub fn capture_screenshot(window_id: u32) -> Result<Vec<u8>> {
         let result = slice.to_vec();
 
         // Free FFI memory
-        free_screenshot_buffer_ffi(ptr);
+        macos_sensing_free_screenshot_buffer(ptr);
 
         Ok(result)
     }
@@ -717,7 +794,7 @@ pub fn capture_screenshot(window_id: u32) -> Result<Vec<u8>> {
 
 pub fn run_ocr(image_data: &[u8]) -> Result<OCRResult> {
     unsafe {
-        let ptr = run_ocr_ffi(image_data.as_ptr(), image_data.len());
+        let ptr = macos_sensing_run_ocr(image_data.as_ptr(), image_data.len());
 
         if ptr.is_null() {
             anyhow::bail!("OCR failed");
@@ -740,7 +817,7 @@ pub fn run_ocr(image_data: &[u8]) -> Result<OCRResult> {
         };
 
         // Free FFI memory
-        free_ocr_result_ffi(ptr);
+        macos_sensing_free_ocr_result(ptr);
 
         Ok(result)
     }

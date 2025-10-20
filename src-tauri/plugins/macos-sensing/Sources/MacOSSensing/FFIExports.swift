@@ -1,7 +1,7 @@
 import Foundation
 
-@_cdecl("get_active_window_metadata_ffi")
-public func getActiveWindowMetadataFFI() -> UnsafeMutablePointer<WindowMetadataFFI>? {
+@_cdecl("macos_sensing_swift_get_window")
+public func macos_sensing_swift_get_window() -> UnsafeMutablePointer<WindowMetadataFFI>? {
     var metadata: WindowMetadataFFI?
     let semaphore = DispatchSemaphore(value: 0)
 
@@ -27,8 +27,8 @@ public func getActiveWindowMetadataFFI() -> UnsafeMutablePointer<WindowMetadataF
     return pointer
 }
 
-@_cdecl("capture_screenshot_ffi")
-public func captureScreenshotFFI(
+@_cdecl("macos_sensing_swift_capture_screenshot")
+public func macos_sensing_swift_capture_screenshot(
     _ windowId: UInt32,
     _ outLength: UnsafeMutablePointer<Int>
 ) -> UnsafeMutablePointer<UInt8>? {
@@ -61,8 +61,8 @@ public func captureScreenshotFFI(
     return buffer
 }
 
-@_cdecl("run_ocr_ffi")
-public func runOCRFFI(
+@_cdecl("macos_sensing_swift_run_ocr")
+public func macos_sensing_swift_run_ocr(
     _ imageData: UnsafePointer<UInt8>,
     _ imageLength: Int
 ) -> UnsafeMutablePointer<OCRResultFFI>? {
@@ -96,8 +96,8 @@ public func runOCRFFI(
     return resultPointer
 }
 
-@_cdecl("free_window_metadata_ffi")
-public func freeWindowMetadataFFI(_ pointer: UnsafeMutablePointer<WindowMetadataFFI>) {
+@_cdecl("macos_sensing_swift_free_window_metadata")
+public func macos_sensing_swift_free_window_metadata(_ pointer: UnsafeMutablePointer<WindowMetadataFFI>) {
     if let bundleId = pointer.pointee.bundleIdPtr {
         free(bundleId)
     }
@@ -110,13 +110,13 @@ public func freeWindowMetadataFFI(_ pointer: UnsafeMutablePointer<WindowMetadata
     pointer.deallocate()
 }
 
-@_cdecl("free_screenshot_buffer_ffi")
-public func freeScreenshotBufferFFI(_ pointer: UnsafeMutablePointer<UInt8>) {
+@_cdecl("macos_sensing_swift_free_screenshot_buffer")
+public func macos_sensing_swift_free_screenshot_buffer(_ pointer: UnsafeMutablePointer<UInt8>) {
     pointer.deallocate()
 }
 
-@_cdecl("free_ocr_result_ffi")
-public func freeOCRResultFFI(_ pointer: UnsafeMutablePointer<OCRResultFFI>) {
+@_cdecl("macos_sensing_swift_free_ocr_result")
+public func macos_sensing_swift_free_ocr_result(_ pointer: UnsafeMutablePointer<OCRResultFFI>) {
     if let text = pointer.pointee.textPtr {
         free(text)
     }
