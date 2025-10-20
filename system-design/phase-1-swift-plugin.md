@@ -243,7 +243,7 @@ public struct WindowMetadataFFI {
 public struct OCRResultFFI {
     public var textPtr: UnsafeMutablePointer<CChar>?
     public var confidence: Double
-    public var wordCount: Int
+    public var wordCount: Int64  // explicit 64-bit for ABI clarity
 }
 ```
 
@@ -256,6 +256,7 @@ import Cocoa
 import Vision
 import ScreenCaptureKit
 import Foundation
+import ImageIO
 
 public class MacOSSensingPlugin {
     public static let shared = MacOSSensingPlugin()
@@ -290,10 +291,11 @@ private var lastCacheUpdate: Date = .distantPast
         ])
     }
 
-        // 2. Refresh cache if stale
-    if Date().timeIntervalSince(lastCacheUpdate) > 5.0 {
-        try await refreshWindowCache()
-    }
+        // 2. Refresh cache if stale (read under stateQueue)
+        let cacheAge = stateQueue.sync { Date().timeIntervalSince(lastCacheUpdate) }
+        if cacheAge > 5.0 {
+            try await refreshWindowCache()
+        }
 
         // 3. Resolve window by stable ID if available, otherwise pick first on-screen for frontmost app
         let cachedFromId: SCWindow? = stateQueue.sync {
@@ -415,17 +417,13 @@ private func refreshWindowCache() async throws {
     public func runOCR(imageData: Data) async throws -> OCRResultFFI {
     return try await Task {
         try autoreleasepool {
-            // 1. Decode image
-            guard let nsImage = NSImage(data: imageData),
-                  let cgImage = nsImage.cgImage(
-                    forProposedRect: nil,
-                    context: nil,
-                    hints: nil
-                  ) else {
-                throw NSError(domain: "MacOSSensing", code: 6, userInfo: [
-                    NSLocalizedDescriptionKey: "Failed to decode image"
-                ])
-            }
+                // 1. Decode image (ImageIO-only; thread-safe on background threads)
+                guard let src = CGImageSourceCreateWithData(imageData as CFData, nil),
+                      let cgImage = CGImageSourceCreateImageAtIndex(src, 0, nil) else {
+                    throw NSError(domain: "MacOSSensing", code: 6, userInfo: [
+                        NSLocalizedDescriptionKey: "Failed to decode image"
+                    ])
+                }
 
                 // 2. Perform OCR and extract results under serial queue
                 let (recognizedText, avgConfidence, wordCount): (String, Double, Int) = ocrQueue.sync {
@@ -438,7 +436,7 @@ private func refreshWindowCache() async throws {
                 .joined(separator: "\n")
                         let confidences = observations.compactMap { $0.topCandidates(1).first?.confidence }
                         let avg = confidences.isEmpty ? 0.0 : confidences.reduce(0, +) / Double(confidences.count)
-                        return (text, avg, observations.count)
+                        return (text, avg, Int(observations.count))
                     } catch {
                         return ("", 0.0, 0)
                     }
@@ -447,7 +445,7 @@ private func refreshWindowCache() async throws {
                 return OCRResultFFI(
                     textPtr: recognizedText.withCString { strdup($0) },
                     confidence: avgConfidence,
-                    wordCount: wordCount
+                    wordCount: Int64(wordCount)
                 )
         }  // autoreleasepool ends here - Vision objects drained
     }.value
