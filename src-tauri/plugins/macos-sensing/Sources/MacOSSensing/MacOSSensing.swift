@@ -4,6 +4,12 @@ import ImageIO
 import ScreenCaptureKit
 import Vision
 
+private actor CaptureGate {
+    func run<T>(_ operation: () async throws -> T) async rethrows -> T {
+        try await operation()
+    }
+}
+
 public final class MacOSSensingPlugin {
     public static let shared = MacOSSensingPlugin()
 
@@ -12,7 +18,7 @@ public final class MacOSSensingPlugin {
     private var lastActiveWindowId: CGWindowID?
 
     private let stateQueue = DispatchQueue(label: "MacOSSensing.State")
-    private let captureSemaphore = DispatchSemaphore(value: 1)
+    private let captureGate = CaptureGate()
     private let ocrQueue = DispatchQueue(label: "MacOSSensing.OCR")
 
     private lazy var ocrRequest: VNRecognizeTextRequest = {
@@ -119,104 +125,103 @@ public final class MacOSSensingPlugin {
     // MARK: - Screenshot Capture
 
     public func captureScreenshot(windowId: UInt32) async throws -> Data {
-        captureSemaphore.wait()
-        defer { captureSemaphore.signal() }
-
-        var cached: SCWindow? = stateQueue.sync {
-            windowCache[windowId]
-        }
-
-        if cached == nil {
-            try await refreshWindowCache()
-            cached = stateQueue.sync {
+        try await captureGate.run {
+            var cached: SCWindow? = stateQueue.sync {
                 windowCache[windowId]
             }
+
+            if cached == nil {
+                try await refreshWindowCache()
+                cached = stateQueue.sync {
+                    windowCache[windowId]
+                }
+            }
+
+            guard let window = cached else {
+                throw NSError(
+                    domain: "MacOSSensing",
+                    code: 3,
+                    userInfo: [NSLocalizedDescriptionKey: "Window not found: \(windowId)"]
+                )
+            }
+
+            let filter = SCContentFilter(desktopIndependentWindow: window)
+            let configuration = SCStreamConfiguration()
+
+            let targetWidth = min(Int(window.frame.width), 1280)
+            let scale = CGFloat(targetWidth) / window.frame.width
+            configuration.width = targetWidth
+            configuration.height = Int(window.frame.height * scale)
+            configuration.pixelFormat = kCVPixelFormatType_32BGRA
+            configuration.showsCursor = false
+
+            guard let cgImage = try? await SCScreenshotManager.captureImage(
+                contentFilter: filter,
+                configuration: configuration
+            ) else {
+                throw NSError(
+                    domain: "MacOSSensing",
+                    code: 4,
+                    userInfo: [NSLocalizedDescriptionKey: "Screenshot capture failed"]
+                )
+            }
+
+            let bitmap = NSBitmapImageRep(cgImage: cgImage)
+            guard let png = bitmap.representation(using: .png, properties: [:]) else {
+                throw NSError(
+                    domain: "MacOSSensing",
+                    code: 5,
+                    userInfo: [NSLocalizedDescriptionKey: "PNG encoding failed"]
+                )
+            }
+
+            return png
         }
-
-        guard let window = cached else {
-            throw NSError(
-                domain: "MacOSSensing",
-                code: 3,
-                userInfo: [NSLocalizedDescriptionKey: "Window not found: \(windowId)"]
-            )
-        }
-
-        let filter = SCContentFilter(desktopIndependentWindow: window)
-        let configuration = SCStreamConfiguration()
-
-        let targetWidth = min(Int(window.frame.width), 1280)
-        let scale = CGFloat(targetWidth) / window.frame.width
-        configuration.width = targetWidth
-        configuration.height = Int(window.frame.height * scale)
-        configuration.pixelFormat = kCVPixelFormatType_32BGRA
-        configuration.showsCursor = false
-
-        guard let cgImage = try? await SCScreenshotManager.captureImage(
-            contentFilter: filter,
-            configuration: configuration
-        ) else {
-            throw NSError(
-                domain: "MacOSSensing",
-                code: 4,
-                userInfo: [NSLocalizedDescriptionKey: "Screenshot capture failed"]
-            )
-        }
-
-        let bitmap = NSBitmapImageRep(cgImage: cgImage)
-        guard let png = bitmap.representation(using: .png, properties: [:]) else {
-            throw NSError(
-                domain: "MacOSSensing",
-                code: 5,
-                userInfo: [NSLocalizedDescriptionKey: "PNG encoding failed"]
-            )
-        }
-
-        return png
     }
 
     // MARK: - OCR
 
     public func runOCR(imageData: Data) async throws -> OCRResultFFI {
-        try await Task<OCRResultFFI, Error> {
-            try autoreleasepool {
-                guard let source = CGImageSourceCreateWithData(imageData as CFData, nil),
-                      let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-                    throw NSError(
-                        domain: "MacOSSensing",
-                        code: 6,
-                        userInfo: [NSLocalizedDescriptionKey: "Failed to decode image"]
-                    )
-                }
-
-                let metrics: (String, Double, UInt64) = ocrQueue.sync {
-                    do {
-                        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-                        try handler.perform([ocrRequest])
-
-                        guard let observations = ocrRequest.results as? [VNRecognizedTextObservation] else {
-                            return ("", 0.0, 0)
-                        }
-
-                        let lines = observations.compactMap { $0.topCandidates(1).first?.string }
-                        let confidences = observations.compactMap { $0.topCandidates(1).first?.confidence }
-
-                        let text = lines.joined(separator: "\n")
-                        let average = confidences.isEmpty ? 0.0 : confidences.reduce(0, +) / Double(confidences.count)
-
-                        return (text, average, UInt64(observations.count))
-                    } catch {
-                        return ("", 0.0, 0)
-                    }
-                }
-
-                let (text, confidence, wordCount) = metrics
-
-                return OCRResultFFI(
-                    textPtr: text.withCString { strdup($0) },
-                    confidence: confidence,
-                    wordCount: wordCount
+        try autoreleasepool {
+            guard let source = CGImageSourceCreateWithData(imageData as CFData, nil),
+                  let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+                throw NSError(
+                    domain: "MacOSSensing",
+                    code: 6,
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to decode image"]
                 )
             }
-        }.value
+
+            let metrics: (String, Double, UInt64) = ocrQueue.sync {
+                do {
+                    let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+                    try handler.perform([ocrRequest])
+
+                    guard let observations = ocrRequest.results else {
+                        return ("", 0.0, 0)
+                    }
+
+                    let lines = observations.compactMap { $0.topCandidates(1).first?.string }
+                    let confidences = observations.compactMap { $0.topCandidates(1).first?.confidence }
+
+                    let text = lines.joined(separator: "\n")
+                    let average = confidences.isEmpty
+                        ? 0.0
+                        : confidences.reduce(0.0) { $0 + Double($1) } / Double(confidences.count)
+
+                    return (text, average, UInt64(observations.count))
+                } catch {
+                    return ("", 0.0, 0)
+                }
+            }
+
+            let (text, confidence, wordCount) = metrics
+
+            return OCRResultFFI(
+                textPtr: text.withCString { strdup($0) },
+                confidence: confidence,
+                wordCount: wordCount
+            )
+        }
     }
 }

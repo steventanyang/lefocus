@@ -15,8 +15,17 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "CMacOSSensing",
+            path: "Sources/CMacOSSensing",
+            publicHeadersPath: "include"
+        ),
+        .target(
             name: "MacOSSensing",
+            dependencies: ["CMacOSSensing"],
             path: "Sources/MacOSSensing",
+            cSettings: [
+                .headerSearchPath("../CMacOSSensing/include")
+            ],
             linkerSettings: [
                 .linkedFramework("Cocoa"),
                 .linkedFramework("ScreenCaptureKit"),
