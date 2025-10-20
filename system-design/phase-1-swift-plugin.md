@@ -170,7 +170,7 @@ fn main() {
 
         // 3. Recompile if Swift source changes
         println!("cargo:rerun-if-changed={}/plugins/macos-sensing/Sources", manifest_dir);
-    }
+  }
 }
 ```
 
@@ -261,8 +261,8 @@ public class MacOSSensingPlugin {
     public static let shared = MacOSSensingPlugin()
 
     // Window cache (refreshed every 5s)
-    private var windowCache: [CGWindowID: SCWindow] = [:]
-    private var lastCacheUpdate: Date = .distantPast
+private var windowCache: [CGWindowID: SCWindow] = [:]
+private var lastCacheUpdate: Date = .distantPast
     private var lastActiveWindowId: CGWindowID?
     private let stateQueue = DispatchQueue(label: "MacOSSensing.State")
 
@@ -283,17 +283,17 @@ public class MacOSSensingPlugin {
     // MARK: - Window Metadata
 
     public func getActiveWindowMetadata() async throws -> WindowMetadataFFI {
-        // 1. Get frontmost app
-        guard let app = NSWorkspace.shared.frontmostApplication else {
-            throw NSError(domain: "MacOSSensing", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "No active application"
-            ])
-        }
+    // 1. Get frontmost app
+    guard let app = NSWorkspace.shared.frontmostApplication else {
+        throw NSError(domain: "MacOSSensing", code: 1, userInfo: [
+            NSLocalizedDescriptionKey: "No active application"
+        ])
+    }
 
         // 2. Refresh cache if stale
-        if Date().timeIntervalSince(lastCacheUpdate) > 5.0 {
-            try await refreshWindowCache()
-        }
+    if Date().timeIntervalSince(lastCacheUpdate) > 5.0 {
+        try await refreshWindowCache()
+    }
 
         // 3. Resolve window by stable ID if available, otherwise pick first on-screen for frontmost app
         let cachedFromId: SCWindow? = stateQueue.sync {
@@ -316,18 +316,18 @@ public class MacOSSensingPlugin {
             }
         }
 
-        guard let content = try? await SCShareableContent.excludingDesktopWindows(
-            false,
-            onScreenWindowsOnly: true
-        ),
-        let window = content.windows.first(where: {
-            $0.owningApplication?.bundleIdentifier == app.bundleIdentifier &&
-            $0.isOnScreen
-        }) else {
-            throw NSError(domain: "MacOSSensing", code: 2, userInfo: [
-                NSLocalizedDescriptionKey: "No window found for active app"
-            ])
-        }
+    guard let content = try? await SCShareableContent.excludingDesktopWindows(
+        false,
+        onScreenWindowsOnly: true
+    ),
+    let window = content.windows.first(where: {
+        $0.owningApplication?.bundleIdentifier == app.bundleIdentifier &&
+        $0.isOnScreen
+    }) else {
+        throw NSError(domain: "MacOSSensing", code: 2, userInfo: [
+            NSLocalizedDescriptionKey: "No window found for active app"
+        ])
+    }
 
         // 4. Cache ID and convert to FFI struct
         stateQueue.sync { lastActiveWindowId = window.windowID }
@@ -345,20 +345,20 @@ public class MacOSSensingPlugin {
             boundsWidth: window.frame.size.width,
             boundsHeight: window.frame.size.height
         )
-    }
+}
 
-    private func refreshWindowCache() async throws {
-        let content = try await SCShareableContent.excludingDesktopWindows(
-            false,
-            onScreenWindowsOnly: true
-        )
+private func refreshWindowCache() async throws {
+    let content = try await SCShareableContent.excludingDesktopWindows(
+        false,
+        onScreenWindowsOnly: true
+    )
         stateQueue.sync {
-            windowCache.removeAll()
-            for window in content.windows where window.isOnScreen {
-                windowCache[window.windowID] = window
-            }
-            lastCacheUpdate = Date()
-        }
+    windowCache.removeAll()
+    for window in content.windows where window.isOnScreen {
+        windowCache[window.windowID] = window
+    }
+    lastCacheUpdate = Date()
+}
     }
 
     // MARK: - Screenshot Capture
@@ -368,78 +368,80 @@ public class MacOSSensingPlugin {
         captureSemaphore.wait()
         defer { captureSemaphore.signal() }
 
-        // 1. Get window from cache
+    // 1. Get window from cache
         let hasWindow = stateQueue.sync { windowCache[windowId] != nil }
         if !hasWindow { try await refreshWindowCache() }
 
         guard let window = stateQueue.sync(execute: { windowCache[windowId] }) else {
-            throw NSError(domain: "MacOSSensing", code: 3, userInfo: [
-                NSLocalizedDescriptionKey: "Window not found: \(windowId)"
-            ])
-        }
-
-        // 2. Configure capture
-        let filter = SCContentFilter(desktopIndependentWindow: window)
-        let config = SCStreamConfiguration()
-
-        let targetWidth = min(Int(window.frame.width), 1280)
-        let scale = CGFloat(targetWidth) / window.frame.width
-        config.width = targetWidth
-        config.height = Int(window.frame.height * scale)
-        config.pixelFormat = kCVPixelFormatType_32BGRA
-        config.showsCursor = false
-
-        // 3. Capture
-        guard let cgImage = try? await SCScreenshotManager.captureImage(
-            contentFilter: filter,
-            configuration: config
-        ) else {
-            throw NSError(domain: "MacOSSensing", code: 4, userInfo: [
-                NSLocalizedDescriptionKey: "Screenshot capture failed"
-            ])
-        }
-
-        // 4. Convert to PNG
-        guard let bitmapRep = NSBitmapImageRep(cgImage: cgImage),
-              let pngData = bitmapRep.representation(using: .png, properties: [:]) else {
-            throw NSError(domain: "MacOSSensing", code: 5, userInfo: [
-                NSLocalizedDescriptionKey: "PNG encoding failed"
-            ])
-        }
-
-        return pngData
+        throw NSError(domain: "MacOSSensing", code: 3, userInfo: [
+            NSLocalizedDescriptionKey: "Window not found: \(windowId)"
+        ])
     }
+
+    // 2. Configure capture
+    let filter = SCContentFilter(desktopIndependentWindow: window)
+    let config = SCStreamConfiguration()
+
+    let targetWidth = min(Int(window.frame.width), 1280)
+    let scale = CGFloat(targetWidth) / window.frame.width
+    config.width = targetWidth
+    config.height = Int(window.frame.height * scale)
+    config.pixelFormat = kCVPixelFormatType_32BGRA
+    config.showsCursor = false
+
+    // 3. Capture
+    guard let cgImage = try? await SCScreenshotManager.captureImage(
+        contentFilter: filter,
+        configuration: config
+    ) else {
+        throw NSError(domain: "MacOSSensing", code: 4, userInfo: [
+            NSLocalizedDescriptionKey: "Screenshot capture failed"
+        ])
+    }
+
+    // 4. Convert to PNG
+    guard let bitmapRep = NSBitmapImageRep(cgImage: cgImage),
+          let pngData = bitmapRep.representation(using: .png, properties: [:]) else {
+        throw NSError(domain: "MacOSSensing", code: 5, userInfo: [
+            NSLocalizedDescriptionKey: "PNG encoding failed"
+        ])
+    }
+
+    return pngData
+}
 
     // MARK: - OCR
 
     public func runOCR(imageData: Data) async throws -> OCRResultFFI {
-        return try await Task {
-            try autoreleasepool {
-                // 1. Decode image
-                guard let nsImage = NSImage(data: imageData),
-                      let cgImage = nsImage.cgImage(
-                        forProposedRect: nil,
-                        context: nil,
-                        hints: nil
-                      ) else {
-                    throw NSError(domain: "MacOSSensing", code: 6, userInfo: [
-                        NSLocalizedDescriptionKey: "Failed to decode image"
-                    ])
-                }
+    return try await Task {
+        try autoreleasepool {
+            // 1. Decode image
+            guard let nsImage = NSImage(data: imageData),
+                  let cgImage = nsImage.cgImage(
+                    forProposedRect: nil,
+                    context: nil,
+                    hints: nil
+                  ) else {
+                throw NSError(domain: "MacOSSensing", code: 6, userInfo: [
+                    NSLocalizedDescriptionKey: "Failed to decode image"
+                ])
+            }
 
                 // 2. Perform OCR and extract results under serial queue
-                let (recognizedText, avgConfidence, wordCount): (String, Double, Int) = try ocrQueue.sync {
-                    let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-                    try handler.perform([self.ocrRequest])
-                    guard let observations = self.ocrRequest.results as? [VNRecognizedTextObservation] else {
+                let (recognizedText, avgConfidence, wordCount): (String, Double, Int) = ocrQueue.sync {
+                    do {
+            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+                        try handler.perform([self.ocrRequest])
+                        let observations = (self.ocrRequest.results as? [VNRecognizedTextObservation]) ?? []
+                        let text = observations
+                .compactMap { $0.topCandidates(1).first?.string }
+                .joined(separator: "\n")
+                        let confidences = observations.compactMap { $0.topCandidates(1).first?.confidence }
+                        let avg = confidences.isEmpty ? 0.0 : confidences.reduce(0, +) / Double(confidences.count)
+                        return (text, avg, observations.count)
+                    } catch {
                         return ("", 0.0, 0)
                     }
-                    let text = observations
-                        .compactMap { $0.topCandidates(1).first?.string }
-                        .joined(separator: "\n")
-                    let confidences = observations.compactMap { $0.topCandidates(1).first?.confidence }
-                    let avg = confidences.isEmpty ? 0.0 : confidences.reduce(0, +) / Double(confidences.count)
-                    return (text, avg, observations.count)
                 }
 
                 return OCRResultFFI(
@@ -447,8 +449,8 @@ public class MacOSSensingPlugin {
                     confidence: avgConfidence,
                     wordCount: wordCount
                 )
-            }  // autoreleasepool ends here - Vision objects drained
-        }.value
+        }  // autoreleasepool ends here - Vision objects drained
+    }.value
     }
 }
 ```
@@ -467,7 +469,7 @@ public func getActiveWindowMetadataFFI() -> UnsafeMutablePointer<WindowMetadataF
     var metadata: WindowMetadataFFI?
     let semaphore = DispatchSemaphore(value: 0)
 
-    Task {
+    Task.detached {
         defer { semaphore.signal() }
         do {
             metadata = try await MacOSSensingPlugin.shared.getActiveWindowMetadata()
@@ -476,7 +478,7 @@ public func getActiveWindowMetadataFFI() -> UnsafeMutablePointer<WindowMetadataF
         }
     }
 
-    semaphore.wait()
+    if semaphore.wait(timeout: .now() + 5) == .timedOut { return nil }
 
     guard let md = metadata else { return nil }
     let ptr = UnsafeMutablePointer<WindowMetadataFFI>.allocate(capacity: 1)
@@ -492,7 +494,7 @@ public func captureScreenshotFFI(
     var resultData: Data?
     let semaphore = DispatchSemaphore(value: 0)
 
-    Task {
+    Task.detached {
         do {
             resultData = try await MacOSSensingPlugin.shared.captureScreenshot(windowId: windowId)
         } catch {
@@ -501,7 +503,10 @@ public func captureScreenshotFFI(
         semaphore.signal()
     }
 
-    semaphore.wait()
+    if semaphore.wait(timeout: .now() + 5) == .timedOut {
+        outLength.pointee = 0
+        return nil
+    }
 
     guard let data = resultData else {
         outLength.pointee = 0
@@ -523,7 +528,7 @@ public func runOCRFFI(
     let result = UnsafeMutablePointer<OCRResultFFI>.allocate(capacity: 1)
     let semaphore = DispatchSemaphore(value: 0)
 
-    Task {
+    Task.detached {
         do {
             let ocrResult = try await MacOSSensingPlugin.shared.runOCR(imageData: data)
             result.pointee = ocrResult
@@ -534,7 +539,10 @@ public func runOCRFFI(
         semaphore.signal()
     }
 
-    semaphore.wait()
+    if semaphore.wait(timeout: .now() + 5) == .timedOut {
+        result.pointee = OCRResultFFI(textPtr: strdup(""), confidence: 0.0, wordCount: 0)
+        return result
+    }
     return result
 }
 
