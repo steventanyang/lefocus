@@ -68,9 +68,57 @@ This document tracks ideas, optimizations, and features to consider **after P0 i
 
 ---
 
+### 5. OCR Request Handler Reuse + Dedicated Queue
+**Current (P0):** Create new `VNRecognizeTextRequest` + `VNImageRequestHandler` per OCR call, runs on global executor
+
+**Improvement:**
+- Pre-warm reusable `VNRecognizeTextRequest` (persists across calls)
+- Run OCR on dedicated serial `DispatchQueue` for thread affinity
+- Already wrapped in `@autoreleasepool` (P0 has this)
+
+**Implementation:**
+```swift
+class MacOSSensingPlugin {
+    private let ocrQueue = DispatchQueue(
+        label: "com.lefocus.ocr",
+        qos: .userInitiated
+    )
+
+    private lazy var ocrRequest: VNRecognizeTextRequest = {
+        let req = VNRecognizeTextRequest()
+        req.recognitionLevel = .fast
+        req.usesLanguageCorrection = false
+        return req
+    }()
+
+    func runOCR(imageData: Data) async throws -> [String: Any] {
+        return try await withCheckedThrowingContinuation { continuation in
+            ocrQueue.async {
+                autoreleasepool {
+                    // Reuse self.ocrRequest
+                }
+            }
+        }
+    }
+}
+```
+
+**Impact:**
+- ~30% faster OCR (request creation overhead eliminated)
+- More consistent performance (dedicated thread)
+- Better memory behavior (serial queue + autoreleasepool)
+
+**Complexity:** Low (small refactor, requires compiled plugin)
+
+**Priority:** Medium (nice performance win, but requires P1 compiled plugin first)
+
+**Note:** P0 already uses `@autoreleasepool` to prevent memory leaks. This improvement adds request reuse + thread affinity.
+
+---
+
 ## Accuracy Improvements
 
-### 5. Accessibility API Integration
+### 6. Accessibility API Integration
 **Current (P0):** Use `NSWorkspace.frontmostApplication` + ScreenCaptureKit z-order
 
 **Improvement:** Use AXUIElement to detect truly focused window/element
@@ -90,7 +138,7 @@ AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute, &focusedWindow)
 
 ---
 
-### 6. OCR Accurate Mode
+### 7. OCR Accurate Mode
 **Current (P0):** Vision.framework `.fast` mode
 
 **Improvement:** Adaptive OCR - use `.accurate` mode when confidence < 0.7
@@ -103,7 +151,7 @@ AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute, &focusedWindow)
 
 ---
 
-### 7. Visual Change Detection Tuning
+### 8. Visual Change Detection Tuning
 **Current (P0):** Fixed thresholds (pHash ≥ 12, SSIM < 0.75)
 
 **Improvement:** Adaptive thresholds based on app type (code editor vs browser vs Figma)
@@ -118,7 +166,7 @@ AXUIElementCopyAttributeValue(axApp, kAXFocusedWindowAttribute, &focusedWindow)
 
 ## Multi-Display & Spaces
 
-### 8. Multi-Monitor Tracking
+### 9. Multi-Monitor Tracking
 **Current (P0):** Track frontmost window (any display)
 
 **Improvement:** Record which display window is on, show in summary
@@ -140,7 +188,7 @@ struct WindowMetadata {
 
 ---
 
-### 9. Spaces/Virtual Desktop Tracking
+### 10. Spaces/Virtual Desktop Tracking
 **Current (P0):** Space switch = new window = new segment (implicit)
 
 **Improvement:** Explicitly track Space/Desktop ID, show in summary
@@ -153,7 +201,7 @@ struct WindowMetadata {
 
 ---
 
-### 10. Minimized/Hidden Window Handling
+### 11. Minimized/Hidden Window Handling
 **Current (P0):** Minimized window = context switch to whatever is active
 
 **Improvement:** Detect "minimized" vs "switched away", mark as interruption
@@ -168,7 +216,7 @@ struct WindowMetadata {
 
 ## Context Intelligence (Semantic P1)
 
-### 11. CLIP Embeddings
+### 12. CLIP Embeddings
 **Current (P0):** No semantic understanding of screenshots
 
 **Improvement:** Run CLIP on screenshots, cluster by visual similarity
@@ -183,7 +231,7 @@ struct WindowMetadata {
 
 ---
 
-### 12. App Category Detection
+### 13. App Category Detection
 **Current (P0):** Show app name (e.g., "Chrome", "VS Code")
 
 **Improvement:** Map apps to categories ("Development", "Communication", "Entertainment")
@@ -208,7 +256,7 @@ fn get_app_category(bundle_id: &str) -> &str {
 
 ---
 
-### 13. Local LLM Summarization
+### 14. Local LLM Summarization
 **Current (P0):** Hardcoded caption ("You spent most time in VS Code")
 
 **Improvement:** Use local LLM (e.g., llama.cpp) to generate natural summary
@@ -223,7 +271,7 @@ fn get_app_category(bundle_id: &str) -> &str {
 
 ## UI & UX Enhancements
 
-### 14. Timeline Scrubber
+### 15. Timeline Scrubber
 **Current (P0):** Static stacked bar chart
 
 **Improvement:** Interactive timeline - scrub to see screenshot thumbnails at each timestamp
@@ -238,7 +286,7 @@ fn get_app_category(bundle_id: &str) -> &str {
 
 ---
 
-### 15. Real-Time Focus Indicator
+### 16. Real-Time Focus Indicator
 **Current (P0):** Silent during session, summary at end
 
 **Improvement:** Optional subtle indicator (e.g., menu bar icon color changes on context switch)
@@ -253,7 +301,7 @@ fn get_app_category(bundle_id: &str) -> &str {
 
 ---
 
-### 16. Session History View
+### 17. Session History View
 **Current (P0):** No way to view past sessions
 
 **Improvement:** List past sessions, click to view summary
@@ -266,7 +314,7 @@ fn get_app_category(bundle_id: &str) -> &str {
 
 ---
 
-### 17. Export Summary
+### 18. Export Summary
 **Current (P0):** Summary only in app
 
 **Improvement:** Export summary as PNG/PDF/Markdown
@@ -281,7 +329,7 @@ fn get_app_category(bundle_id: &str) -> &str {
 
 ## Audio Integration
 
-### 18. Ambient Sound During Session
+### 19. Ambient Sound During Session
 **Current (P0):** Audio code exists but not integrated
 
 **Improvement:** Optional ambient sound (binaural, rain, brown noise) during Pomodoro
@@ -294,7 +342,7 @@ fn get_app_category(bundle_id: &str) -> &str {
 
 ---
 
-### 19. Sound Cues for Timer Events
+### 20. Sound Cues for Timer Events
 **Current (P0):** No audio feedback
 
 **Improvement:** Subtle chime on timer start/end
@@ -309,7 +357,7 @@ fn get_app_category(bundle_id: &str) -> &str {
 
 ## Data & Privacy
 
-### 20. Encrypted Screenshot Storage
+### 21. Encrypted Screenshot Storage
 **Current (P0):** Screenshots dropped after pHash/OCR
 
 **Improvement:** Option to save encrypted screenshots for timeline scrubbing
@@ -322,7 +370,7 @@ fn get_app_category(bundle_id: &str) -> &str {
 
 ---
 
-### 21. Session Retention Policy
+### 22. Session Retention Policy
 **Current (P0):** Keep all sessions forever
 
 **Improvement:** Auto-delete sessions older than N days (user configurable)
@@ -335,7 +383,7 @@ fn get_app_category(bundle_id: &str) -> &str {
 
 ---
 
-### 22. Sensitive Window Detection
+### 23. Sensitive Window Detection
 **Current (P0):** Capture all windows equally
 
 **Improvement:** Blacklist apps (e.g., Password Manager, Banking), auto-blur screenshots
@@ -359,7 +407,7 @@ const SENSITIVE_BUNDLES: &[&str] = &[
 
 ## System Integration
 
-### 23. Notion Integration
+### 24. Notion Integration
 **Current (P0):** No external integration
 
 **Improvement:** Auto-create Notion page with session summary
@@ -372,7 +420,7 @@ const SENSITIVE_BUNDLES: &[&str] = &[
 
 ---
 
-### 24. Calendar Integration
+### 25. Calendar Integration
 **Current (P0):** Manual timer start
 
 **Improvement:** Auto-start timer based on calendar events (e.g., "Deep Work" blocks)
@@ -385,7 +433,7 @@ const SENSITIVE_BUNDLES: &[&str] = &[
 
 ---
 
-### 25. Shortcut Key Binding
+### 26. Shortcut Key Binding
 **Current (P0):** Click to start timer
 
 **Improvement:** Global hotkey to start/stop (e.g., Cmd+Shift+F)
@@ -400,7 +448,7 @@ const SENSITIVE_BUNDLES: &[&str] = &[
 
 ## Reliability & Error Handling
 
-### 26. Permission Pre-Check
+### 27. Permission Pre-Check
 **Current (P0):** Fail on first screenshot attempt
 
 **Improvement:** Check permissions on app launch, guide user proactively
@@ -413,7 +461,7 @@ const SENSITIVE_BUNDLES: &[&str] = &[
 
 ---
 
-### 27. Graceful Degradation Modes
+### 28. Graceful Degradation Modes
 **Current (P0):** OCR fails → silent, confidence = 0
 
 **Improvement:** Explicit degraded mode indicators ("Running without OCR")
@@ -426,7 +474,7 @@ const SENSITIVE_BUNDLES: &[&str] = &[
 
 ---
 
-### 28. Session Recovery
+### 29. Session Recovery
 **Current (P0):** App crash = session lost
 
 **Improvement:** Auto-save session state every 60s, recover on restart
@@ -441,7 +489,7 @@ const SENSITIVE_BUNDLES: &[&str] = &[
 
 ## Performance Monitoring
 
-### 29. Built-in Telemetry
+### 30. Built-in Telemetry
 **Current (P0):** Manual CPU/RAM monitoring (Activity Monitor)
 
 **Improvement:** Built-in performance dashboard (CPU, RAM, battery per session)
@@ -454,7 +502,7 @@ const SENSITIVE_BUNDLES: &[&str] = &[
 
 ---
 
-### 30. Adaptive Polling
+### 31. Adaptive Polling
 **Current (P0):** Fixed 5s polling interval
 
 **Improvement:** Slow down polling when on battery or low resources detected
@@ -469,7 +517,7 @@ const SENSITIVE_BUNDLES: &[&str] = &[
 
 ## Testing & Quality
 
-### 31. Synthetic Testing Framework
+### 32. Synthetic Testing Framework
 **Current (P0):** Manual testing only
 
 **Improvement:** Automated tests with fake window switches, screenshots
@@ -482,7 +530,7 @@ const SENSITIVE_BUNDLES: &[&str] = &[
 
 ---
 
-### 32. Segmentation Algorithm Visualization
+### 33. Segmentation Algorithm Visualization
 **Current (P0):** Manual review of segment boundaries
 
 **Improvement:** Dev tool to visualize segmentation decisions (timeline with thresholds)
@@ -497,7 +545,7 @@ const SENSITIVE_BUNDLES: &[&str] = &[
 
 ## Miscellaneous
 
-### 33. Dark Mode UI
+### 34. Dark Mode UI
 **Current (P0):** Basic UI, no theme
 
 **Improvement:** Proper dark/light mode support
@@ -508,7 +556,7 @@ const SENSITIVE_BUNDLES: &[&str] = &[
 
 ---
 
-### 34. Custom Session Durations
+### 35. Custom Session Durations
 **Current (P0):** 25 min Pomodoro only
 
 **Improvement:** User-configurable durations (15m, 25m, 50m, custom)
@@ -521,7 +569,7 @@ const SENSITIVE_BUNDLES: &[&str] = &[
 
 ---
 
-### 35. Pause/Resume Session
+### 36. Pause/Resume Session
 **Current (P0):** Can pause timer, but sensing stops
 
 **Improvement:** Keep sensing during paused timer (track "break time" separately)
@@ -551,5 +599,5 @@ When evaluating P1 ideas:
 
 **End of P1 Improvements Tracker**
 
-Total items: 35
+Total items: 36
 Next review: After 1 week of P0 dogfooding

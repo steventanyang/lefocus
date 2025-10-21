@@ -1,6 +1,14 @@
 mod audio;
+mod macos_bridge;
 
 use audio::AudioEngineHandle;
+use macos_bridge::{
+    capture_screenshot,
+    get_active_window_metadata,
+    run_ocr,
+    OCRResult,
+    WindowMetadata,
+};
 use tauri::State;
 
 // Global audio engine state
@@ -69,6 +77,35 @@ fn set_volume(volume: f32, state: State<AudioState>) -> Result<String, String> {
     Ok(format!("Volume set to {}", volume))
 }
 
+#[tauri::command]
+fn test_get_window() -> Result<WindowMetadata, String> {
+    get_active_window_metadata().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn test_capture_screenshot(window_id: u32) -> Result<String, String> {
+    let image_data = capture_screenshot(window_id)
+        .map_err(|e| e.to_string())?;
+
+    let output_path = std::path::Path::new("/tmp/lefocus_test_screenshot.png");
+    std::fs::write(output_path, &image_data)
+        .map_err(|e| e.to_string())?;
+
+    Ok(format!(
+        "Screenshot saved to {} ({} bytes)",
+        output_path.display(),
+        image_data.len()
+    ))
+}
+
+#[tauri::command]
+fn test_run_ocr(image_path: String) -> Result<OCRResult, String> {
+    let image_data = std::fs::read(&image_path)
+        .map_err(|e| e.to_string())?;
+
+    run_ocr(&image_data).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -80,7 +117,10 @@ pub fn run() {
             start_audio,
             stop_audio,
             toggle_pause,
-            set_volume
+            set_volume,
+            test_get_window,
+            test_capture_screenshot,
+            test_run_ocr,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
