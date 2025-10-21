@@ -79,11 +79,11 @@ This phase teaches you:
 └──────────────────┬──────────────────────────┘
                    │ FFI (C ABI)
 ┌──────────────────▼──────────────────────────┐
-│   libmacossensing.dylib (Swift Compiled)    │
+│   libMacOSSensing.dylib (Swift Compiled)    │
 │                                             │
-│  get_active_window_metadata_ffi()           │
-│  capture_screenshot_ffi()                   │
-│  run_ocr_ffi()                              │
+│  macos_sensing_get_active_window_metadata() │
+│  macos_sensing_capture_screenshot()         │
+│  macos_sensing_run_ocr()                    │
 │                                             │
 │  ┌─────────────────────────────────────┐   │
 │  │ MacOSSensingPlugin (Swift Class)    │   │
@@ -95,11 +95,11 @@ This phase teaches you:
 
 ### 2.2 Communication Flow
 
-1. **Rust** calls `get_active_window_metadata_ffi()` (C function)
+1. **Rust** calls `macos_sensing_get_active_window_metadata()` (C function)
 2. **Swift** receives call, executes async code
 3. **Swift** allocates result buffer, returns pointer to Rust
 4. **Rust** reads result, converts to Rust types
-5. **Rust** calls `free_ffi_buffer()` to release Swift memory
+5. **Rust** calls the matching `macos_sensing_free_*` to release Swift memory
 
 ---
 
@@ -134,48 +134,50 @@ src-tauri/
 
 ## 4. Build System Setup
 
-### 4.1 `build.rs` - Swift Compiler Integration
+### 4.1 `build.rs` - Swift Compiler Integration (updated)
 
 ```rust
 // src-tauri/build.rs
 
 use std::process::Command;
 use std::env;
+use std::fs;
 
 fn main() {
+    // Build Swift dylib first, then run tauri_build
     #[cfg(target_os = "macos")]
     {
         let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
         let plugin_dir = format!("{}/plugins/macos-sensing", manifest_dir);
 
-        // 1. Compile Swift package to dylib
         let output = Command::new("swift")
-            .args(&[
-                "build",
-                "-c", "release",
-                "--package-path", &plugin_dir,
-                "--product", "MacOSSensing",
-            ])
+            .args(&["build", "-c", "release", "--package-path", &plugin_dir, "--product", "MacOSSensing"])
             .output()
             .expect("Failed to compile Swift plugin");
-
         if !output.status.success() {
-            panic!(
-                "Swift compilation failed:\n{}",
-                String::from_utf8_lossy(&output.stderr)
-            );
+            panic!("Swift compilation failed:\n{}", String::from_utf8_lossy(&output.stderr));
         }
 
-        // 2. Tell Cargo where to find the dylib
-        println!("cargo:rustc-link-search=native={}/plugins/macos-sensing/.build/release", manifest_dir);
+        let build_output = format!("{}/plugins/macos-sensing/.build/release", manifest_dir);
+        let dylib_name = "libMacOSSensing.dylib";
+        let dylib_path = format!("{}/{}", build_output, dylib_name);
+
+        println!("cargo:rustc-link-search=native={}", build_output);
         println!("cargo:rustc-link-lib=dylib=MacOSSensing");
-
-        // Ensure the dynamic loader can find the dylib in bundle Frameworks at runtime
+        println!("cargo:rustc-link-arg=-Wl,-rpath,{}", build_output);
         println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../Frameworks");
+        println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../Resources");
 
-        // 3. Recompile if Swift source changes
+        // copy to resources for bundling
+        let resources_dir = format!("{}/resources", manifest_dir);
+        let _ = fs::create_dir_all(&resources_dir);
+        fs::copy(&dylib_path, format!("{}/{}", resources_dir, dylib_name))
+            .expect("Failed to copy libMacOSSensing.dylib into resources/");
+
         println!("cargo:rerun-if-changed={}/plugins/macos-sensing/Sources", manifest_dir);
-  }
+    }
+
+    tauri_build::build();
 }
 ```
 
@@ -260,8 +262,8 @@ public class MacOSSensingPlugin {
     public static let shared = MacOSSensingPlugin()
 
     // Window cache (refreshed every 5s)
-    private var windowCache: [CGWindowID: SCWindow] = [:]
-    private var lastCacheUpdate: Date = .distantPast
+private var windowCache: [CGWindowID: SCWindow] = [:]
+private var lastCacheUpdate: Date = .distantPast
     private var lastActiveWindowId: CGWindowID?
     private let stateQueue = DispatchQueue(label: "MacOSSensing.State")
 
@@ -282,18 +284,18 @@ public class MacOSSensingPlugin {
     // MARK: - Window Metadata
 
     public func getActiveWindowMetadata() async throws -> WindowMetadataFFI {
-        // 1. Get frontmost app
-        guard let app = NSWorkspace.shared.frontmostApplication else {
-            throw NSError(domain: "MacOSSensing", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "No active application"
-            ])
-        }
+    // 1. Get frontmost app
+    guard let app = NSWorkspace.shared.frontmostApplication else {
+        throw NSError(domain: "MacOSSensing", code: 1, userInfo: [
+            NSLocalizedDescriptionKey: "No active application"
+        ])
+    }
 
         // 2. Refresh cache if stale (read under stateQueue)
         let cacheAge = stateQueue.sync { Date().timeIntervalSince(lastCacheUpdate) }
         if cacheAge > 5.0 {
-            try await refreshWindowCache()
-        }
+        try await refreshWindowCache()
+    }
 
         // 3. Resolve window by stable ID if available, otherwise pick first on-screen for frontmost app
         let cachedFromId: SCWindow? = stateQueue.sync {
@@ -316,18 +318,18 @@ public class MacOSSensingPlugin {
             }
         }
 
-        guard let content = try? await SCShareableContent.excludingDesktopWindows(
-            false,
-            onScreenWindowsOnly: true
-        ),
-        let window = content.windows.first(where: {
-            $0.owningApplication?.bundleIdentifier == app.bundleIdentifier &&
-            $0.isOnScreen
-        }) else {
-            throw NSError(domain: "MacOSSensing", code: 2, userInfo: [
-                NSLocalizedDescriptionKey: "No window found for active app"
-            ])
-        }
+    guard let content = try? await SCShareableContent.excludingDesktopWindows(
+        false,
+        onScreenWindowsOnly: true
+    ),
+    let window = content.windows.first(where: {
+        $0.owningApplication?.bundleIdentifier == app.bundleIdentifier &&
+        $0.isOnScreen
+    }) else {
+        throw NSError(domain: "MacOSSensing", code: 2, userInfo: [
+            NSLocalizedDescriptionKey: "No window found for active app"
+        ])
+    }
 
         // 4. Cache ID and convert to FFI struct
         stateQueue.sync { lastActiveWindowId = window.windowID }
@@ -345,20 +347,20 @@ public class MacOSSensingPlugin {
             boundsWidth: window.frame.size.width,
             boundsHeight: window.frame.size.height
         )
-    }
+}
 
-    private func refreshWindowCache() async throws {
-        let content = try await SCShareableContent.excludingDesktopWindows(
-            false,
-            onScreenWindowsOnly: true
-        )
+private func refreshWindowCache() async throws {
+    let content = try await SCShareableContent.excludingDesktopWindows(
+        false,
+        onScreenWindowsOnly: true
+    )
         stateQueue.sync {
-            windowCache.removeAll()
-            for window in content.windows where window.isOnScreen {
-                windowCache[window.windowID] = window
-            }
-            lastCacheUpdate = Date()
-        }
+    windowCache.removeAll()
+    for window in content.windows where window.isOnScreen {
+        windowCache[window.windowID] = window
+    }
+    lastCacheUpdate = Date()
+}
     }
 
     // MARK: - Screenshot Capture
@@ -368,47 +370,47 @@ public class MacOSSensingPlugin {
         captureSemaphore.wait()
         defer { captureSemaphore.signal() }
 
-        // 1. Get window from cache
+    // 1. Get window from cache
         let hasWindow = stateQueue.sync { windowCache[windowId] != nil }
         if !hasWindow { try await refreshWindowCache() }
 
         guard let window = stateQueue.sync(execute: { windowCache[windowId] }) else {
-            throw NSError(domain: "MacOSSensing", code: 3, userInfo: [
-                NSLocalizedDescriptionKey: "Window not found: \(windowId)"
-            ])
-        }
+        throw NSError(domain: "MacOSSensing", code: 3, userInfo: [
+            NSLocalizedDescriptionKey: "Window not found: \(windowId)"
+        ])
+    }
 
-        // 2. Configure capture
-        let filter = SCContentFilter(desktopIndependentWindow: window)
-        let config = SCStreamConfiguration()
+    // 2. Configure capture
+    let filter = SCContentFilter(desktopIndependentWindow: window)
+    let config = SCStreamConfiguration()
 
-        let targetWidth = min(Int(window.frame.width), 1280)
-        let scale = CGFloat(targetWidth) / window.frame.width
-        config.width = targetWidth
-        config.height = Int(window.frame.height * scale)
-        config.pixelFormat = kCVPixelFormatType_32BGRA
-        config.showsCursor = false
+    let targetWidth = min(Int(window.frame.width), 1280)
+    let scale = CGFloat(targetWidth) / window.frame.width
+    config.width = targetWidth
+    config.height = Int(window.frame.height * scale)
+    config.pixelFormat = kCVPixelFormatType_32BGRA
+    config.showsCursor = false
 
-        // 3. Capture
-        guard let cgImage = try? await SCScreenshotManager.captureImage(
-            contentFilter: filter,
-            configuration: config
-        ) else {
-            throw NSError(domain: "MacOSSensing", code: 4, userInfo: [
-                NSLocalizedDescriptionKey: "Screenshot capture failed"
-            ])
-        }
+    // 3. Capture
+    guard let cgImage = try? await SCScreenshotManager.captureImage(
+        contentFilter: filter,
+        configuration: config
+    ) else {
+        throw NSError(domain: "MacOSSensing", code: 4, userInfo: [
+            NSLocalizedDescriptionKey: "Screenshot capture failed"
+        ])
+    }
 
-        // 4. Convert to PNG
+    // 4. Convert to PNG
         let bitmap = NSBitmapImageRep(cgImage: cgImage)
         guard let pngData = bitmap.representation(using: .png, properties: [:]) else {
-            throw NSError(domain: "MacOSSensing", code: 5, userInfo: [
-                NSLocalizedDescriptionKey: "PNG encoding failed"
-            ])
-        }
-
-        return pngData
+        throw NSError(domain: "MacOSSensing", code: 5, userInfo: [
+            NSLocalizedDescriptionKey: "PNG encoding failed"
+        ])
     }
+
+    return pngData
+}
 
     // MARK: - OCR
 
@@ -418,10 +420,10 @@ public class MacOSSensingPlugin {
                 // 1. Decode image (ImageIO-only; thread-safe on background threads)
                 guard let src = CGImageSourceCreateWithData(imageData as CFData, nil),
                       let cgImage = CGImageSourceCreateImageAtIndex(src, 0, nil) else {
-                    throw NSError(domain: "MacOSSensing", code: 6, userInfo: [
-                        NSLocalizedDescriptionKey: "Failed to decode image"
-                    ])
-                }
+                throw NSError(domain: "MacOSSensing", code: 6, userInfo: [
+                    NSLocalizedDescriptionKey: "Failed to decode image"
+                ])
+            }
 
                 // 2. Perform OCR and extract results under serial queue
                 let (recognizedText, avgConfidence, wordCount): (String, Double, UInt64) = ocrQueue.sync {
