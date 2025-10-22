@@ -860,8 +860,8 @@ src/
   - Batch DB `updated_at` updates every 10-15s (sent to DB thread, non-blocking)
 
 #### Step 5: Tauri Commands
-- [ ] Create `src-tauri/src/timer/commands.rs`
-- [ ] Register all commands in `lib.rs`
+- [x] Create `src-tauri/src/timer/commands.rs`
+- [x] Register all commands in `lib.rs`
 - [ ] Test commands via Tauri DevTools console
 
 #### Step 6: Frontend Types

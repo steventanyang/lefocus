@@ -38,6 +38,7 @@ struct SessionCompletedEvent {
     session: SessionInfo,
 }
 
+#[derive(Clone)]
 pub struct TimerController {
     state: Arc<Mutex<TimerState>>,
     db: Database,

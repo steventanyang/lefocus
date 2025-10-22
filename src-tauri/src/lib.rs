@@ -13,14 +13,24 @@ use macos_bridge::{
     OCRResult,
     WindowMetadata,
 };
-use timer::TimerController;
+use timer::{
+    commands::{
+        cancel_timer,
+        end_timer,
+        get_timer_state,
+        pause_timer,
+        resume_timer,
+        start_timer,
+    },
+    TimerController,
+};
 use tauri::Manager;
 use tauri::State;
 
-struct AppState {
+pub(crate) struct AppState {
     audio: AudioEngineHandle,
-    db: Database,
-    timer: TimerController,
+    _db: Database,
+    pub(crate) timer: TimerController,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -133,7 +143,7 @@ pub fn run() {
 
                 app.manage(AppState {
                     audio: AudioEngineHandle::new(),
-                    db: database,
+                    _db: database,
                     timer: timer_controller,
                 });
 
@@ -150,6 +160,12 @@ pub fn run() {
             test_get_window,
             test_capture_screenshot,
             test_run_ocr,
+            get_timer_state,
+            start_timer,
+            pause_timer,
+            resume_timer,
+            end_timer,
+            cancel_timer,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
