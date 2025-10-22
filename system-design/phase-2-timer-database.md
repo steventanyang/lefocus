@@ -99,7 +99,7 @@ Build a **production-quality Pomodoro timer** with:
 │                  Tauri Rust Core                         │
 │  ┌──────────────────────────────────────────────────┐   │
 │  │         TimerController (AppState)               │   │
-│  │  - state: Arc<Mutex<TimerState>>                 │   │
+│  │  - state: Arc<tokio::sync::Mutex<TimerState>>    │   │
 │  │  - ticker_handle: Option<JoinHandle>             │   │
 │  │  - db: Arc<Database>                             │   │
 │  └──────────────────┬───────────────────────────────┘   │
@@ -191,15 +191,44 @@ TimerController::end_timer()
 
 **On Restart:**
 - Database has session with `status=Running` or `status=Paused`
-- App startup detects incomplete session:
+- App startup detects and cleans up incomplete session:
   ```rust
-  if let Some(incomplete) = db.get_incomplete_sessions()? {
-      db.mark_as_interrupted(incomplete.id)?;
-      log::warn!("Marked session {} as interrupted", incomplete.id);
+  if let Some(incomplete) = db.get_incomplete_sessions().await? {
+      let now = Utc::now();
+
+      // 1. Finalize any open pause records (calculate duration in Rust)
+      let open_pauses = db.get_open_pauses(incomplete.id).await?;
+      for pause in open_pauses {
+          let duration_ms = (now - pause.pause_started_at).num_milliseconds() as u64;
+          db.finalize_pause(pause.id, now, duration_ms).await?;
+      }
+
+      // 2. Mark session as Interrupted with stopped_at timestamp
+      db.mark_as_interrupted(incomplete.id, now).await?;
+
+      log::warn!("Cleaned up interrupted session {}", incomplete.id);
   }
   ```
-- **Phase 2 behavior:** Mark as "Interrupted", do nothing else
-- **P1 behavior:** Offer soft resume ("Continue previous session?")
+
+**Finalize Pause SQL (simple update, duration calculated in Rust):**
+```sql
+UPDATE pauses
+SET pause_ended_at = ?1, duration_ms = ?2
+WHERE id = ?3;
+```
+
+**Mark as Interrupted SQL:**
+```sql
+UPDATE sessions
+SET status = 'Interrupted', stopped_at = ?1, updated_at = ?2
+WHERE id = ?3;
+```
+
+**Heartbeat Persistence (prevents data loss):**
+- Ticker task updates DB every 10-15s with latest `active_ms`, `paused_ms`, `updated_at`
+- On crash, DB has snapshot from last heartbeat (≤15s stale)
+- **Phase 2 behavior:** Mark as "Interrupted", finalize pauses, keep last snapshot
+- **P1 behavior:** Offer soft resume with recovered state
 
 ---
 
@@ -221,11 +250,18 @@ pub struct TimerState {
     pub status: TimerStatus,
     pub session_id: Option<String>,  // UUID as string
     pub target_ms: u64,              // Planned duration (e.g., 1500000 = 25min)
-    pub active_ms: u64,              // Time actively running (excludes pauses)
+    pub active_ms: u64,              // Completed running time (excludes pauses & current period)
     pub paused_ms: u64,              // Total time paused
+
+    // Wall-clock timestamps (for DB persistence)
     pub started_at: Option<DateTime<Utc>>,
     pub last_pause_started_at: Option<DateTime<Utc>>,
-    pub last_tick_at: Option<DateTime<Utc>>,  // For accurate resume
+
+    // Monotonic time tracking (not serialized, runtime-only)
+    #[serde(skip)]
+    pub active_ms_baseline: u64,     // active_ms value when current period started
+    #[serde(skip)]
+    pub running_anchor: Option<Instant>,  // When current running period started
 }
 ```
 
@@ -268,40 +304,81 @@ pub struct TimerState {
 
 ### 3.3 Time Calculations
 
+**Monotonic Time Anchoring (prevents drift):**
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimerState {
+    // ... existing fields ...
+
+    // active_ms stores ONLY completed running segments (pauses excluded)
+    pub active_ms: u64,
+
+    // Baseline when current running period started (not serialized)
+    #[serde(skip)]
+    pub active_ms_baseline: u64,  // Value of active_ms when this running period started
+
+    // Monotonic anchor for current running period (not serialized)
+    #[serde(skip)]
+    pub running_anchor: Option<Instant>,  // When current running period started
+
+    // DateTime for wall-clock timestamps (DB persistence)
+    pub started_at: Option<DateTime<Utc>>,
+    pub last_pause_started_at: Option<DateTime<Utc>>,
+}
+```
+
 **Remaining Time (displayed in UI):**
 ```rust
 fn get_remaining_ms(state: &TimerState) -> i64 {
     match state.status {
         TimerStatus::Idle => 0,
         TimerStatus::Paused => {
+            // active_ms already includes all completed running time
             (state.target_ms as i64) - (state.active_ms as i64)
         }
         TimerStatus::Running => {
-            let elapsed_since_last_tick = state.last_tick_at
-                .map(|t| Utc::now().signed_duration_since(t).num_milliseconds())
+            // active_ms + current running period (from anchor)
+            let elapsed_this_period = state.running_anchor
+                .map(|anchor| anchor.elapsed().as_millis() as u64)
                 .unwrap_or(0);
 
-            (state.target_ms as i64) - (state.active_ms as i64) - elapsed_since_last_tick
+            let total_active = state.active_ms + elapsed_this_period;
+            (state.target_ms as i64) - (total_active as i64)
         }
         TimerStatus::Stopped => 0,
     }
 }
 ```
 
-**Active Time (excludes pauses):**
+**Active Time Management:**
 ```rust
-// Updated on every tick (Running state)
-state.active_ms += 1000;  // 1 second per tick
+// On start:
+state.active_ms = 0;
+state.active_ms_baseline = 0;
+state.running_anchor = Some(Instant::now());
 
-// On pause:
-// - Stop incrementing active_ms
-// - Start incrementing paused_ms when resumed
+// On pause (finalize current running period):
+if let Some(anchor) = state.running_anchor {
+    let elapsed = anchor.elapsed().as_millis() as u64;
+    state.active_ms = state.active_ms_baseline + elapsed;  // Save completed segment
+    state.running_anchor = None;
+}
 
-// On resume:
+// On resume (start new running period):
+state.active_ms_baseline = state.active_ms;  // Current total becomes new baseline
+state.running_anchor = Some(Instant::now());  // New anchor
+
 let pause_duration = Utc::now()
     .signed_duration_since(state.last_pause_started_at.unwrap())
     .num_milliseconds() as u64;
 state.paused_ms += pause_duration;
+
+// On heartbeat/tick (update active_ms for DB persistence):
+if let Some(anchor) = state.running_anchor {
+    let elapsed = anchor.elapsed().as_millis() as u64;
+    state.active_ms = state.active_ms_baseline + elapsed;
+    // This updates active_ms for DB writes, but doesn't change baseline
+}
 ```
 
 ---
@@ -351,7 +428,43 @@ pub struct Pause {
 }
 ```
 
-### 4.3 Frontend Types (TypeScript)
+### 4.3 SessionInfo (Rust - IPC Response Type)
+
+**Purpose:** Lightweight response type for IPC (omits internal metadata like `created_at`, `updated_at`).
+
+**Usage:** Returned by `end_timer()` command and used in frontend display.
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionInfo {
+    pub id: String,
+    pub started_at: DateTime<Utc>,
+    pub stopped_at: Option<DateTime<Utc>>,
+    pub status: SessionStatus,
+    pub target_ms: u64,
+    pub active_ms: u64,
+    pub paused_ms: u64,
+}
+
+// Convenient conversion from Session (strips created_at/updated_at)
+impl From<Session> for SessionInfo {
+    fn from(session: Session) -> Self {
+        SessionInfo {
+            id: session.id,
+            started_at: session.started_at,
+            stopped_at: session.stopped_at,
+            status: session.status,
+            target_ms: session.target_ms,
+            active_ms: session.active_ms,
+            paused_ms: session.paused_ms,
+        }
+    }
+}
+```
+
+**Contract:** `SessionInfo` (Rust) serializes to match `SessionInfo` (TypeScript) exactly.
+
+### 4.4 Frontend Types (TypeScript)
 
 ```typescript
 // src/types/timer.ts
@@ -468,29 +581,61 @@ fn apply_migration(conn: &Connection, version: i32) -> Result<()> {
 }
 ```
 
-### 5.3 Dummy Data for Phase 2 Testing
+### 5.3 Database Access Pattern (Dedicated Thread)
 
-Since Phase 3 will add context readings, we'll insert placeholder data to test the schema:
+**Critical:** Use a dedicated DB thread with message passing to avoid blocking the async runtime.
 
 ```rust
-// Only for testing - remove in Phase 3
-#[cfg(debug_assertions)]
-pub fn insert_dummy_reading(db: &Database, session_id: &str) -> Result<()> {
-    db.conn.lock().unwrap().execute(
-        "INSERT INTO context_readings (session_id, timestamp, bundle_id, window_title, owner_name, bounds_json)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![
-            session_id,
-            Utc::now().to_rfc3339(),
-            "com.placeholder.app",
-            "Placeholder Window",
-            "Placeholder",
-            r#"{"x":0,"y":0,"width":800,"height":600}"#,
-        ],
-    )?;
-    Ok(())
+// Database actor pattern
+pub struct Database {
+    tx: mpsc::Sender<DbCommand>,
+}
+
+enum DbCommand {
+    CreateSession { session: Session, respond_to: oneshot::Sender<Result<()>> },
+    UpdateSession { id: String, active_ms: u64, paused_ms: u64, respond_to: oneshot::Sender<Result<()>> },
+    CreatePause { pause: Pause, respond_to: oneshot::Sender<Result<()>> },
+    FinalizePause { pause_id: String, ended_at: DateTime<Utc>, duration_ms: u64, respond_to: oneshot::Sender<Result<()>> },
+    FinalizeSession { id: String, status: SessionStatus, stopped_at: DateTime<Utc>, respond_to: oneshot::Sender<Result<()>> },
+    GetIncompleteSessions { respond_to: oneshot::Sender<Result<Vec<Session>>> },
+    GetOpenPauses { session_id: String, respond_to: oneshot::Sender<Result<Vec<Pause>>> },
+    MarkAsInterrupted { session_id: String, stopped_at: DateTime<Utc>, respond_to: oneshot::Sender<Result<()>> },
+}
+
+impl Database {
+    pub fn new(path: PathBuf) -> Result<Self> {
+        let (tx, mut rx) = mpsc::channel::<DbCommand>(100);
+
+        // Spawn dedicated DB thread
+        std::thread::spawn(move || {
+            let conn = Connection::open(path).unwrap();
+            // Run migrations...
+
+            while let Some(cmd) = rx.blocking_recv() {
+                match cmd {
+                    DbCommand::CreateSession { session, respond_to } => {
+                        let result = conn.execute("INSERT INTO sessions ...", params![...]);
+                        let _ = respond_to.send(result.map(|_| ()));
+                    }
+                    // ... handle other commands
+                }
+            }
+        });
+
+        Ok(Self { tx })
+    }
+
+    pub async fn create_session(&self, session: Session) -> Result<()> {
+        let (tx, rx) = oneshot::channel();
+        self.tx.send(DbCommand::CreateSession { session, respond_to: tx }).await?;
+        rx.await?
+    }
 }
 ```
+
+### 5.4 Notes for Phase 3 Preparation
+
+**Context readings table:** Will be added in Phase 3 schema migration. Phase 2 only creates `sessions` and `pauses` tables.
 
 ---
 
@@ -656,8 +801,12 @@ src/
 #### Step 1: Database Setup
 - [ ] Create `src-tauri/src/db/` module
 - [ ] Write `schema_v1.sql` (sessions + pauses tables)
-- [ ] Implement `Database` struct with rusqlite
-- [ ] Implement migrations using `PRAGMA user_version`
+- [ ] Implement `Database` actor with dedicated thread:
+  - Create `DbCommand` enum for all DB operations
+  - Spawn `std::thread` with `Connection` and `mpsc::Receiver`
+  - Public methods send commands via `mpsc::Sender` + await `oneshot` response
+  - **Pattern:** Message passing to dedicated thread (no spawn_blocking needed)
+- [ ] Implement migrations using `PRAGMA user_version` (run on thread startup)
 - [ ] Add database initialization to app startup
 - [ ] Test: Verify DB created in Tauri app data directory
 
@@ -670,36 +819,45 @@ src/
 #### Step 3: Timer State Machine
 - [ ] Create `src-tauri/src/timer/mod.rs`
 - [ ] Implement `TimerState` and `TimerStatus` enums
+  - Include `active_ms_baseline: u64` with `#[serde(skip)]`
+  - Include `running_anchor: Option<Instant>` with `#[serde(skip)]`
 - [ ] Implement state transition logic
-- [ ] Implement time calculation functions (`get_remaining_ms`, etc.)
+- [ ] Implement time calculation functions:
+  - `get_remaining_ms()` - adds `active_ms + anchor.elapsed()` (no double-counting)
+  - On start: `active_ms = 0`, `baseline = 0`, `anchor = Some(now)`
+  - On pause: `active_ms = baseline + anchor.elapsed()`, `anchor = None`
+  - On resume: `baseline = active_ms`, `anchor = Some(now)`
+  - On tick: `active_ms = baseline + anchor.elapsed()` (for DB write)
 - [ ] Unit tests for state transitions
 
 #### Step 4: Timer Controller
 - [ ] Create `src-tauri/src/timer/controller.rs`
-- [ ] Implement `TimerController` struct with `Arc<Mutex<TimerState>>`
+- [ ] Implement `TimerController` struct with `Arc<tokio::sync::Mutex<TimerState>>`
+  - **Important:** Use `tokio::sync::Mutex`, NOT `std::sync::Mutex` (avoids blocking Tokio runtime)
 - [ ] Implement `start_timer()` method:
-  - Create session in DB
+  - Create session in DB (await db.create_session() - sends to dedicated thread)
   - Spawn ticker task (tokio::spawn with tokio::time::interval)
   - Store JoinHandle, cancel on any state transition
   - Emit state-changed event
 - [ ] Implement `pause_timer()` method:
-  - Create pause record
+  - Create pause record in DB (sends to dedicated thread)
   - Cancel ticker task (abort JoinHandle)
   - Emit event
 - [ ] Implement `resume_timer()` method:
-  - Update pause record (end time + duration)
+  - Update pause record (end time + duration) via DB thread
   - Restart ticker (new JoinHandle)
   - Emit event
 - [ ] Implement `end_timer()` method:
   - Cancel ticker task
-  - Update session status to Completed, set stopped_at
+  - Update session status to Completed, set stopped_at (via DB thread)
   - Emit session-completed event
-- [ ] Implement `cancel_timer()` method (cancel ticker + mark Cancelled)
+- [ ] Implement `cancel_timer()` method (cancel ticker + mark Cancelled via DB thread)
 - [ ] Implement ticker task:
-  - tokio::time::interval(1s) updates `active_ms` internally (Arc<Mutex>)
-  - Check if `remaining_ms ≤ 0` → auto-transition to Stopped
+  - tokio::time::interval(1s) checks state via `Arc<tokio::sync::Mutex>`
+  - On each tick: update `active_ms = baseline + anchor.elapsed()` (monotonic, drift-free)
+  - Check if `get_remaining_ms() ≤ 0` → auto-transition to Stopped
   - Emit heartbeat every 10 ticks (10s)
-  - Batch DB `updated_at` updates every 10-15s (not every tick)
+  - Batch DB `updated_at` updates every 10-15s (sent to DB thread, non-blocking)
 
 #### Step 5: Tauri Commands
 - [ ] Create `src-tauri/src/timer/commands.rs`
@@ -726,9 +884,19 @@ src/
 - [ ] Test: Verify UI updates within 100ms of state change
 
 #### Step 9: Crash Handling
-- [ ] Add startup check for incomplete sessions
-- [ ] Mark interrupted sessions on app init
-- [ ] Test: Force-quit during session, restart, verify status=Interrupted
+- [ ] Add `get_incomplete_sessions()` DB command (finds Running/Paused sessions)
+- [ ] Add `get_open_pauses(session_id)` DB command (finds pauses with null ended_at)
+- [ ] Add `finalize_pause(pause_id, ended_at, duration_ms)` DB command
+- [ ] Add `mark_as_interrupted(session_id, stopped_at)` DB command
+- [ ] Add startup check in `main.rs`:
+  - Call `get_incomplete_sessions()`
+  - For each session:
+    - Get `now = Utc::now()`
+    - Call `get_open_pauses()` to find dangling pauses
+    - For each open pause: calculate duration in Rust, call `finalize_pause()`
+    - Call `mark_as_interrupted()` with `stopped_at = now`
+- [ ] Test: Force-quit during Running, restart, verify status=Interrupted
+- [ ] Test: Force-quit during Paused, restart, verify open pause has duration calculated correctly
 
 #### Step 10: Manual Testing
 - [ ] Start 15min timer, verify DB record created
@@ -758,7 +926,8 @@ src/
 | **Auto-stop** | Start timer (debug: 10s) → wait | Timer auto-stops at 0, status=Stopped, UI shows "Complete!" |
 | **End session** | Auto-stopped timer → click "End" | Session status=Completed, stopped_at set, UI returns to Idle |
 | **Cancel** | Start timer → wait 10s → click "Cancel" | Session status=Cancelled, UI returns to Idle |
-| **Crash recovery** | Start timer → force quit app → restart | Session marked as Interrupted on startup |
+| **Crash recovery (running)** | Start timer → force quit app → restart | Session marked as Interrupted, `active_ms` from last heartbeat preserved |
+| **Crash recovery (paused)** | Start timer → pause → force quit → restart | Session marked as Interrupted, open pause finalized with duration calculated |
 
 ### 9.2 Acceptance Criteria
 
