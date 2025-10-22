@@ -799,30 +799,30 @@ src/
 ### 8.1 Step-by-Step Checklist
 
 #### Step 1: Database Setup
-- [ ] Create `src-tauri/src/db/` module
-- [ ] Write `schema_v1.sql` (sessions + pauses tables)
-- [ ] Implement `Database` actor with dedicated thread:
+- [x] Create `src-tauri/src/db/` module
+- [x] Write `schema_v1.sql` (sessions + pauses tables)
+- [x] Implement `Database` actor with dedicated thread:
   - Create `DbCommand` enum for all DB operations
   - Spawn `std::thread` with `Connection` and `mpsc::Receiver`
   - Public methods send commands via `mpsc::Sender` + await `oneshot` response
   - **Pattern:** Message passing to dedicated thread (no spawn_blocking needed)
-- [ ] Implement migrations using `PRAGMA user_version` (run on thread startup)
-- [ ] Add database initialization to app startup
+- [x] Implement migrations using `PRAGMA user_version` (run on thread startup)
+- [x] Add database initialization to app startup
 - [ ] Test: Verify DB created in Tauri app data directory
 
 #### Step 2: Data Models
-- [ ] Create `src-tauri/src/models/session.rs`
-- [ ] Create `src-tauri/src/models/pause.rs`
-- [ ] Implement `Session`, `SessionStatus`, `Pause` structs
-- [ ] Derive `Serialize`, `Deserialize` for Tauri IPC
+- [x] Create `src-tauri/src/models/session.rs`
+- [x] Create `src-tauri/src/models/pause.rs`
+- [x] Implement `Session`, `SessionStatus`, `Pause` structs
+- [x] Derive `Serialize`, `Deserialize` for Tauri IPC
 
 #### Step 3: Timer State Machine
-- [ ] Create `src-tauri/src/timer/mod.rs`
-- [ ] Implement `TimerState` and `TimerStatus` enums
+- [x] Create `src-tauri/src/timer/mod.rs`
+- [x] Implement `TimerState` and `TimerStatus` enums
   - Include `active_ms_baseline: u64` with `#[serde(skip)]`
   - Include `running_anchor: Option<Instant>` with `#[serde(skip)]`
-- [ ] Implement state transition logic
-- [ ] Implement time calculation functions:
+- [x] Implement state transition logic
+- [x] Implement time calculation functions:
   - `get_remaining_ms()` - adds `active_ms + anchor.elapsed()` (no double-counting)
   - On start: `active_ms = 0`, `baseline = 0`, `anchor = Some(now)`
   - On pause: `active_ms = baseline + anchor.elapsed()`, `anchor = None`
@@ -831,28 +831,28 @@ src/
 - [ ] Unit tests for state transitions
 
 #### Step 4: Timer Controller
-- [ ] Create `src-tauri/src/timer/controller.rs`
-- [ ] Implement `TimerController` struct with `Arc<tokio::sync::Mutex<TimerState>>`
+- [x] Create `src-tauri/src/timer/controller.rs`
+- [x] Implement `TimerController` struct with `Arc<tokio::sync::Mutex<TimerState>>`
   - **Important:** Use `tokio::sync::Mutex`, NOT `std::sync::Mutex` (avoids blocking Tokio runtime)
-- [ ] Implement `start_timer()` method:
+- [x] Implement `start_timer()` method:
   - Create session in DB (await db.create_session() - sends to dedicated thread)
   - Spawn ticker task (tokio::spawn with tokio::time::interval)
   - Store JoinHandle, cancel on any state transition
   - Emit state-changed event
-- [ ] Implement `pause_timer()` method:
+- [x] Implement `pause_timer()` method:
   - Create pause record in DB (sends to dedicated thread)
   - Cancel ticker task (abort JoinHandle)
   - Emit event
-- [ ] Implement `resume_timer()` method:
+- [x] Implement `resume_timer()` method:
   - Update pause record (end time + duration) via DB thread
   - Restart ticker (new JoinHandle)
   - Emit event
-- [ ] Implement `end_timer()` method:
+- [x] Implement `end_timer()` method:
   - Cancel ticker task
   - Update session status to Completed, set stopped_at (via DB thread)
   - Emit session-completed event
-- [ ] Implement `cancel_timer()` method (cancel ticker + mark Cancelled via DB thread)
-- [ ] Implement ticker task:
+- [x] Implement `cancel_timer()` method (cancel ticker + mark Cancelled via DB thread)
+- [x] Implement ticker task:
   - tokio::time::interval(1s) checks state via `Arc<tokio::sync::Mutex>`
   - On each tick: update `active_ms = baseline + anchor.elapsed()` (monotonic, drift-free)
   - Check if `get_remaining_ms() ≤ 0` → auto-transition to Stopped
@@ -1085,4 +1085,3 @@ ORDER BY started_at DESC;
 **Total sections:** 12
 **Estimated implementation time:** 1-2 weeks
 **Ready for implementation:** ✅
-

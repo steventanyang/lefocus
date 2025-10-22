@@ -1,6 +1,8 @@
 mod audio;
 mod db;
 mod macos_bridge;
+mod models;
+mod timer;
 
 use audio::AudioEngineHandle;
 use db::Database;
@@ -11,12 +13,14 @@ use macos_bridge::{
     OCRResult,
     WindowMetadata,
 };
+use timer::TimerController;
 use tauri::Manager;
 use tauri::State;
 
 struct AppState {
     audio: AudioEngineHandle,
     db: Database,
+    timer: TimerController,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -124,9 +128,13 @@ pub fn run() {
                 let db_path = app_data_dir.join("lefocus.sqlite3");
                 let database = Database::new(db_path)?;
 
+                let timer_controller =
+                    TimerController::new(app.handle().clone(), database.clone());
+
                 app.manage(AppState {
                     audio: AudioEngineHandle::new(),
                     db: database,
+                    timer: timer_controller,
                 });
 
                 Ok(())
