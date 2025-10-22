@@ -1,0 +1,50 @@
+use anyhow::{bail, Context, Result};
+use rusqlite::{Connection, Transaction};
+
+const CURRENT_SCHEMA_VERSION: i32 = 1;
+
+pub fn run_migrations(conn: &mut Connection) -> Result<()> {
+    let mut version: i32 = conn
+        .pragma_query_value(None, "user_version", |row| row.get(0))
+        .context("failed to read user_version pragma")?;
+
+    if version > CURRENT_SCHEMA_VERSION {
+        bail!(
+            "database version ({}) is newer than supported schema ({})",
+            version,
+            CURRENT_SCHEMA_VERSION
+        );
+    }
+
+    if version == CURRENT_SCHEMA_VERSION {
+        return Ok(());
+    }
+
+    let tx = conn
+        .transaction()
+        .context("failed to open migration transaction")?;
+
+    while version < CURRENT_SCHEMA_VERSION {
+        let next_version = version + 1;
+        apply_migration(&tx, next_version)
+            .with_context(|| format!("migration to version {next_version} failed"))?;
+        version = next_version;
+    }
+
+    tx.pragma_update(None, "user_version", CURRENT_SCHEMA_VERSION)
+        .context("failed to update user_version pragma")?;
+    tx.commit().context("failed to commit migrations")?;
+
+    Ok(())
+}
+
+fn apply_migration(tx: &Transaction<'_>, version: i32) -> Result<()> {
+    match version {
+        1 => {
+            tx.execute_batch(include_str!("schema_v1.sql"))
+                .context("failed to execute schema_v1.sql")?;
+            Ok(())
+        }
+        _ => bail!("unknown migration target version: {version}"),
+    }
+}

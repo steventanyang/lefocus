@@ -16,3 +16,6 @@ manually build swift
     SWIFT_MODULE_CACHE_PATH=$PWD/.swift-module-cache swift build -c release`
 
 
+scripts
+
+`/new_migration.sh`

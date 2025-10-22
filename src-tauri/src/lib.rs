@@ -1,7 +1,9 @@
 mod audio;
+mod db;
 mod macos_bridge;
 
 use audio::AudioEngineHandle;
+use db::Database;
 use macos_bridge::{
     capture_screenshot,
     get_active_window_metadata,
@@ -9,11 +11,12 @@ use macos_bridge::{
     OCRResult,
     WindowMetadata,
 };
+use tauri::Manager;
 use tauri::State;
 
-// Global audio engine state
-struct AudioState {
-    engine: AudioEngineHandle,
+struct AppState {
+    audio: AudioEngineHandle,
+    db: Database,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -28,52 +31,52 @@ fn start_audio(
     sound_type: SoundType,
     left_freq: Option<f32>,
     right_freq: Option<f32>,
-    state: State<AudioState>,
+    state: State<AppState>,
 ) -> Result<String, String> {
     // Initialize new audio engine and add the appropriate source
-    state.engine.start()?;
+    state.audio.start()?;
 
     match sound_type {
         SoundType::Binaural => {
             let left = left_freq.unwrap_or(200.0);
             let right = right_freq.unwrap_or(204.0);
-            state.engine.append_binaural(left, right)?;
+            state.audio.append_binaural(left, right)?;
         }
         SoundType::BrownNoise => {
-            state.engine.append_brown_noise()?;
+            state.audio.append_brown_noise()?;
         }
         SoundType::Rain => {
-            state.engine.append_rain()?;
+            state.audio.append_rain()?;
         }
     }
 
-    state.engine.play()?;
+    state.audio.play()?;
 
     Ok("Audio started".to_string())
 }
 
 #[tauri::command]
-fn stop_audio(state: State<AudioState>) -> Result<String, String> {
-    state.engine.stop()?;
+fn stop_audio(state: State<AppState>) -> Result<String, String> {
+    state.audio.stop()?;
     Ok("Audio stopped".to_string())
 }
 
 #[tauri::command]
-fn toggle_pause(state: State<AudioState>) -> Result<bool, String> {
-    let is_paused = state.engine.is_paused()?;
+fn toggle_pause(state: State<AppState>) -> Result<bool, String> {
+    let is_paused = state.audio.is_paused()?;
 
     if is_paused {
-        state.engine.play()?;
+        state.audio.play()?;
         Ok(false) // Not paused anymore
     } else {
-        state.engine.pause()?;
+        state.audio.pause()?;
         Ok(true) // Now paused
     }
 }
 
 #[tauri::command]
-fn set_volume(volume: f32, state: State<AudioState>) -> Result<String, String> {
-    state.engine.set_volume(volume)?;
+fn set_volume(volume: f32, state: State<AppState>) -> Result<String, String> {
+    state.audio.set_volume(volume)?;
     Ok(format!("Volume set to {}", volume))
 }
 
@@ -110,8 +113,26 @@ fn test_run_ocr(image_path: String) -> Result<OCRResult, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .manage(AudioState {
-            engine: AudioEngineHandle::new(),
+        .setup(|app| {
+            let result = (|| -> anyhow::Result<()> {
+                let app_data_dir = app
+                    .path()
+                    .app_data_dir()
+                    .map_err(|err| anyhow::anyhow!(err))?;
+                std::fs::create_dir_all(&app_data_dir)?;
+
+                let db_path = app_data_dir.join("lefocus.sqlite3");
+                let database = Database::new(db_path)?;
+
+                app.manage(AppState {
+                    audio: AudioEngineHandle::new(),
+                    db: database,
+                });
+
+                Ok(())
+            })();
+
+            result.map_err(|err| err.into())
         })
         .invoke_handler(tauri::generate_handler![
             start_audio,

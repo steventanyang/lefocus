@@ -1,45 +1,59 @@
-1. keep just as timer for now, integration we can do in p1
-2. I think we can use tokio tasks for the context sensing
-3. I think we shoudl write swift code and expose via tauri plugin
-4. Use existing creates we can make our own for p1
-5. yea do the swift tuari plugin and call swift scripts
-6. do sqlite
+1. 
+- lets do timer state in rust so its 1 source of truth
+- yea support pause and resume , we want to track how long the pauses are as well because that will go in the summary
+- if crashes, for now we're just going to end on quit. later on in p1 we can do soft resume
+
+2. 
+- use tauri app data directory
+- initialize on app startup
+- yea lets set up migrations now , use PRAGMA
+
+3. 
+- mark it as interrupted. this will help us with soft resumes in the future. we should also have other statuses (deleted, running, paused, etc..)
+- we do not allow this
+- yes 
+  •	Planned = target_ms you already have.
+	•	Actual active = active_ms accumulator (excludes pauses).
+	•	Paused total = paused_ms.
+	•	Wall time elapsed (optional) = stopped_at - started_at.
+
+
+4. 
+right now the audio player is in a separate file
+we're showing the test inteface rn for phase 1. 
+also put that in a separate file just for safekeeping, then we can write our new stuff
+
+5. 
+- yes
+- remaining time
+- just text for now, but plan for progress bar
+
+6. 
+- for now selectable from frontend with preset options
+
 7. 
-Duration: longer segments are usually more reliable.
-Focus stability: fraction of frames where the same window/app stayed active.
-Visual change clarity: how far the pHash/SSIM delta at boundaries is from your change threshold (the “margin”).
-OCR quality: avg confidence or text length; 0 if OCR failed.
+- Let React manage smooth animation with a local 250 ms interval, but sync to Rust via transition events + a 5–10 s heartbeat 
+- 
 
-8. lets do memory and dump for now. we can make this more relaible p1
+8. 
+- stop but dont create session record. user clicks end to finalize
 
-9. yea make the ui dead simple for now . just empty screen with timer clock + start stop buttons. replace audio ui entirely. keep teh audio files for later
+9.
+- Create dummy/placeholder readings for testing
 
-10. use recharts,
-11. no this is for p1
+10. 
+-  push-first with events from Rust, plus a tiny pull on mount or when you suspect desync.
 
-12. auto req on first start + minimal check
-13. no fallback hard requirement
-14. we can add telemetry later on for p1
+11. 
+- keep it lean—only the sessions (and pauses) tables. Add readings/segments in Phase 3+.
 
-15. if ocr graphics fail, right now just silent but log for me to see
-16. yea just do the arc/box references handled by allocator
-17. 
+12. 
+Ill just manual for now if we need test I"ll ask
 
-on switch(new_app):
-  if current_segment.duration < min_segment:
-    extend current to include brief switch (interruption noted)
-  else if previous_app == new_app and last_interruption.duration <= merge_gap:
-    merge sandwich; append "interruption: B (t)"
-  else if switch_rate(60s) >= 3:
-    open/extend "Transitioning" segment
-  else:
-    close current; open new segment
+13. 
+looks good
 
-periodic:
-  if "Transitioning" and stable in one app ≥ 15s: close Transitioning; open stable segment
+14. 
+- also pausing works
 
-  Thresholds
-min_segment = 15s
-merge_gap = 12s
-transition_trigger: ≥3 switches in 60s OR median_dwell < 10s
 

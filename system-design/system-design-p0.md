@@ -1506,30 +1506,39 @@ match reading_tx.try_send(reading) {
 
 ## 11. Implementation Roadmap
 
-### Phase 1: Foundation (Week 1)
+### Phase 1: Swift Plugin (Week 1) ✅ COMPLETED
 
-**Goal:** Timer + database + minimal UI
+**Goal:** macOS context capture working via compiled dylib with FFI
+
+- [x] Create Swift plugin with compiled dylib approach
+- [x] Implement `getActiveWindowMetadata()` using `NSWorkspace` + `ScreenCaptureKit`
+- [x] Implement `captureActiveWindowScreenshot()` using `ScreenCaptureKit`
+- [x] Implement `runOCR()` using `VNRecognizeTextRequest` (Vision framework)
+- [x] Build FFI bridge (C ABI shim) between Rust and Swift
+- [x] Set up `build.rs` to compile Swift → dylib automatically
+- [x] Add window caching for stable `CGWindowID`-based window matching
+- [x] Test all three functions independently via Tauri commands
+
+**Deliverable:** Swift dylib callable from Rust via FFI, returns window metadata + screenshots + OCR results.
+
+**Status:** Completed per [phase-1-swift-plugin.md](phase-1-swift-plugin.md). All acceptance criteria met.
+
+---
+
+### Phase 2: Timer + Database Setup (Week 2)
+
+**Goal:** Pomodoro timer with session persistence
 
 - [ ] Replace audio UI with timer UI (clock display, start/stop buttons)
 - [ ] Implement `TimerController` with state machine
 - [ ] Set up SQLite database with schema
 - [ ] Wire up Tauri commands: `start_timer`, `stop_timer`, `get_timer_state`
 - [ ] Emit `timer-tick` events to frontend
+- [ ] Create session records in database on timer start/stop
 
 **Deliverable:** Working Pomodoro timer with persistent session records (no sensing yet).
 
-### Phase 2: Swift Plugin (Week 2)
-
-**Goal:** macOS context capture working
-
-- [ ] Create Tauri plugin scaffold for Swift
-- [ ] Implement `getActiveWindowMetadata()` using `NSWorkspace`
-- [ ] Implement `captureActiveWindowScreenshot()` using `ScreenCaptureKit`
-- [ ] Implement `runOCR()` using `VNRecognizeTextRequest`
-- [ ] Add permission checks and error handling
-- [ ] Test all three functions independently
-
-**Deliverable:** Swift plugin callable from Rust, returns window metadata + screenshots.
+---
 
 ### Phase 3: Sensing Pipeline (Week 3)
 
