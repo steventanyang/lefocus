@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "camelCase")]
 pub enum SessionStatus {
     Running,
-    Paused,
     Completed,
     Cancelled,
     Interrupted,
@@ -15,7 +14,6 @@ impl SessionStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
             SessionStatus::Running => "Running",
-            SessionStatus::Paused => "Paused",
             SessionStatus::Completed => "Completed",
             SessionStatus::Cancelled => "Cancelled",
             SessionStatus::Interrupted => "Interrupted",
@@ -32,7 +30,6 @@ pub struct Session {
     pub status: SessionStatus,
     pub target_ms: u64,
     pub active_ms: u64,
-    pub paused_ms: u64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -46,7 +43,6 @@ pub struct SessionInfo {
     pub status: SessionStatus,
     pub target_ms: u64,
     pub active_ms: u64,
-    pub paused_ms: u64,
 }
 
 impl From<Session> for SessionInfo {
@@ -58,7 +54,6 @@ impl From<Session> for SessionInfo {
             status: session.status,
             target_ms: session.target_ms,
             active_ms: session.active_ms,
-            paused_ms: session.paused_ms,
         }
     }
 }
