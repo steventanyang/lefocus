@@ -2,7 +2,7 @@ use tauri::State;
 
 use crate::{
     models::SessionInfo,
-    timer::{TimerController, TimerState},
+    timer::{TimerController, TimerSnapshot, TimerState},
 };
 
 use crate::AppState;
@@ -12,9 +12,11 @@ fn controller_from_state(state: &State<'_, AppState>) -> TimerController {
 }
 
 #[tauri::command]
-pub async fn get_timer_state(state: State<'_, AppState>) -> Result<TimerState, String> {
+pub async fn get_timer_state(
+    state: State<'_, AppState>,
+) -> Result<TimerSnapshot, String> {
     let controller = controller_from_state(&state);
-    Ok(controller.get_state().await)
+    Ok(controller.get_snapshot().await)
 }
 
 #[tauri::command]
@@ -25,24 +27,6 @@ pub async fn start_timer(
     let controller = controller_from_state(&state);
     controller
         .start_timer(target_ms)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn pause_timer(state: State<'_, AppState>) -> Result<TimerState, String> {
-    let controller = controller_from_state(&state);
-    controller
-        .pause_timer()
-        .await
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-pub async fn resume_timer(state: State<'_, AppState>) -> Result<TimerState, String> {
-    let controller = controller_from_state(&state);
-    controller
-        .resume_timer()
         .await
         .map_err(|e| e.to_string())
 }

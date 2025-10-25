@@ -14,14 +14,7 @@ use macos_bridge::{
     WindowMetadata,
 };
 use timer::{
-    commands::{
-        cancel_timer,
-        end_timer,
-        get_timer_state,
-        pause_timer,
-        resume_timer,
-        start_timer,
-    },
+    commands::{cancel_timer, end_timer, get_timer_state, start_timer},
     TimerController,
 };
 use tauri::Manager;
@@ -162,8 +155,6 @@ pub fn run() {
             test_run_ocr,
             get_timer_state,
             start_timer,
-            pause_timer,
-            resume_timer,
             end_timer,
             cancel_timer,
         ])
