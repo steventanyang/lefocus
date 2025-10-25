@@ -25,11 +25,28 @@ Swift dylib (MacOSSensing)
 ## Responsibilities
 
 - Rust/Tauri
-  - Define commands; call FFI; handle memory; (future) sensing/segmentation/storage.
+  - Define commands; call FFI; handle memory; database and timers; (future) sensing/segmentation/storage.
 - Swift dylib
   - Resolve frontmost window; capture per-window PNG; run OCR; enforce concurrency; manage buffers.
 - Build/Bundle
   - `build.rs` compiles Swift, sets rpaths, copies dylib to `resources/`; Tauri bundles it.
+
+## Startup & App State
+
+- Entry point: `src-tauri/src/main.rs` calls `lefocus_lib::run()`.
+- `src-tauri/src/lib.rs` builds the Tauri app and initializes shared state (audio engine + database) inside `AppState`.
+- Database path: app data dir joined with `lefocus.sqlite3`.
+
+Key wiring (simplified):
+
+```
+run() builds Tauri → setup():
+  - resolve app_data_dir
+  - db_path = app_data_dir/lefocus.sqlite3
+  - Database::new(db_path)  // spawns DB thread, runs migrations
+  - app.manage(AppState { audio, db })
+  - register command handlers
+```
 
 ## Data & Flow (test commands)
 
@@ -46,6 +63,19 @@ Swift dylib (MacOSSensing)
   - FFI uses `Task.detached` + semaphores (5s timeout) to avoid deadlock.
 - Rust
   - Tauri commands are synchronous (for tests); consider `spawn_blocking` when integrating.
+  - Database access runs on a dedicated actor thread (single writer) via message passing; callers never block the async runtime.
+
+## Database (SQLite + actor model)
+
+- Dedicated thread: started by `Database::new()`. It opens SQLite, enables WAL and foreign keys, runs migrations, then processes commands.
+- API: call `Database::execute(|conn| { ... })` to run closure-based operations on the DB thread, returning results via oneshot.
+- Benefits: isolates blocking I/O, guarantees single-writer semantics, and centralizes migration/startup.
+
+## Migrations
+
+- Versioned with `PRAGMA user_version` and `CURRENT_SCHEMA_VERSION` in Rust.
+- On startup: if the DB version < current, run sequential migrations inside one transaction, bump `user_version`, commit.
+- Initial schema (v1): tables `sessions`, `pauses` with indexes and FK constraints.
 
 ## FFI Surface (C ABI via shim)
 
@@ -81,6 +111,17 @@ src-tauri/
     main.rs                        # Tauri entry
     lib.rs                         # Tauri commands; registers handlers
     macos_bridge.rs                # Safe Rust FFI wrappers -> C shim
+    db/
+      mod.rs                       # Database actor thread, execute API, WAL, FKs
+      migrations.rs                # Migration runner using PRAGMA user_version
+      schema_v1.sql                # Initial schema (sessions, pauses)
+    models/
+      mod.rs
+      session.rs                   # Session, SessionStatus
+      pause.rs                     # Pause
+    timer/
+      mod.rs                       # Timer module (scaffold)
+      state.rs                     # TimerState, TimerStatus (drift-free elapsed)
     audio/
       mod.rs
       binaural.rs
@@ -101,11 +142,19 @@ system-design/
   system-architecture.md           # this document
   system-design-p0.md
   phase-1-swift-plugin.md
+  phase-2-timer-database.md
   p0prd.md
   p1-improvements.md
   notes.md
   lefocus.md
 ```
+
+## Timer subsystem (Phase 2 scaffolding)
+
+- `timer/state.rs` defines the state machine data structures:
+  - `TimerStatus`: `Idle | Running | Paused | Stopped`.
+  - `TimerState`: accumulates active/paused time, planned duration, wall-clock stamps, and a monotonic `running_anchor` to compute drift‑free elapsed time.
+- Controller/commands/events will be added per Phase 2 to manage session lifecycle and emit updates to the UI.
 
 ## Tauri commands (current)
 
@@ -113,6 +162,8 @@ system-design/
 - `test_capture_screenshot(window_id: u32) -> String`
 - `test_run_ocr(image_path: String) -> OCRResult`
 - Legacy audio: `start_audio`, `stop_audio`, `toggle_pause`, `set_volume`
+
+Planned (Phase 2): `start_timer`, `pause_timer`, `resume_timer`, `end_timer`, `cancel_timer`, `get_timer_state`.
 
 ## Known decisions
 
@@ -123,3 +174,4 @@ system-design/
 ## Next wiring (P0)
 
 - Add sensing pipeline + segmentation; move commands to async + `spawn_blocking` for capture/OCR; integrate SQLite WAL.
+  Next (Phase 2): Timer controller + DB persistence of sessions/pauses; Tauri commands and events; crash recovery on startup.
