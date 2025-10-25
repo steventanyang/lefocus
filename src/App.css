@@ -1,11 +1,13 @@
+/* Japanese Minimalist Styling - White background, black text, typography weight for hierarchy */
+
 :root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   font-size: 16px;
-  line-height: 24px;
+  line-height: 1.6;
   font-weight: 400;
 
-  color: #0f0f0f;
-  background-color: #f6f6f6;
+  color: #000000;
+  background-color: #ffffff;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -14,236 +16,161 @@
   -webkit-text-size-adjust: 100%;
 }
 
-.container {
+* {
   margin: 0;
-  padding: 2rem;
-  max-width: 600px;
-  margin: 0 auto;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+.container {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: center;
+  padding: 2rem;
+}
+
+/* Timer View */
+.timer-view {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3rem;
 }
 
 h1 {
+  font-size: 1.5rem;
+  font-weight: 300;
+  letter-spacing: 0.05em;
   text-align: center;
-  margin-bottom: 2rem;
-  color: #396cd8;
 }
 
-.controls {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  padding: 2rem;
-  background-color: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+/* Timer Display */
+.timer-display {
+  font-size: 6rem;
+  font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
-.control-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.control-group label {
-  font-weight: 500;
-  font-size: 0.95rem;
-}
-
-select {
-  border-radius: 8px;
-  border: 1px solid #ddd;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-family: inherit;
-  background-color: #ffffff;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-
-select:hover:not(:disabled) {
-  border-color: #396cd8;
-}
-
-select:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-input[type="range"] {
-  width: 100%;
-  height: 6px;
-  border-radius: 3px;
-  background: #ddd;
-  outline: none;
-  padding: 0;
-  margin: 0;
-}
-
-input[type="range"]::-webkit-slider-thumb {
-  appearance: none;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: #396cd8;
-  cursor: pointer;
-  transition: background 0.15s ease-in-out;
-}
-
-input[type="range"]::-webkit-slider-thumb:hover:not(:disabled) {
-  background: #2854b0;
-}
-
-input[type="range"]::-moz-range-thumb {
-  width: 20px;
-  height: 20px;
-  border: none;
-  border-radius: 50%;
-  background: #396cd8;
-  cursor: pointer;
-}
-
-input[type="range"]:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.frequency-controls {
+/* Duration Section */
+.duration-section {
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding: 1rem;
-  background-color: #f8f9fa;
-  border-radius: 8px;
+  align-items: center;
+  width: 100%;
 }
 
-.beat-frequency {
-  text-align: center;
-  color: #666;
-  font-weight: 500;
+.duration-section label {
+  font-size: 0.875rem;
+  font-weight: 300;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
-.button-group {
+/* Duration Picker */
+.duration-picker {
   display: flex;
   gap: 1rem;
   justify-content: center;
-  margin-top: 1rem;
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.8em 2em;
-  font-size: 1em;
-  font-weight: 600;
+.duration-picker button {
+  background: transparent;
+  border: 1px solid #000000;
+  color: #000000;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 400;
   font-family: inherit;
   cursor: pointer;
-  transition: all 0.25s;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
 }
 
-.btn-primary {
+.duration-picker button:hover {
+  background: #000000;
   color: #ffffff;
-  background-color: #396cd8;
 }
 
-.btn-primary:hover {
-  background-color: #2854b0;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.btn-secondary {
+.duration-picker button.selected {
+  background: #000000;
   color: #ffffff;
-  background-color: #6c757d;
+  font-weight: 600;
 }
 
-.btn-secondary:hover {
-  background-color: #5a6268;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+.duration-picker button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
-.btn-danger {
+/* Timer Controls */
+.timer-controls {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.timer-controls button {
+  background: transparent;
+  border: 1px solid #000000;
+  color: #000000;
+  padding: 0.875rem 2rem;
+  font-size: 1rem;
+  font-weight: 400;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+}
+
+.timer-controls button:hover {
+  background: #000000;
   color: #ffffff;
-  background-color: #dc3545;
 }
 
-.btn-danger:hover {
-  background-color: #c82333;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+.timer-controls button.primary {
+  font-weight: 600;
 }
 
-button:active {
-  transform: translateY(0);
+.timer-controls button.secondary {
+  font-weight: 300;
 }
 
-.message {
+.timer-controls button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.timer-controls button:disabled:hover {
+  background: transparent;
+  color: #000000;
+}
+
+/* Loading and Error States */
+.loading {
+  font-size: 1rem;
+  font-weight: 300;
   text-align: center;
-  padding: 0.8rem;
-  background-color: #e7f3ff;
-  border-radius: 6px;
-  color: #004085;
-  font-size: 0.9rem;
+  padding: 2rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #1a1a1a;
-  }
-
-  h1 {
-    color: #6fa3f5;
-  }
-
-  .controls {
-    background-color: #2a2a2a;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
-  }
-
-  .control-group label {
-    color: #e0e0e0;
-  }
-
-  select {
-    color: #f6f6f6;
-    background-color: #1a1a1a;
-    border-color: #444;
-  }
-
-  select:hover:not(:disabled) {
-    border-color: #6fa3f5;
-  }
-
-  input[type="range"] {
-    background: #444;
-  }
-
-  input[type="range"]::-webkit-slider-thumb {
-    background: #6fa3f5;
-  }
-
-  input[type="range"]::-webkit-slider-thumb:hover:not(:disabled) {
-    background: #5a8dd6;
-  }
-
-  input[type="range"]::-moz-range-thumb {
-    background: #6fa3f5;
-  }
-
-  .frequency-controls {
-    background-color: #333;
-  }
-
-  .beat-frequency {
-    color: #aaa;
-  }
-
-  .message {
-    background-color: #1e3a5f;
-    color: #a8d0ff;
-  }
+.error {
+  font-size: 0.875rem;
+  font-weight: 400;
+  text-align: center;
+  padding: 1rem;
+  border: 1px solid #000000;
+  background: transparent;
+  max-width: 100%;
 }
