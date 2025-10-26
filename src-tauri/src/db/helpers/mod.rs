@@ -19,7 +19,10 @@ pub fn parse_datetime(value: &str, field: &str) -> Result<DateTime<Utc>> {
         .with_context(|| format!("failed to parse {field}"))
 }
 
-pub fn parse_optional_datetime(value: Option<String>, field: &str) -> Result<Option<DateTime<Utc>>> {
+pub fn parse_optional_datetime(
+    value: Option<String>,
+    field: &str,
+) -> Result<Option<DateTime<Utc>>> {
     match value {
         Some(raw) => parse_datetime(&raw, field).map(Some),
         None => Ok(None),

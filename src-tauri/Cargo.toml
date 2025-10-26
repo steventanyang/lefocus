@@ -30,3 +30,6 @@ chrono = { version = "0.4", features = ["serde"] }
 log = "0.4"
 rusqlite = { version = "0.31", features = ["bundled"] }
 uuid = { version = "1", features = ["v4", "serde"] }
+image = "0.25"
+image_hasher = "2.0"
+tokio-util = "0.7"
