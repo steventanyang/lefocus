@@ -12,11 +12,13 @@
 This system design document serves as the **source of truth** for implementing the P0 milestone of LeFocus Context Companion. It provides sufficient technical detail for multiple development agents to share context and maintain architectural consistency while avoiding unnecessary bloat.
 
 **Target audience:**
+
 - Implementation agents (AI assistants, future contributors)
 - Code reviewers
 - Future maintainers
 
 **Scope:**
+
 - Detailed component architecture
 - Data models and storage schema
 - Core algorithms (especially segmentation logic)
@@ -24,6 +26,7 @@ This system design document serves as the **source of truth** for implementing t
 - Performance constraints and error handling
 
 **Out of scope:**
+
 - P1+ features (CLIP embeddings, LLM integration, multi-monitor)
 - Audio integration (deferred to P1)
 - Deployment and distribution
@@ -53,6 +56,7 @@ This system design document serves as the **source of truth** for implementing t
 ### 1.1 P0 Mission
 
 Build a **deterministic, on-device Pomodoro companion** that:
+
 1. Tracks where visual attention goes during focus sessions
 2. Generates accurate post-session summaries
 3. Operates with minimal resource overhead (<6% CPU, <300 MB RAM)
@@ -60,15 +64,15 @@ Build a **deterministic, on-device Pomodoro companion** that:
 
 ### 1.2 Success Criteria
 
-| Metric | Target |
-|--------|--------|
-| Avg CPU usage | ≤ 6% (1 core sustained) |
-| Peak CPU spike | ≤ 15% for < 1 s |
-| Memory footprint | ≤ 300 MB steady state |
-| Summary render latency | ≤ 200 ms |
-| Context switch accuracy | ≥ 90% correctly segmented |
-| Battery impact | < 3% drain/hour vs idle |
-| Privacy | 0 network calls, 0 persistent images |
+| Metric                  | Target                               |
+| ----------------------- | ------------------------------------ |
+| Avg CPU usage           | ≤ 6% (1 core sustained)              |
+| Peak CPU spike          | ≤ 15% for < 1 s                      |
+| Memory footprint        | ≤ 300 MB steady state                |
+| Summary render latency  | ≤ 200 ms                             |
+| Context switch accuracy | ≥ 90% correctly segmented            |
+| Battery impact          | < 3% drain/hour vs idle              |
+| Privacy                 | 0 network calls, 0 persistent images |
 
 ### 1.3 Core User Flow
 
@@ -117,11 +121,11 @@ Build a **deterministic, on-device Pomodoro companion** that:
 
 ### 2.2 Layer Responsibilities
 
-| Layer | Responsibility | Key Constraints |
-|-------|----------------|-----------------|
-| **React UI** | Timer display, summary visualization, user input | Render ≤ 16ms (60fps), minimal state |
-| **Tauri Core** | Timer logic, orchestration, segmentation, storage | No blocking I/O on main thread |
-| **Swift Plugin** | macOS screen API access, OCR execution | Must handle permission failures gracefully |
+| Layer            | Responsibility                                    | Key Constraints                            |
+| ---------------- | ------------------------------------------------- | ------------------------------------------ |
+| **React UI**     | Timer display, summary visualization, user input  | Render ≤ 16ms (60fps), minimal state       |
+| **Tauri Core**   | Timer logic, orchestration, segmentation, storage | No blocking I/O on main thread             |
+| **Swift Plugin** | macOS screen API access, OCR execution            | Must handle permission failures gracefully |
 
 ### 2.3 Data Flow (During Session)
 
@@ -164,6 +168,7 @@ Generate summary JSON → Emit to frontend
 ### 3.1 Core Dependencies
 
 #### Rust (Backend)
+
 ```toml
 [dependencies]
 tauri = { version = "2", features = ["macos-private-api"] }
@@ -173,7 +178,7 @@ serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
 image = "0.25"                    # Screenshot processing
-image-hasher = "0.4"              # pHash computation
+image-hasher = "2.0"              # pHash computation
 image-compare = "0.4"             # SSIM grid calculation
 chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1"
@@ -182,6 +187,7 @@ env_logger = "0.11"
 ```
 
 #### Swift Plugin
+
 ```swift
 import Cocoa
 import Vision
@@ -189,27 +195,28 @@ import ScreenCaptureKit  // macOS 13+ screen capture API
 ```
 
 #### Frontend (React)
+
 ```json
 {
   "dependencies": {
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "@tauri-apps/api": "^2",
-    "recharts": "^2.10.0"  // NEW: For stacked bar chart
+    "recharts": "^2.10.0" // NEW: For stacked bar chart
   }
 }
 ```
 
 ### 3.2 Why These Choices?
 
-| Technology | Rationale |
-|------------|-----------|
-| **Tokio** | Async runtime for polling loops, non-blocking I/O, bounded channels (mpsc) for backpressure |
-| **SQLite** | Local persistence with ACID, query support for historical data |
-| **image-hasher** | Battle-tested pHash impl, avoid reinventing |
-| **image-compare** | SSIM calculation for structural change detection |
-| **Swift Plugin** | Native macOS API access (Vision, ScreenCaptureKit) |
-| **Recharts** | Declarative React charts, good for stacked bar viz |
+| Technology        | Rationale                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------- |
+| **Tokio**         | Async runtime for polling loops, non-blocking I/O, bounded channels (mpsc) for backpressure |
+| **SQLite**        | Local persistence with ACID, query support for historical data                              |
+| **image-hasher**  | Battle-tested pHash impl, avoid reinventing                                                 |
+| **image-compare** | SSIM calculation for structural change detection                                            |
+| **Swift Plugin**  | Native macOS API access (Vision, ScreenCaptureKit)                                          |
+| **Recharts**      | Declarative React charts, good for stacked bar viz                                          |
 
 ---
 
@@ -220,6 +227,7 @@ import ScreenCaptureKit  // macOS 13+ screen capture API
 **Responsibility:** Manage Pomodoro timer state, start/stop sensing pipeline.
 
 #### State Machine
+
 ```rust
 enum TimerState {
     Idle,
@@ -230,6 +238,7 @@ enum TimerState {
 ```
 
 #### API Surface
+
 ```rust
 struct TimerController {
     state: Arc<Mutex<TimerState>>,
@@ -246,6 +255,7 @@ impl TimerController {
 ```
 
 #### Threading Model
+
 - Timer ticks on dedicated tokio task (1s interval)
 - Emits progress events to frontend via Tauri event system
 - On start: Spawns worker tasks:
@@ -291,6 +301,7 @@ The sensing pipeline uses a **multi-task worker architecture** with bounded chan
 ```
 
 #### Event Types
+
 ```rust
 enum SensingEvent {
     WindowChange {
@@ -305,6 +316,7 @@ enum SensingEvent {
 ```
 
 #### Main Polling Loop
+
 ```rust
 async fn sensing_loop(
     session_id: Uuid,
@@ -375,6 +387,7 @@ async fn sensing_loop(
 ```
 
 #### Screenshot Worker
+
 ```rust
 async fn screenshot_worker(
     mut event_rx: mpsc::Receiver<SensingEvent>,
@@ -449,6 +462,7 @@ async fn screenshot_worker(
 ```
 
 #### Sensing Configuration
+
 ```rust
 const POLL_INTERVAL_SECS: u64 = 5;           // Window metadata polling
 const HEARTBEAT_INTERVAL_TICKS: u32 = 3;     // Every 3 ticks (15s) without window change
@@ -466,11 +480,13 @@ const OCR_CHANNEL_CAPACITY: usize = 20;      // OCR requests
 #### Backpressure Handling Strategy
 
 **When channels fill up:**
+
 1. **Event channel full** → Drop new events (prefer keeping system responsive)
 2. **Reading channel full** → Coalesce heartbeats (drop, keep window changes)
 3. **OCR channel full** → Skip OCR for this reading (degrade gracefully)
 
 **Rationale:** Under load (e.g., rapid window switching), we prioritize:
+
 - System responsiveness (don't block)
 - Key events (window changes > heartbeats)
 - Graceful degradation (lower confidence > crash)
@@ -482,6 +498,7 @@ const OCR_CHANNEL_CAPACITY: usize = 20;      // OCR requests
 **Responsibility:** Expose macOS-specific APIs to Rust via Tauri plugin.
 
 #### Plugin Structure
+
 ```swift
 // TauriPlugin_MacOSSensing/Sources/MacOSSensing.swift
 
@@ -604,6 +621,7 @@ const OCR_CHANNEL_CAPACITY: usize = 20;      // OCR requests
 ```
 
 #### Rust-Swift Bridge (Tauri Plugin Registration)
+
 ```rust
 // src-tauri/src/lib.rs
 
@@ -665,6 +683,7 @@ Events:
 ```
 
 #### Core Algorithm (Pseudocode)
+
 ```rust
 fn segment_session(readings: Vec<ContextReading>) -> Vec<Segment> {
     let mut segments = Vec::new();
@@ -761,6 +780,7 @@ fn segment_session(readings: Vec<ContextReading>) -> Vec<Segment> {
 ```
 
 #### Thresholds (from notes.md)
+
 ```rust
 const MIN_SEGMENT_DURATION: Duration = Duration::seconds(15);
 const MERGE_GAP: Duration = Duration::seconds(12);
@@ -770,6 +790,7 @@ const STABLE_CONSOLIDATION_THRESHOLD: Duration = Duration::seconds(15);
 ```
 
 #### Confidence Scoring (from notes.md)
+
 ```rust
 fn compute_confidence(segment: &Segment) -> f64 {
     let mut factors = Vec::new();
@@ -809,6 +830,7 @@ fn compute_confidence(segment: &Segment) -> f64 {
 **Responsibility:** Transform segments into user-facing summary data.
 
 #### Output Structure
+
 ```rust
 #[derive(Serialize)]
 struct SummaryData {
@@ -835,6 +857,7 @@ struct SegmentSummary {
 ```
 
 #### Generation Logic
+
 ```rust
 async fn generate_summary(session_id: Uuid) -> Result<SummaryData> {
     // 1. Load session from SQLite
@@ -892,6 +915,7 @@ async fn generate_summary(session_id: Uuid) -> Result<SummaryData> {
 ### 5.1 Core Entities
 
 #### Session
+
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Session {
@@ -912,6 +936,7 @@ enum SessionStatus {
 ```
 
 #### ContextReading
+
 ```rust
 #[derive(Debug, Clone)]
 struct ContextReading {
@@ -942,6 +967,7 @@ struct WindowBounds {
 ```
 
 #### Segment
+
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Segment {
@@ -1117,10 +1143,12 @@ See Section 4.4 for full pseudocode. Key states:
 ```
 
 **Merge conditions:**
+
 1. **Sandwich merge:** `A → B → A` where `duration(B) ≤ 12s`
 2. **Brief interruption absorption:** Current segment `duration < 15s` → extend previous
 
 **Transition trigger:**
+
 - `switch_rate ≥ 3` in 60s rolling window, OR
 - `median_dwell < 10s`
 
@@ -1131,6 +1159,7 @@ See Section 4.4 for full pseudocode. Key states:
 ### 7.1 Tauri Commands (Rust → React)
 
 #### Timer Control
+
 ```rust
 #[tauri::command]
 async fn start_timer(
@@ -1156,6 +1185,7 @@ async fn get_timer_state(
 ```
 
 #### Summary Retrieval
+
 ```rust
 #[tauri::command]
 async fn get_session_summary(
@@ -1200,7 +1230,7 @@ emit("sensing-error", {
 ```typescript
 // Timer state (local component state)
 interface TimerState {
-  status: 'idle' | 'running' | 'paused' | 'completed';
+  status: "idle" | "running" | "paused" | "completed";
   sessionId: string | null;
   elapsedSeconds: number;
   totalSeconds: number;
@@ -1301,16 +1331,19 @@ mod db {
 ### 8.2 Storage Lifecycle
 
 **Initialization:**
+
 - Database file: `~/.lefocus/sessions.db`
 - Created on first app launch
 - Migrations handled via schema version check
 
 **During Session:**
+
 - Readings accumulated in bounded channel (`reading_channel`, capacity 500)
 - NOT persisted until session end (P0 simplification)
 - Channel backpressure prevents unbounded memory growth
 
 **On Session End:**
+
 1. Drain `reading_channel` → collect all readings into `Vec<ContextReading>`
 2. Write all readings to `context_readings` table (batch insert, single transaction)
 3. Run segmentation algorithm on collected readings
@@ -1319,6 +1352,7 @@ mod db {
 6. Drop channel and collected readings (reclaim RAM)
 
 **Retention Policy (Future):**
+
 - P0: Keep all sessions indefinitely
 - P1: Add setting for retention (e.g., 30 days)
 
@@ -1328,16 +1362,17 @@ mod db {
 
 ### 9.1 CPU Budget
 
-| Component | Target Avg CPU | Peak CPU | Duration |
-|-----------|----------------|----------|----------|
-| Sensing loop (polling) | 2-3% | 5% | Continuous |
-| Screenshot capture | 1-2% | 10% | < 500ms |
-| OCR (Vision.framework) | 3-5% | 15% | < 1s |
-| pHash computation | 0.5% | 3% | < 100ms |
-| Segmentation | N/A | 5% | < 200ms (one-time) |
-| **Total (session)** | **≤ 6%** | **≤ 15%** | **25 min** |
+| Component              | Target Avg CPU | Peak CPU  | Duration           |
+| ---------------------- | -------------- | --------- | ------------------ |
+| Sensing loop (polling) | 2-3%           | 5%        | Continuous         |
+| Screenshot capture     | 1-2%           | 10%       | < 500ms            |
+| OCR (Vision.framework) | 3-5%           | 15%       | < 1s               |
+| pHash computation      | 0.5%           | 3%        | < 100ms            |
+| Segmentation           | N/A            | 5%        | < 200ms (one-time) |
+| **Total (session)**    | **≤ 6%**       | **≤ 15%** | **25 min**         |
 
 **Mitigation strategies:**
+
 - Use `tokio::time::interval` (non-blocking timers)
 - Downscale screenshots before processing (≤1280px)
 - OCR rate-limited to ≥15s intervals
@@ -1345,30 +1380,32 @@ mod db {
 
 ### 9.2 Memory Budget
 
-| Component | Steady-State | Peak | Notes |
-|-----------|--------------|------|-------|
-| React app | ~50 MB | ~70 MB | DOM + state |
-| Tauri runtime | ~30 MB | ~40 MB | WebView bridge |
-| Rust backend | ~50 MB | ~80 MB | Tokio threads + task overhead |
-| **Bounded channels** | **~15 MB** | **~25 MB** | **See breakdown below** |
-| Screenshot buffers | ~10 MB | ~20 MB | 1-2 concurrent (processed immediately) |
-| SQLite cache | ~20 MB | ~30 MB | Read cache |
-| **Total** | **~175 MB** | **~295 MB** | **Target met** |
+| Component            | Steady-State | Peak        | Notes                                  |
+| -------------------- | ------------ | ----------- | -------------------------------------- |
+| React app            | ~50 MB       | ~70 MB      | DOM + state                            |
+| Tauri runtime        | ~30 MB       | ~40 MB      | WebView bridge                         |
+| Rust backend         | ~50 MB       | ~80 MB      | Tokio threads + task overhead          |
+| **Bounded channels** | **~15 MB**   | **~25 MB**  | **See breakdown below**                |
+| Screenshot buffers   | ~10 MB       | ~20 MB      | 1-2 concurrent (processed immediately) |
+| SQLite cache         | ~20 MB       | ~30 MB      | Read cache                             |
+| **Total**            | **~175 MB**  | **~295 MB** | **Target met**                         |
 
 #### Channel Memory Breakdown
 
-| Channel | Capacity | Item Size | Memory |
-|---------|----------|-----------|--------|
-| `event_channel` | 10 | ~200 bytes | ~2 KB |
-| `reading_channel` | 500 | ~100 KB | ~50 MB (peak) |
-| `ocr_channel` | 20 | ~50 KB | ~1 MB |
+| Channel           | Capacity | Item Size  | Memory        |
+| ----------------- | -------- | ---------- | ------------- |
+| `event_channel`   | 10       | ~200 bytes | ~2 KB         |
+| `reading_channel` | 500      | ~100 KB    | ~50 MB (peak) |
+| `ocr_channel`     | 20       | ~50 KB     | ~1 MB         |
 
 **Note:** `reading_channel` peak assumes worst-case (all slots filled). In practice:
+
 - Heartbeats coalesced under load (fewer items)
 - Channel drains at session end → memory freed
 - Steady-state: ~150-200 readings (15-20 MB)
 
 **Mitigation strategies:**
+
 - Drop screenshot data immediately after pHash computation
 - Use bounded channels with backpressure (prevent unbounded growth)
 - Coalesce heartbeats when channels approach capacity
@@ -1379,12 +1416,14 @@ mod db {
 **Target:** < 3% drain/hour vs idle on M1 MacBook Air
 
 **Power-hungry operations:**
+
 1. Screen capture (~40% of power usage)
 2. OCR (~30%)
 3. Image processing (~20%)
 4. Database writes (~10%)
 
 **Mitigations:**
+
 - Reduce poll frequency if battery < 20% (fallback to 10s intervals)
 - Skip OCR on battery power (optional setting)
 - Coalesce database writes (1 transaction at session end)
@@ -1398,6 +1437,7 @@ mod db {
 #### Scenario: Screen recording permission denied
 
 **Detection:**
+
 ```rust
 match capture_screenshot().await {
     Err(e) if e.contains("permission") => {
@@ -1414,6 +1454,7 @@ match capture_screenshot().await {
 ```
 
 **User experience:**
+
 - Timer refuses to start
 - Modal dialog: "Screen Recording permission required. Open System Settings?"
 - Button: "Open Settings" → Opens `x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture`
@@ -1425,6 +1466,7 @@ match capture_screenshot().await {
 #### Scenario: Vision framework crashes or times out
 
 **Handling:**
+
 ```rust
 let ocr_result = tokio::time::timeout(
     Duration::from_secs(5),
@@ -1452,6 +1494,7 @@ match ocr_result {
 #### Scenario: Active window has no title or bundle ID
 
 **Fallback:**
+
 ```rust
 let metadata = get_active_window_metadata().await?;
 let bundle_id = metadata.bundle_id.unwrap_or_else(|| "unknown".to_string());
@@ -1467,6 +1510,7 @@ let title = metadata.title.unwrap_or_else(|| "[Untitled]".to_string());
 **Detection:** `rusqlite::Connection::open()` returns error.
 
 **Recovery:**
+
 1. Log error to stderr
 2. Rename corrupted DB to `sessions.db.backup`
 3. Create fresh DB with schema
@@ -1498,6 +1542,7 @@ match reading_tx.try_send(reading) {
 ```
 
 **Impact:**
+
 - Heartbeats dropped first (graceful degradation)
 - Window changes preserved (blocking send with backpressure)
 - Memory bounded at `READING_CHANNEL_CAPACITY * ~100KB = 50 MB` max
@@ -1529,30 +1574,35 @@ match reading_tx.try_send(reading) {
 
 **Goal:** Pomodoro timer with session persistence
 
-- [ ] Replace audio UI with timer UI (clock display, start/stop buttons)
-- [ ] Implement `TimerController` with state machine
-- [ ] Set up SQLite database with schema
-- [ ] Wire up Tauri commands: `start_timer`, `stop_timer`, `get_timer_state`
-- [ ] Emit `timer-tick` events to frontend
-- [ ] Create session records in database on timer start/stop
+- [x] Replace audio UI with timer UI (clock display, start/stop buttons)
+- [x] Implement `TimerController` with state machine
+- [x] Set up SQLite database with modular structure (connections, repositories, models)
+- [x] Wire up Tauri commands: `start_timer`, `end_timer`, `cancel_timer`, `get_timer_state`
+- [x] Emit `timer-state-changed` + `timer-heartbeat` events (10 s cadence, 1 s in debug)
+- [x] Create/maintain session records (insert, heartbeat updates, completion/cancel)
+- [x] Crash recovery: detect running session on startup, mark as `Interrupted`
+- [x] Frontend hooks (`useTimerSnapshot`, `useSmoothCountdown`) keep UI smooth and in sync
 
 **Deliverable:** Working Pomodoro timer with persistent session records (no sensing yet).
+
+**Status:** Completed per [phase-2-timer-database.md](phase-2-timer-database.md). All acceptance criteria met.
 
 ---
 
 ### Phase 3: Sensing Pipeline (Week 3)
 
-**Goal:** Context readings collected during session with worker architecture
+**Goal:** Context readings collected during session with single combined worker
 
-- [ ] Implement bounded channels (`event_channel`, `reading_channel`, `ocr_channel`)
-- [ ] Implement `sensing_loop` tokio task (polls metadata, emits heartbeats)
-- [ ] Implement `screenshot_worker` task (captures + pHash)
-- [ ] Implement `ocr_worker` task (Vision OCR processing)
-- [ ] Add backpressure handling (try_send, drop heartbeats on full)
-- [ ] Wire up window_id-based window matching (via cache)
-- [ ] Persist readings to SQLite on session end (drain channel)
+- [ ] Create `ContextReading` model in `db/models/`
+- [ ] Add `context_readings` table via schema_v4 migration
+- [ ] Implement `SensingController` with start/stop hooks
+- [ ] Implement `sensing_loop` task (5s interval with MissedTickBehavior::Delay)
+- [ ] Implement combined capture worker (metadata + screenshot + pHash + conditional OCR)
+- [ ] Add OCR gating logic (20s cooldown + pHash change detection)
+- [ ] Integrate with `TimerController` (direct Rust hooks)
+- [ ] Write readings to SQLite immediately (no buffering)
 
-**Deliverable:** Session produces `context_readings` table rows with stable window IDs.
+**Deliverable:** Session produces `context_readings` table rows with window metadata, pHash, and OCR text.
 
 ### Phase 4: Segmentation (Week 4)
 
@@ -1602,6 +1652,7 @@ match reading_tx.try_send(reading) {
 ### 12.1 Unit Tests
 
 **Rust components:**
+
 ```rust
 #[cfg(test)]
 mod tests {
@@ -1653,6 +1704,7 @@ mod tests {
 ### 12.2 Integration Tests
 
 **Scenarios:**
+
 1. **Happy path:** Start timer → Wait 1 min → Stop → Verify summary
 2. **Permission denied:** Mock screenshot failure → Verify error modal
 3. **OCR failure:** Mock Vision timeout → Verify segment confidence drops
@@ -1662,6 +1714,7 @@ mod tests {
 ### 12.3 Performance Tests
 
 **CPU monitoring:**
+
 ```bash
 # Run timer for 25 min, sample CPU every 5s
 while true; do
@@ -1674,6 +1727,7 @@ awk '{sum+=$1; count++} END {print "Avg:", sum/count}' cpu_log.txt
 ```
 
 **Memory profiling:**
+
 ```rust
 // Add to sensing loop
 if cfg!(debug_assertions) {
@@ -1684,15 +1738,15 @@ if cfg!(debug_assertions) {
 
 ### 12.4 Acceptance Criteria
 
-| Test | Pass Condition |
-|------|----------------|
-| CPU avg (25 min session) | ≤ 6% |
-| CPU peak | ≤ 15% for < 1s |
-| RAM steady state | ≤ 300 MB |
-| Summary latency | ≤ 200 ms from stop to render |
-| Segmentation accuracy | ≥ 90% on manual review |
-| Permission handling | Error modal shown, timer blocked |
-| OCR failure recovery | Session continues, confidence drops |
+| Test                     | Pass Condition                      |
+| ------------------------ | ----------------------------------- |
+| CPU avg (25 min session) | ≤ 6%                                |
+| CPU peak                 | ≤ 15% for < 1s                      |
+| RAM steady state         | ≤ 300 MB                            |
+| Summary latency          | ≤ 200 ms from stop to render        |
+| Segmentation accuracy    | ≥ 90% on manual review              |
+| Permission handling      | Error modal shown, timer blocked    |
+| OCR failure recovery     | Session continues, confidence drops |
 
 ---
 
@@ -1701,20 +1755,25 @@ if cfg!(debug_assertions) {
 ### 13.1 For Future Resolution
 
 1. **App name resolution:** How to map bundle ID → friendly name?
+
    - Option A: Hardcode common apps (`com.microsoft.VSCode` → "Visual Studio Code")
    - Option B: Query `NSWorkspace.shared.runningApplications` for localized name
    - **Decision:** Use Option B for P0.
 
 2. **Screenshot format:** PNG or TIFF? Color or grayscale?
+
    - **Decision:** Swift returns PNG (smaller, faster to decode). Rust converts to grayscale for pHash.
 
 3. **Window matching:** Use frame bounds or stable identifier?
+
    - **Decision:** Use `CGWindowID` (stable identifier) with cached `SCWindow` references. Avoids fragile float equality.
 
 4. **pHash caching:** Should we cache pHash of previous frame?
+
    - **Decision:** Yes, store `last_phash: Option<ImageHash>` in screenshot_worker.
 
 5. **SSIM grid usage:** Do we need it for P0, or is pHash sufficient?
+
    - **Decision:** Implement pHash first, add SSIM only if accuracy issues arise.
 
 6. **Database vacuuming:** When to compact SQLite DB?
@@ -1723,12 +1782,15 @@ if cfg!(debug_assertions) {
 ### 13.2 Assumptions to Validate
 
 1. **OCR fast mode accuracy:** Is Vision `.fast` accurate enough for context detection?
+
    - **Validation:** Compare `.fast` vs `.accurate` on sample screenshots, measure confidence delta.
 
 2. **5s polling frequency:** Too slow to catch brief interruptions?
+
    - **Validation:** Test with rapid app switching, check if 5s misses important context.
 
 3. **Segmentation thresholds:** Are `min_segment=15s`, `merge_gap=12s` appropriate?
+
    - **Validation:** Run dogfooding sessions, manually review segment boundaries.
 
 4. **Battery impact:** Will sensing drain battery noticeably?
@@ -1758,13 +1820,24 @@ lefocus/
 │   │   ├── summary/
 │   │   │   └── mod.rs                 # Summary generation
 │   │   ├── db/
-│   │   │   ├── mod.rs                 # Database interface
-│   │   │   ├── schema.sql             # SQLite schema
-│   │   │   └── migrations.rs          # Schema versioning
-│   │   ├── models/
-│   │   │   ├── session.rs             # Session struct
-│   │   │   ├── reading.rs             # ContextReading struct
-│   │   │   └── segment.rs             # Segment struct
+│   │   │   ├── mod.rs                 # Public API + re-exports
+│   │   │   ├── connections.rs         # Database struct + thread
+│   │   │   ├── migrations.rs          # Schema versioning
+│   │   │   ├── helpers/
+│   │   │   │   └── mod.rs             # Conversions, parsers
+│   │   │   ├── models/
+│   │   │   │   ├── session.rs         # Session struct
+│   │   │   │   ├── context_reading.rs # ContextReading struct
+│   │   │   │   └── segment.rs         # Segment struct (Phase 4)
+│   │   │   ├── repositories/
+│   │   │   │   ├── sessions.rs        # Session CRUD
+│   │   │   │   ├── context_readings.rs # Reading CRUD
+│   │   │   │   └── segments.rs        # Segment CRUD (Phase 4)
+│   │   │   └── schemas/
+│   │   │       ├── schema_v1.sql      # Initial sessions table
+│   │   │       ├── schema_v2.sql      # Remove pause support
+│   │   │       ├── schema_v3.sql      # Test table (cleanup later)
+│   │   │       └── schema_v4.sql      # context_readings table
 │   │   └── audio/                     # (Keep for P1)
 │   │       ├── mod.rs
 │   │       ├── binaural.rs
@@ -1799,37 +1872,36 @@ lefocus/
 
 ## Appendix B: Key Dependencies Rationale
 
-| Crate/Library | Version | Purpose | Alternative Considered |
-|---------------|---------|---------|------------------------|
-| `tokio` | 1.x | Async runtime for polling loops | `async-std` (less ecosystem support) |
-| `rusqlite` | 0.31 | SQLite bindings, bundled | `diesel` (too heavy for P0) |
-| `image-hasher` | 0.4 | Perceptual hashing | Custom impl (P1 optimization) |
-| `image-compare` | 0.4 | SSIM calculation | `imagequant` (different use case) |
-| `recharts` | 2.10 | React charting | D3.js (too low-level), Chart.js (not React-native) |
-| `ScreenCaptureKit` | macOS 13+ | Modern screen capture API | `CGWindowListCreateImage` (deprecated) |
-| `Vision.framework` | macOS 10.15+ | On-device OCR | Tesseract (worse accuracy, heavier) |
+| Crate/Library      | Version      | Purpose                         | Alternative Considered                             |
+| ------------------ | ------------ | ------------------------------- | -------------------------------------------------- |
+| `tokio`            | 1.x          | Async runtime for polling loops | `async-std` (less ecosystem support)               |
+| `rusqlite`         | 0.31         | SQLite bindings, bundled        | `diesel` (too heavy for P0)                        |
+| `image-hasher`     | 2.0          | Perceptual hashing              | Custom impl (P1 optimization)                      |
+| `image-compare`    | 0.4          | SSIM calculation                | `imagequant` (different use case)                  |
+| `recharts`         | 2.10         | React charting                  | D3.js (too low-level), Chart.js (not React-native) |
+| `ScreenCaptureKit` | macOS 13+    | Modern screen capture API       | `CGWindowListCreateImage` (deprecated)             |
+| `Vision.framework` | macOS 10.15+ | On-device OCR                   | Tesseract (worse accuracy, heavier)                |
 
 ---
 
 ## Appendix C: Glossary
 
-| Term | Definition |
-|------|------------|
-| **pHash** | Perceptual hash; fingerprint of image content, robust to small changes |
-| **SSIM** | Structural Similarity Index; measures perceived quality difference between images |
-| **Hamming distance** | Number of differing bits between two hashes |
-| **Segment** | Contiguous time interval where user focused on one context (app/window) |
-| **Context reading** | Single snapshot of window metadata + screenshot + OCR at one timestamp |
-| **Confidence score** | 0.0-1.0 metric indicating reliability of segment classification |
-| **Sandwich merge** | Merging segments when brief interruption occurs (A → B → A becomes A with interruption) |
-| **Transitioning segment** | Special segment capturing rapid switching behavior (≥3 switches/60s) |
-| **Heartbeat** | Periodic context sample taken even when window hasn't changed (every 15s) |
-| **Backpressure** | Flow control mechanism where bounded channels drop/delay events when full |
-| **CGWindowID** | Stable macOS window identifier used instead of frame bounds for matching |
+| Term                      | Definition                                                                              |
+| ------------------------- | --------------------------------------------------------------------------------------- |
+| **pHash**                 | Perceptual hash; fingerprint of image content, robust to small changes                  |
+| **SSIM**                  | Structural Similarity Index; measures perceived quality difference between images       |
+| **Hamming distance**      | Number of differing bits between two hashes                                             |
+| **Segment**               | Contiguous time interval where user focused on one context (app/window)                 |
+| **Context reading**       | Single snapshot of window metadata + screenshot + OCR at one timestamp                  |
+| **Confidence score**      | 0.0-1.0 metric indicating reliability of segment classification                         |
+| **Sandwich merge**        | Merging segments when brief interruption occurs (A → B → A becomes A with interruption) |
+| **Transitioning segment** | Special segment capturing rapid switching behavior (≥3 switches/60s)                    |
+| **Heartbeat**             | Periodic context sample taken even when window hasn't changed (every 15s)               |
+| **Backpressure**          | Flow control mechanism where bounded channels drop/delay events when full               |
+| **CGWindowID**            | Stable macOS window identifier used instead of frame bounds for matching                |
 
 ---
 
 **End of System Design Document**
 
 Total lines: ~987 (target: 800-1000) ✓
-

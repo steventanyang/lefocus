@@ -1,7 +1,6 @@
 mod audio;
 mod db;
 mod macos_bridge;
-mod models;
 mod timer;
 
 use audio::AudioEngineHandle;

@@ -9,10 +9,7 @@ use serde::Serialize;
 use tokio::{sync::Mutex, task::JoinHandle, time};
 use uuid::Uuid;
 
-use crate::{
-    db::Database,
-    models::{Session, SessionInfo, SessionStatus},
-};
+use crate::db::{Database, Session, SessionInfo, SessionStatus};
 
 use super::{TimerState, TimerStatus};
 

@@ -697,9 +697,9 @@ src/
 
 #### Step 1: Database Setup
 
-- [x] Create `src-tauri/src/db/` module
-- [x] Write `schema_v1.sql` (sessions table)
-- [x] Implement `Database` actor with dedicated thread:
+- [x] Create `src-tauri/src/db/` module structure
+- [x] Write `schemas/schema_v1.sql` (sessions table)
+- [x] Implement `Database` in `connections.rs` with dedicated thread:
   - Create `DbCommand` enum for all DB operations
   - Spawn `std::thread` with `Connection` and `mpsc::Receiver`
   - Public methods send commands via `mpsc::Sender` + await `oneshot` response
@@ -710,7 +710,7 @@ src/
 
 #### Step 2: Data Models
 
-- [x] Create `src-tauri/src/models/session.rs`
+- [x] Create `src-tauri/src/db/models/session.rs`
 - [x] Implement `Session` and `SessionStatus` structs
 - [x] Derive `Serialize`, `Deserialize` for Tauri IPC
 
@@ -773,10 +773,9 @@ src/
 
 #### Step 8: State Synchronization
 
-- [x] Implement event listeners in `TimerView`
-- [x] Implement 250ms animation interval
-- [x] Implement heartbeat sync
-- [x] Test: Verify UI updates within 100ms of state change
+- [x] Add `useTimerSnapshot` hook for initial fetch + state/heartbeat listeners
+- [x] Add `useSmoothCountdown` hook (requestAnimationFrame interpolation)
+- [x] Timer UI stays in sync without visible jumps (<100 ms drift)
 
 #### Step 9: Crash Handling
 
@@ -904,11 +903,15 @@ No new frontend dependencies needed (React + Tauri API already available).
 ```
 src-tauri/src/
 ├── db/
-│   ├── mod.rs              # Database struct, connection management
+│   ├── mod.rs              # Public API + re-exports
+│   ├── connections.rs      # Database struct, thread management
 │   ├── migrations.rs       # Migration runner
-│   └── schema_v1.sql       # Initial schema
-├── models/
-│   └── session.rs          # Session, SessionStatus
+│   ├── models/
+│   │   └── session.rs      # Session, SessionStatus
+│   ├── repositories/
+│   │   └── sessions.rs     # Session CRUD operations
+│   └── schemas/
+│       └── schema_v1.sql   # Initial schema
 ├── timer/
 │   ├── mod.rs              # Re-exports
 │   ├── state.rs            # TimerState, TimerStatus

@@ -54,7 +54,7 @@ awk -v ver="$next" '
       print indent "    tx.execute_batch(include_str!(\"schema_v" ver ".sql\"))"
       print indent "        .context(\"failed to execute schema_v" ver ".sql\")?;"
       print indent "    Ok(())"
-      print indent "},"
+      print indent "}"
       print $0
       inserted=1
       next
