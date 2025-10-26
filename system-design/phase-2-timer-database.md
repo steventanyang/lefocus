@@ -13,9 +13,11 @@
 This document provides detailed implementation specifications for **Phase 2** of LeFocus P0: building a Pomodoro timer with session persistence. This phase establishes the foundation for session tracking without context sensing (which comes in Phase 3).
 
 **Dependencies:**
+
 - Phase 1 (Swift Plugin) ✅ Complete
 
 **Enables:**
+
 - Phase 3 (Sensing Pipeline)
 - Phase 4 (Segmentation)
 - Phase 5 (Summary Visualization)
@@ -41,6 +43,7 @@ This document provides detailed implementation specifications for **Phase 2** of
 ### 1.1 Phase 2 Mission
 
 Build a **production-quality Pomodoro timer** with:
+
 1. Accurate time tracking (start, stop, cancel)
 2. Session persistence in SQLite
 3. Crash-resilient state management
@@ -48,14 +51,14 @@ Build a **production-quality Pomodoro timer** with:
 
 ### 1.2 Success Criteria
 
-| Criterion | Target |
-|-----------|--------|
-| Timer accuracy | ±500ms over 25 min session |
-| State sync latency | UI updates within 100ms of state change |
-| Database initialization | < 50ms on app startup |
-| Session record creation | < 10ms to insert |
-| UI responsiveness | 60fps timer display (16ms frame budget) |
-| Code separation | Audio/test UIs moved to separate files |
+| Criterion               | Target                                  |
+| ----------------------- | --------------------------------------- |
+| Timer accuracy          | ±500ms over 25 min session              |
+| State sync latency      | UI updates within 100ms of state change |
+| Database initialization | < 50ms on app startup                   |
+| Session record creation | < 10ms to insert                        |
+| UI responsiveness       | 60fps timer display (16ms frame budget) |
+| Code separation         | Audio/test UIs moved to separate files  |
 
 ### 1.3 What's In Scope
 
@@ -113,6 +116,7 @@ Build a **production-quality Pomodoro timer** with:
 ### 2.2 State Flow
 
 **Starting a Timer:**
+
 ```
 User clicks "Start 25min"
   ↓
@@ -130,6 +134,7 @@ React receives event → updates UI
 ```
 
 **Timer Reaches Zero:**
+
 ```
 Ticker task detects remaining_ms ≤ 0
   ↓
@@ -151,6 +156,7 @@ TimerController::end_timer()
 ```
 
 **Cancelling Early:**
+
 ```
 User clicks "Cancel"
   ↓
@@ -168,6 +174,7 @@ TimerController::cancel_timer()
 **Scenario:** User force-quits app mid-session
 
 **On Restart:**
+
 - Database may contain a session with `status=Running`
 - App startup detects any incomplete session and marks it as Interrupted
   ```rust
@@ -179,6 +186,7 @@ TimerController::cancel_timer()
   ```
 
 **Mark as Interrupted SQL:**
+
 ```sql
 UPDATE sessions
 SET status = 'Interrupted', stopped_at = ?1, updated_at = ?2
@@ -186,6 +194,7 @@ WHERE id = ?3;
 ```
 
 **Heartbeat Persistence (prevents data loss):**
+
 - Ticker task updates DB every 10-15s with latest `active_ms` and `updated_at`
 - On crash, DB has snapshot from last heartbeat (≤15s stale)
 - **Phase 2 behavior:** Mark as "Interrupted" and keep last snapshot
@@ -248,18 +257,21 @@ pub struct TimerState {
 ```
 
 **Valid Transitions:**
+
 - `Idle → Running`: `start_timer(duration_ms)`
 - `Running → Stopped`: Auto-trigger when `remaining_ms ≤ 0`
 - `Stopped → Idle`: `end_timer()` (user finalizes)
 - `Running → Idle`: `cancel_timer()` (abort session, mark as Cancelled)
 
 **Invalid Transitions:**
+
 - `Idle → Stopped`: Timer must run first
 - `Stopped → Running`: Requires explicit restart (start a new session)
 
 ### 3.3 Time Calculations
 
 **Monotonic Time Anchoring (prevents drift):**
+
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimerState {
@@ -282,6 +294,7 @@ pub struct TimerState {
 ```
 
 **Remaining Time (displayed in UI):**
+
 ```rust
 fn get_remaining_ms(state: &TimerState) -> i64 {
     match state.status {
@@ -300,6 +313,7 @@ fn get_remaining_ms(state: &TimerState) -> i64 {
 ```
 
 **Active Time Management:**
+
 ```rust
 // On start:
 state.active_ms = 0;
@@ -389,30 +403,30 @@ impl From<Session> for SessionInfo {
 ```typescript
 // src/types/timer.ts
 
-export type TimerStatus = 'Idle' | 'Running' | 'Stopped';
+export type TimerStatus = "Idle" | "Running" | "Stopped";
 
 export interface TimerState {
   status: TimerStatus;
   sessionId: string | null;
   targetMs: number;
   activeMs: number;
-  startedAt: string | null;  // ISO 8601
+  startedAt: string | null; // ISO 8601
 }
 
 export interface SessionInfo {
   id: string;
   startedAt: string;
   stoppedAt: string | null;
-  status: 'Running' | 'Completed' | 'Cancelled' | 'Interrupted';
+  status: "Running" | "Completed" | "Cancelled" | "Interrupted";
   targetMs: number;
   activeMs: number;
 }
 
 // Preset durations (milliseconds)
 export const TIMER_PRESETS = {
-  short: 15 * 60 * 1000,   // 15 min
+  short: 15 * 60 * 1000, // 15 min
   standard: 25 * 60 * 1000, // 25 min (classic Pomodoro)
-  long: 45 * 60 * 1000,    // 45 min
+  long: 45 * 60 * 1000, // 45 min
 } as const;
 ```
 
@@ -447,6 +461,7 @@ CREATE INDEX idx_sessions_started_at ON sessions(started_at DESC);
 ### 5.2 Schema Migrations
 
 **Migration System:**
+
 - Use SQLite `PRAGMA user_version` to track schema version
 - Increment on each migration
 - Run migrations sequentially on startup
@@ -590,7 +605,7 @@ pub async fn get_timer_state(
 // State transition events (emitted on every state change)
 interface TimerStateChangedEvent {
   state: TimerState;
-  remainingMs: number;  // Calculated server-side
+  remainingMs: number; // Calculated server-side
 }
 
 // Periodic heartbeat (every 5-10s while Running)
@@ -647,6 +662,7 @@ src/
 ### 7.2 Requirements & Behavior
 
 **TimerView Component:**
+
 - Fetch initial timer state on mount via `get_timer_state` command
 - Listen to `timer-state-changed` events and update React state
 - Listen to `timer-heartbeat` events (every 10s) to resync display
@@ -657,14 +673,17 @@ src/
 - Handle commands: `start_timer`, `end_timer`, `cancel_timer`
 
 **TimerDisplay Component:**
+
 - Format `remainingMs` as MM:SS (zero-padded)
 
 **DurationPicker Component:**
+
 - Show three preset buttons: 15 min, 25 min, 45 min
 - Highlight selected duration
 - Call `onSelect` with milliseconds when clicked
 
 **Key Implementation Notes:**
+
 - Use `@tauri-apps/api/core` for `invoke()`
 - Use `@tauri-apps/api/event` for `listen()`
 - Clean up event listeners in useEffect return functions
@@ -677,6 +696,7 @@ src/
 ### 8.1 Step-by-Step Checklist
 
 #### Step 1: Database Setup
+
 - [x] Create `src-tauri/src/db/` module
 - [x] Write `schema_v1.sql` (sessions table)
 - [x] Implement `Database` actor with dedicated thread:
@@ -689,11 +709,13 @@ src/
 - [ ] Test: Verify DB created in Tauri app data directory
 
 #### Step 2: Data Models
+
 - [x] Create `src-tauri/src/models/session.rs`
 - [x] Implement `Session` and `SessionStatus` structs
 - [x] Derive `Serialize`, `Deserialize` for Tauri IPC
 
 #### Step 3: Timer State Machine
+
 - [x] Create `src-tauri/src/timer/mod.rs`
 - [x] Implement `TimerState` and `TimerStatus` enums
   - Include `active_ms_baseline: u64` with `#[serde(skip)]`
@@ -707,6 +729,7 @@ src/
 - [ ] Unit tests for state transitions
 
 #### Step 4: Timer Controller
+
 - [x] Create `src-tauri/src/timer/controller.rs`
 - [x] Implement `TimerController` struct with `Arc<tokio::sync::Mutex<TimerState>>`
   - **Important:** Use `tokio::sync::Mutex`, NOT `std::sync::Mutex` (avoids blocking Tokio runtime)
@@ -728,16 +751,19 @@ src/
   - Batch DB `updated_at` updates every 10-15s (sent to DB thread, non-blocking)
 
 #### Step 5: Tauri Commands
+
 - [x] Create `src-tauri/src/timer/commands.rs`
 - [x] Register all commands in `lib.rs`
 - [ ] Test commands via Tauri DevTools console
 
 #### Step 6: Frontend Types
+
 - [ ] Create `src/types/timer.ts`
 - [ ] Define TypeScript interfaces matching Rust types
 - [ ] Define `TIMER_PRESETS` constant
 
 #### Step 7: Frontend Components
+
 - [ ] Archive old components to `src/components/archived/`
 - [ ] Create `TimerDisplay.tsx` (MM:SS display)
 - [ ] Create `DurationPicker.tsx` (preset buttons)
@@ -746,25 +772,28 @@ src/
 - [ ] Update `App.tsx` to render `TimerView`
 
 #### Step 8: State Synchronization
+
 - [ ] Implement event listeners in `TimerView`
 - [ ] Implement 250ms animation interval
 - [ ] Implement heartbeat sync
 - [ ] Test: Verify UI updates within 100ms of state change
 
 #### Step 9: Crash Handling
-- [ ] Add `get_incomplete_session()` DB command (finds latest Running session)
-- [ ] Add `mark_as_interrupted(session_id, stopped_at)` DB command
-- [ ] Add startup check in `main.rs`:
+
+- [x] Add `get_incomplete_session()` DB command (finds latest Running session)
+- [x] Add `mark_as_interrupted(session_id, stopped_at)` DB command
+- [x] Add startup check in `main.rs`:
   - Call `get_incomplete_session()`
   - If present, call `mark_as_interrupted()` with `stopped_at = now`
-- [ ] Test: Force-quit during Running, restart, verify status=Interrupted
+- [x] Test: Force-quit during Running, restart, verify status=Interrupted
 
 #### Step 10: Manual Testing
-- [ ] Start 15min timer, verify DB record created
-- [ ] Let timer complete, verify auto-stop
-- [ ] Click "End", verify session finalized
-- [ ] Test cancel mid-session
-- [ ] Test crash recovery (force quit + restart)
+
+- [x] Start 15min timer, verify DB record created
+- [x] Let timer complete, verify auto-stop
+- [x] Click "End", verify session finalized
+- [x] Test cancel mid-session
+- [x] Test crash recovery (force quit + restart)
 
 ---
 
@@ -773,40 +802,46 @@ src/
 ### 9.1 Functional Tests (Manual)
 
 **Debug Mode:** Set `LEFOCUS_DEBUG=1` env variable for faster testing:
+
 - Timer durations: 10s instead of minutes
 - Heartbeat interval: 1s instead of 10s
 
-| Test Case | Steps | Expected Result |
-|-----------|-------|-----------------|
-| **Start timer** | Click "25 min" → "Start" | Session created in DB with status=Running, timer counts down |
-| **Auto-stop** | Start timer (debug: 10s) → wait | Timer auto-stops at 0, status=Stopped, UI shows "Complete!" |
-| **End session** | Auto-stopped timer → click "End" | Session status=Completed, stopped_at set, UI returns to Idle |
-| **Cancel** | Start timer → wait 10s → click "Cancel" | Session status=Cancelled, UI returns to Idle |
-| **Crash recovery** | Start timer → force quit app → restart | Session marked as Interrupted, `active_ms` from last heartbeat preserved |
+| Test Case          | Steps                                   | Expected Result                                                          |
+| ------------------ | --------------------------------------- | ------------------------------------------------------------------------ |
+| **Start timer**    | Click "25 min" → "Start"                | Session created in DB with status=Running, timer counts down             |
+| **Auto-stop**      | Start timer (debug: 10s) → wait         | Timer auto-stops at 0, status=Stopped, UI shows "Complete!"              |
+| **End session**    | Auto-stopped timer → click "End"        | Session status=Completed, stopped_at set, UI returns to Idle             |
+| **Cancel**         | Start timer → wait 10s → click "Cancel" | Session status=Cancelled, UI returns to Idle                             |
+| **Crash recovery** | Start timer → force quit app → restart  | Session marked as Interrupted, `active_ms` from last heartbeat preserved |
 
 ### 9.2 Acceptance Criteria
 
 #### ✅ Database
+
 - [ ] SQLite file created in Tauri app data directory
 - [ ] Schema version = 1
 - [ ] Sessions table has correct columns and indexes
 
 #### ✅ Timer Accuracy
+
 - [ ] 25-minute timer completes within ±500ms of 1500 seconds
 - [ ] Active time persists correctly across heartbeats
 
 #### ✅ State Synchronization
+
 - [ ] UI updates within 100ms of Rust state change
 - [ ] Heartbeat event emitted every 10s (±1s)
 - [ ] Local animation smooth at 60fps (no jank)
 
 #### ✅ UI/UX
+
 - [ ] Duration picker shows 15/25/45 min options
 - [ ] Timer displays in MM:SS format
 - [ ] Button states correct for each status (disabled when invalid)
 - [ ] "Complete!" message shown when timer reaches 0
 
 #### ✅ Code Quality
+
 - [ ] Audio/test components moved to `archived/` folder
 - [ ] No compiler warnings
 - [ ] All Tauri commands registered and callable
@@ -818,14 +853,14 @@ src/
 
 ### 10.1 Resolved
 
-| Question | Decision | Rationale |
-|----------|----------|-----------|
-| Timer state location? | Rust (single source of truth) | Simpler sync, accurate server-side time |
-| Pause/resume support? | No, defer to P1 | Simpler state machine, reduced maintenance |
-| Database location? | Tauri app data directory | Standard path, user-accessible |
-| Migrations now? | Yes, PRAGMA user_version | Future-proof, easy to extend |
-| Session finalization? | User must click "End" | Allows user to review before finalizing |
-| Crash handling? | Mark as Interrupted | Enables P1 soft resume feature |
+| Question              | Decision                      | Rationale                                  |
+| --------------------- | ----------------------------- | ------------------------------------------ |
+| Timer state location? | Rust (single source of truth) | Simpler sync, accurate server-side time    |
+| Pause/resume support? | No, defer to P1               | Simpler state machine, reduced maintenance |
+| Database location?    | Tauri app data directory      | Standard path, user-accessible             |
+| Migrations now?       | Yes, PRAGMA user_version      | Future-proof, easy to extend               |
+| Session finalization? | User must click "End"         | Allows user to review before finalizing    |
+| Crash handling?       | Mark as Interrupted           | Enables P1 soft resume feature             |
 
 ### 10.2 Deferred to Phase 3+
 
@@ -898,12 +933,14 @@ src/
 ## Appendix A: SQL Examples
 
 **Create session:**
+
 ```sql
 INSERT INTO sessions (id, started_at, status, target_ms, active_ms, created_at, updated_at)
 VALUES ('uuid-here', '2025-10-22T10:00:00Z', 'Running', 1500000, 0, '2025-10-22T10:00:00Z', '2025-10-22T10:00:00Z');
 ```
 
 **Update session on end:**
+
 ```sql
 UPDATE sessions
 SET status = 'Completed', stopped_at = '2025-10-22T10:25:00Z', active_ms = 1500000, updated_at = '2025-10-22T10:25:00Z'
@@ -911,6 +948,7 @@ WHERE id = 'session-uuid';
 ```
 
 **Find incomplete sessions on startup:**
+
 ```sql
 SELECT * FROM sessions
 WHERE status = 'Running'
