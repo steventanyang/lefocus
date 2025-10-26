@@ -1529,12 +1529,14 @@ match reading_tx.try_send(reading) {
 
 **Goal:** Pomodoro timer with session persistence
 
-- [ ] Replace audio UI with timer UI (clock display, start/stop buttons)
-- [ ] Implement `TimerController` with state machine
-- [ ] Set up SQLite database with schema
-- [ ] Wire up Tauri commands: `start_timer`, `stop_timer`, `get_timer_state`
-- [ ] Emit `timer-tick` events to frontend
-- [ ] Create session records in database on timer start/stop
+- [x] Replace audio UI with timer UI (clock display, start/stop buttons)
+- [x] Implement `TimerController` with state machine
+- [x] Set up SQLite database with schema + actor thread
+- [x] Wire up Tauri commands: `start_timer`, `end_timer`, `cancel_timer`, `get_timer_state`
+- [x] Emit `timer-state-changed` + `timer-heartbeat` events (10 s cadence, 1 s in debug)
+- [x] Create/maintain session records (insert, heartbeat updates, completion/cancel)
+- [x] Crash recovery: detect running session on startup, mark as `Interrupted`
+- [x] Frontend hooks (`useTimerSnapshot`, `useSmoothCountdown`) keep UI smooth and in sync
 
 **Deliverable:** Working Pomodoro timer with persistent session records (no sensing yet).
 
@@ -1832,4 +1834,3 @@ lefocus/
 **End of System Design Document**
 
 Total lines: ~987 (target: 800-1000) ✓
-

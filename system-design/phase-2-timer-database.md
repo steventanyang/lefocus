@@ -773,10 +773,9 @@ src/
 
 #### Step 8: State Synchronization
 
-- [x] Implement event listeners in `TimerView`
-- [x] Implement 250ms animation interval
-- [x] Implement heartbeat sync
-- [x] Test: Verify UI updates within 100ms of state change
+- [x] Add `useTimerSnapshot` hook for initial fetch + state/heartbeat listeners
+- [x] Add `useSmoothCountdown` hook (requestAnimationFrame interpolation)
+- [x] Timer UI stays in sync without visible jumps (<100 ms drift)
 
 #### Step 9: Crash Handling
 
