@@ -78,7 +78,7 @@ Every 5 seconds (sensing_loop tick):
     4. Call Swift FFI: run_ocr(&png_bytes) → OCRResult { text, confidence, word_count }
     5. Drop PNG bytes (never persist!)
     6. Build ContextReading struct
-    7. db.insert_reading(&reading) (database thread)
+    7. db.insert_context_reading(&reading) (database thread)
     8. Database writes to SQLite WAL immediately
     ↓
 Timer stops (Stopped/Completed/Cancelled/Interrupted)
@@ -338,9 +338,8 @@ use chrono::{DateTime, Utc};
 use anyhow::{Result, anyhow};
 use log::{info, error};
 
-use crate::db::Database;
+use crate::db::{Database, ContextReading};
 use crate::macos_bridge::{get_active_window_metadata, capture_screenshot, run_ocr};
-use crate::models::ContextReading;
 use super::phash::{compute_phash, compute_hamming_distance};
 
 async fn sensing_loop(
@@ -459,7 +458,7 @@ async fn perform_capture(
     };
 
     // Step 6: Write to database immediately
-    db.insert_reading(&reading).await?;
+    db.insert_context_reading(&reading).await?;
 
     // PNG bytes automatically dropped here (never persisted)
     Ok(())
@@ -605,7 +604,7 @@ fn compute_phash(png_bytes: &[u8]) -> Result<String> {
 **Model Definition:**
 
 ```rust
-// src/models/context_reading.rs
+// src/db/models/context_reading.rs
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use crate::macos_bridge::WindowMetadata;
@@ -628,9 +627,9 @@ pub struct ContextReading {
 **Database Method:**
 
 ```rust
-// src-tauri/src/db/mod.rs
+// src/db/repositories/context_readings.rs
 impl Database {
-    pub async fn insert_reading(&self, reading: &ContextReading) -> Result<()> {
+    pub async fn insert_context_reading(&self, reading: &ContextReading) -> Result<()> {
         let r = reading.clone();
         self.execute(move |conn| {
             conn.execute(
@@ -666,7 +665,7 @@ perform_capture()
       ↓
 Build ContextReading struct
       ↓
-db.insert_reading(&reading)
+db.insert_context_reading(&reading)
       ↓
 Database thread receives request (via oneshot channel)
       ↓
@@ -874,29 +873,20 @@ info!("Sensing started for session {}", session_id);
 
 ### Database Migration
 
-Add migration script to `src/database/migrations.rs`:
+Add migration to `src/db/migrations.rs` and create `src/db/schemas/schema_v4.sql`:
 
 ```rust
-pub fn migrate_v2_to_v3(conn: &Connection) -> Result<()> {
-    conn.execute_batch(
-        "CREATE TABLE context_readings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT NOT NULL,
-            timestamp TEXT NOT NULL,
-            window_id INTEGER NOT NULL,
-            bundle_id TEXT NOT NULL,
-            window_title TEXT NOT NULL,
-            owner_name TEXT NOT NULL,
-            bounds_json TEXT NOT NULL,
-            phash TEXT,
-            ocr_text TEXT,
-            ocr_confidence REAL,
-            FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
-        );
+// In migrations.rs:
+const CURRENT_SCHEMA_VERSION: i32 = 4;
 
-        CREATE INDEX idx_context_readings_session_id ON context_readings(session_id);
-        CREATE INDEX idx_context_readings_timestamp ON context_readings(timestamp);"
-    )?;
+fn apply_migration(tx: &Transaction, version: i32) -> Result<()> {
+    match version {
+        1 => tx.execute_batch(include_str!("schemas/schema_v1.sql"))?,
+        2 => tx.execute_batch(include_str!("schemas/schema_v2.sql"))?,
+        3 => tx.execute_batch(include_str!("schemas/schema_v3.sql"))?,
+        4 => tx.execute_batch(include_str!("schemas/schema_v4.sql"))?,  // NEW
+        _ => bail!("unknown migration version: {}", version),
+    }
     Ok(())
 }
 ```
@@ -951,9 +941,10 @@ Phase 3 is complete when:
 - [ ] Create `src/sensing/controller.rs` - Implement `SensingController` struct
 - [ ] Create `src/sensing/loop.rs` - Implement `sensing_loop` and `perform_capture()`
 - [ ] Create `src/sensing/phash.rs` - Implement `compute_phash()` and `compute_hamming_distance()`
-- [ ] Create `src/models/context_reading.rs` - Define `ContextReading` struct
-- [ ] Add `insert_reading()` method to `Database`
-- [ ] Add database migration for `context_readings` table
+- [ ] Create `src/db/models/context_reading.rs` - Define `ContextReading` struct
+- [ ] Create `src/db/repositories/context_readings.rs` - Implement `insert_context_reading()` method
+- [ ] Create `src/db/schemas/schema_v4.sql` - context_readings table schema
+- [ ] Update `src/db/migrations.rs` to apply schema_v4
 - [ ] Integrate sensing hooks into `TimerController` (add field + call hooks)
 
 ### Dependencies
