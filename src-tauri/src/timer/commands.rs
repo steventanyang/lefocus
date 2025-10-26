@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::{
-    models::SessionInfo,
+    db::SessionInfo,
     timer::{TimerController, TimerSnapshot, TimerState},
 };
 
