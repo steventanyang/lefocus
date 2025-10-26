@@ -9,7 +9,10 @@ use serde::Serialize;
 use tokio::{sync::Mutex, task::JoinHandle, time};
 use uuid::Uuid;
 
-use crate::db::{Database, Session, SessionInfo, SessionStatus};
+use crate::{
+    db::{Database, Session, SessionInfo, SessionStatus},
+    sensing::SensingController,
+};
 
 use super::{TimerState, TimerStatus};
 
@@ -48,6 +51,7 @@ pub struct TimerController {
     ticker: Arc<Mutex<Option<JoinHandle<()>>>>,
     tick_interval: Duration,
     heartbeat_every_ticks: u32,
+    sensing: Arc<Mutex<SensingController>>,
 }
 
 impl TimerController {
@@ -63,6 +67,7 @@ impl TimerController {
             ticker: Arc::new(Mutex::new(None)),
             tick_interval: Duration::from_secs(1),
             heartbeat_every_ticks: if debug_mode { 1 } else { 10 },
+            sensing: Arc::new(Mutex::new(SensingController::new())),
         }
     }
 
@@ -111,8 +116,14 @@ impl TimerController {
 
         {
             let mut state = self.state.lock().await;
-            state.begin_session(session_id, target_ms, started_at, Instant::now());
+            state.begin_session(session_id.clone(), target_ms, started_at, Instant::now());
         }
+
+        self.sensing
+            .lock()
+            .await
+            .start_sensing(session_id, self.db.clone())
+            .await?;
 
         self.spawn_ticker().await;
         self.emit_state_changed().await?;
@@ -154,6 +165,7 @@ impl TimerController {
             }
         };
 
+        self.sensing.lock().await.stop_sensing().await?;
         self.cancel_ticker().await;
 
         self.db
@@ -190,6 +202,7 @@ impl TimerController {
             (session_id, active_ms)
         };
 
+        self.sensing.lock().await.stop_sensing().await?;
         self.cancel_ticker().await;
 
         self.db
