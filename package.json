@@ -7,7 +7,13 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "db:mig": "bash scripts/new_migration.sh",
+    "db:ver": "bash scripts/db_user_version.sh print",
+    "db:inc": "bash scripts/db_user_version.sh inc",
+    "db:dec": "bash scripts/db_user_version.sh dec",
+    "db:set": "bash scripts/db_user_version.sh set",
+    "db:ver:custom": "bash scripts/db_user_version.sh --db \"$HOME/Library/Application Support/com.stevenyang.lefocus/lefocus.sqlite3\" print"
   },
   "dependencies": {
     "react": "^19.1.0",

@@ -1,6 +1,6 @@
 1. 
 - lets do timer state in rust so its 1 source of truth
-- yea support pause and resume , we want to track how long the pauses are as well because that will go in the summary
+- keep flow simple (no pause/resume in P0)
 - if crashes, for now we're just going to end on quit. later on in p1 we can do soft resume
 
 2. 
@@ -9,12 +9,11 @@
 - yea lets set up migrations now , use PRAGMA
 
 3. 
-- mark it as interrupted. this will help us with soft resumes in the future. we should also have other statuses (deleted, running, paused, etc..)
+- mark it as interrupted. this will help us with soft resumes in the future. statuses: running, completed, cancelled, interrupted.
 - we do not allow this
 - yes 
   •	Planned = target_ms you already have.
-	•	Actual active = active_ms accumulator (excludes pauses).
-	•	Paused total = paused_ms.
+  •	Actual active = active_ms accumulator.
 	•	Wall time elapsed (optional) = stopped_at - started_at.
 
 
@@ -45,7 +44,7 @@ also put that in a separate file just for safekeeping, then we can write our new
 -  push-first with events from Rust, plus a tiny pull on mount or when you suspect desync.
 
 11. 
-- keep it lean—only the sessions (and pauses) tables. Add readings/segments in Phase 3+.
+- keep it lean—only the sessions table. Add readings/segments in Phase 3+.
 
 12. 
 Ill just manual for now if we need test I"ll ask
@@ -54,6 +53,4 @@ Ill just manual for now if we need test I"ll ask
 looks good
 
 14. 
-- also pausing works
-
-
+- simplified flow (start → stop/end) for P0

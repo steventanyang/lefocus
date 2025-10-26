@@ -1,16 +1,19 @@
 use std::{
+    convert::TryFrom,
     path::{Path, PathBuf},
     sync::{mpsc, Arc, Mutex},
     thread::{self, JoinHandle},
 };
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
+use chrono::{DateTime, Utc};
 use log::{error, info};
-use rusqlite::Connection;
+use rusqlite::{params, Connection, Row};
 use tokio::sync::oneshot;
 
 mod migrations;
 
+use crate::models::{Session, SessionStatus};
 use migrations::run_migrations;
 
 type DbTask = Box<dyn FnOnce(&mut Connection) + Send + 'static>;
@@ -43,6 +46,57 @@ impl Drop for DatabaseInner {
     }
 }
 
+fn to_i64(value: u64) -> Result<i64> {
+    i64::try_from(value).map_err(|_| anyhow!("value {value} exceeds SQLite INTEGER range"))
+}
+
+fn to_u64(value: i64, field: &str) -> Result<u64> {
+    u64::try_from(value).map_err(|_| anyhow!("{field} contains negative value {value}"))
+}
+
+fn parse_datetime(value: &str, field: &str) -> Result<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(value)
+        .map(|dt| dt.with_timezone(&Utc))
+        .with_context(|| format!("failed to parse {field}"))
+}
+
+fn parse_optional_datetime(value: Option<String>, field: &str) -> Result<Option<DateTime<Utc>>> {
+    match value {
+        Some(raw) => parse_datetime(&raw, field).map(Some),
+        None => Ok(None),
+    }
+}
+
+fn parse_status(value: &str) -> Result<SessionStatus> {
+    match value {
+        "Running" => Ok(SessionStatus::Running),
+        "Completed" => Ok(SessionStatus::Completed),
+        "Cancelled" => Ok(SessionStatus::Cancelled),
+        "Interrupted" => Ok(SessionStatus::Interrupted),
+        other => Err(anyhow!("unknown session status {other}")),
+    }
+}
+
+fn row_to_session(row: &Row) -> Result<Session> {
+    let started_at: String = row.get("started_at")?;
+    let stopped_at: Option<String> = row.get("stopped_at")?;
+    let created_at: String = row.get("created_at")?;
+    let updated_at: String = row.get("updated_at")?;
+    let status: String = row.get("status")?;
+    let target_ms: i64 = row.get("target_ms")?;
+    let active_ms: i64 = row.get("active_ms")?;
+    Ok(Session {
+        id: row.get("id")?,
+        started_at: parse_datetime(&started_at, "started_at")?,
+        stopped_at: parse_optional_datetime(stopped_at, "stopped_at")?,
+        status: parse_status(&status)?,
+        target_ms: to_u64(target_ms, "target_ms")?,
+        active_ms: to_u64(active_ms, "active_ms")?,
+        created_at: parse_datetime(&created_at, "created_at")?,
+        updated_at: parse_datetime(&updated_at, "updated_at")?,
+    })
+}
+
 #[derive(Clone)]
 pub struct Database {
     inner: Arc<DatabaseInner>,
@@ -67,8 +121,10 @@ impl Database {
                 let mut conn = match Connection::open(&path_for_thread) {
                     Ok(connection) => connection,
                     Err(err) => {
-                        let _ = ready_tx.send(Err(anyhow::Error::new(err)
-                            .context("failed to open SQLite database")));
+                        let _ =
+                            ready_tx
+                                .send(Err(anyhow::Error::new(err)
+                                    .context("failed to open SQLite database")));
                         return;
                     }
                 };
@@ -104,10 +160,7 @@ impl Database {
             .recv()
             .context("database worker exited before signaling readiness")??;
 
-        info!(
-            "Database initialized at {}",
-            db_path.as_path().display()
-        );
+        info!("Database initialized at {}", db_path.as_path().display());
 
         Ok(Self {
             inner: Arc::new(DatabaseInner {
@@ -139,10 +192,134 @@ impl Database {
 
         sender
             .send(command)
-            .map_err(|err| anyhow::anyhow!("failed to send command to DB thread: {err}"))?;
+            .map_err(|err| anyhow!("failed to send command to DB thread: {err}"))?;
 
         reply_rx
             .await
-            .map_err(|_| anyhow::anyhow!("database thread terminated unexpectedly"))?
+            .map_err(|_| anyhow!("database thread terminated unexpectedly"))?
+    }
+
+    pub async fn insert_session(&self, session: &Session) -> Result<()> {
+        let record = session.clone();
+        self.execute(move |conn| {
+            conn.execute(
+                "INSERT INTO sessions (id, started_at, stopped_at, status, target_ms, active_ms, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                params![
+                    record.id,
+                    record.started_at.to_rfc3339(),
+                    record
+                        .stopped_at
+                        .as_ref()
+                        .map(|dt| dt.to_rfc3339()),
+                    record.status.as_str(),
+                    to_i64(record.target_ms)?,
+                    to_i64(record.active_ms)?,
+                    record.created_at.to_rfc3339(),
+                    record.updated_at.to_rfc3339(),
+                ],
+            )
+            .with_context(|| "failed to insert session")?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn update_session_progress(
+        &self,
+        session_id: &str,
+        active_ms: u64,
+        updated_at: DateTime<Utc>,
+    ) -> Result<()> {
+        let session_id = session_id.to_string();
+        self.execute(move |conn| {
+            conn.execute(
+                "UPDATE sessions
+                 SET active_ms = ?1,
+                     updated_at = ?2
+                 WHERE id = ?3",
+                params![to_i64(active_ms)?, updated_at.to_rfc3339(), session_id,],
+            )
+            .with_context(|| "failed to update session progress")?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn mark_session_status(
+        &self,
+        session_id: &str,
+        status: SessionStatus,
+        active_ms: u64,
+        stopped_at: Option<DateTime<Utc>>,
+        updated_at: DateTime<Utc>,
+    ) -> Result<()> {
+        let session_id = session_id.to_string();
+        self.execute(move |conn| {
+            conn.execute(
+                "UPDATE sessions
+                 SET status = ?1,
+                     active_ms = ?2,
+                     stopped_at = ?3,
+                     updated_at = ?4
+                 WHERE id = ?5",
+                params![
+                    status.as_str(),
+                    to_i64(active_ms)?,
+                    stopped_at.map(|dt| dt.to_rfc3339()),
+                    updated_at.to_rfc3339(),
+                    session_id,
+                ],
+            )
+            .with_context(|| "failed to update session status")?;
+            Ok(())
+        })
+        .await
+    }
+
+    pub async fn get_incomplete_session(&self) -> Result<Option<Session>> {
+        self.execute(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, started_at, stopped_at, status, target_ms, active_ms, created_at, updated_at
+                 FROM sessions
+                 WHERE status = 'Running'
+                 ORDER BY started_at DESC
+                 LIMIT 1",
+            )?;
+
+            let mut rows = stmt.query([])?;
+            let session = match rows.next()? {
+                Some(row) => Some(row_to_session(&row)?),
+                None => None,
+            };
+            Ok(session)
+        })
+        .await
+    }
+
+    pub async fn mark_session_interrupted(
+        &self,
+        session_id: &str,
+        stopped_at: DateTime<Utc>,
+    ) -> Result<()> {
+        let session_id = session_id.to_string();
+        self.execute(move |conn| {
+            conn.execute(
+                "UPDATE sessions
+                 SET status = ?1,
+                     stopped_at = ?2,
+                     updated_at = ?3
+                 WHERE id = ?4",
+                params![
+                    SessionStatus::Interrupted.as_str(),
+                    stopped_at.to_rfc3339(),
+                    stopped_at.to_rfc3339(),
+                    session_id,
+                ],
+            )
+            .with_context(|| "failed to mark session as interrupted")?;
+            Ok(())
+        })
+        .await
     }
 }

@@ -1,7 +1,7 @@
 use std::env;
+use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
-use std::fs;
 
 fn main() {
     // Build Swift plugin and place dylib before tauri_build validates resources
@@ -15,7 +15,8 @@ fn main() {
 
 #[cfg(target_os = "macos")]
 fn compile_macos_sensing() {
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR missing"));
+    let manifest_dir =
+        PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR missing"));
     let plugin_dir = manifest_dir.join("plugins/macos-sensing");
 
     let status = Command::new("swift")
@@ -61,17 +62,11 @@ fn compile_macos_sensing() {
 
     println!(
         "cargo:rerun-if-changed={}",
-        plugin_dir
-            .join("Sources/MacOSSensing")
-            .to_str()
-            .unwrap()
+        plugin_dir.join("Sources/MacOSSensing").to_str().unwrap()
     );
     println!(
         "cargo:rerun-if-changed={}",
-        plugin_dir
-            .join("Sources/CMacOSSensing")
-            .to_str()
-            .unwrap()
+        plugin_dir.join("Sources/CMacOSSensing").to_str().unwrap()
     );
     println!(
         "cargo:rerun-if-changed={}",

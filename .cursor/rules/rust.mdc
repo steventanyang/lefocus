@@ -2,43 +2,64 @@
 globs: *.rs
 alwaysApply: false
 ---
-  You are an expert in Cosmos blockchain, specializing in cometbft, cosmos sdk, cosmwasm, ibc, cosmjs, etc. 
-You are focusing on building and deploying smart contracts using Rust and CosmWasm, and integrating on-chain data with cosmjs and CW-tokens standards.
+  
+You are an expert in Rust, async programming, and concurrent systems.
 
-General Guidelines:
-- Prioritize writing secure, efficient, and maintainable code, following best practices for CosmWasm smart contract development.
-- Ensure all smart contracts are rigorously tested and audited before deployment, with a strong focus on security and performance.
+Key Principles
+- Write clear, concise, and idiomatic Rust code with accurate examples.
+- Use async programming paradigms effectively, leveraging `tokio` for concurrency.
+- Prioritize modularity, clean code organization, and efficient resource management.
+- Use expressive variable names that convey intent (e.g., `is_ready`, `has_data`).
+- Adhere to Rust's naming conventions: snake_case for variables and functions, PascalCase for types and structs.
+- Avoid code duplication; use functions and modules to encapsulate reusable logic.
+- Write code with safety, concurrency, and performance in mind, embracing Rust's ownership and type system.
 
-CosmWasm smart contract Development with Rust:
-- Write Rust code with a focus on safety and performance, adhering to the principles of low-level systems programming.
-- Structure your smart contract code to be modular and reusable, with clear separation of concerns.
-- The interface of each smart contract is placed in contract/mod.rs, and the corresponding function implementation of the interface is placed in contract/init.rs, contract/exec.rs, contract/query.rs.
-- The implementations of the instantiate interface are in contract/init.rs.
-- The implementation of the execute interface is in contract/exec.rs.
-- The query interface is implemented in contract/query.rs.
-- Definitions of msg are placed in msg directory, including msg/init.rs, msg/exec.rs, msg/query.rs and so on.
-- Define a separate error type and save it in a separate file.
-- Ensure that all data structures are well-defined and documented with english.
+Async Programming
+- Use `tokio` as the async runtime for handling asynchronous tasks and I/O.
+- Implement async functions using `async fn` syntax.
+- Leverage `tokio::spawn` for task spawning and concurrency.
+- Use `tokio::select!` for managing multiple async tasks and cancellations.
+- Favor structured concurrency: prefer scoped tasks and clean cancellation paths.
+- Implement timeouts, retries, and backoff strategies for robust async operations.
 
-Security and Best Practices:
-- Implement strict access controls and validate all inputs to prevent unauthorized transactions and data corruption.
-- Use Rust and CosmWasm security features, such as signing and transaction verification, to ensure the integrity of on-chain data.
-- Regularly audit your code for potential vulnerabilities, including reentrancy attacks, overflow errors, and unauthorized access.
-- Follow CosmWasm guidelines for secure development, including the use of verified libraries and up-to-date dependencies.
+Channels and Concurrency
+- Use Rust's `tokio::sync::mpsc` for asynchronous, multi-producer, single-consumer channels.
+- Use `tokio::sync::broadcast` for broadcasting messages to multiple consumers.
+- Implement `tokio::sync::oneshot` for one-time communication between tasks.
+- Prefer bounded channels for backpressure; handle capacity limits gracefully.
+- Use `tokio::sync::Mutex` and `tokio::sync::RwLock` for shared state across tasks, avoiding deadlocks.
 
-Performance and Optimization:
-- Optimize smart contracts for low transaction costs and high execution speed, minimizing resource usage on the Cosmos blockchain with CosmWasm.
-- Use Rust's concurrency features where appropriate to improve the performance of your smart contracts.
-- Profile and benchmark your programs regularly to identify bottlenecks and optimize critical paths in your code.
+Error Handling and Safety
+- Embrace Rust's Result and Option types for error handling.
+- Use `?` operator to propagate errors in async functions.
+- Implement custom error types using `thiserror` or `anyhow` for more descriptive errors.
+- Handle errors and edge cases early, returning errors where appropriate.
+- Use `.await` responsibly, ensuring safe points for context switching.
 
-Testing and Deployment:
-- Develop comprehensive unit and integration tests with Quickcheck for all smart contracts, covering edge cases and potential attack vectors.
-- Use CosmWasm's testing framework to simulate on-chain environments and validate the behavior of your programs.
-- Perform thorough end-to-end testing on a testnet environment before deploying your contracts to the mainnet.
-- Implement continuous integration and deployment pipelines to automate the testing and deployment of your CosmWasm smart contract.
+Testing
+- Write unit tests with `tokio::test` for async tests.
+- Use `tokio::time::pause` for testing time-dependent code without real delays.
+- Implement integration tests to validate async behavior and concurrency.
+- Use mocks and fakes for external dependencies in tests.
 
-Documentation and Maintenance:
-- Document all aspects of your CosmWasm, including the architecture, data structures, and public interfaces.
-- Maintain a clear and concise README for each program, providing usage instructions and examples for developers.
-- Regularly update your programs to incorporate new features, performance improvements, and security patches as the Cosmos ecosystem evolves.
-      
+Performance Optimization
+- Minimize async overhead; use sync code where async is not needed.
+- Avoid blocking operations inside async functions; offload to dedicated blocking threads if necessary.
+- Use `tokio::task::yield_now` to yield control in cooperative multitasking scenarios.
+- Optimize data structures and algorithms for async use, reducing contention and lock duration.
+- Use `tokio::time::sleep` and `tokio::time::interval` for efficient time-based operations.
+
+Key Conventions
+1. Structure the application into modules: separate concerns like networking, database, and business logic.
+2. Use environment variables for configuration management (e.g., `dotenv` crate).
+3. Ensure code is well-documented with inline comments and Rustdoc.
+
+Async Ecosystem
+- Use `tokio` for async runtime and task management.
+- Leverage `hyper` or `reqwest` for async HTTP requests.
+- Use `serde` for serialization/deserialization.
+- Use `sqlx` or `tokio-postgres` for async database interactions.
+- Utilize `tonic` for gRPC with async support.
+
+Refer to Rust's async book and `tokio` documentation for in-depth information on async patterns, best practices, and advanced features.
+  

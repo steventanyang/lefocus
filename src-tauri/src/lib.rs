@@ -1,22 +1,27 @@
 mod audio;
 mod db;
 mod macos_bridge;
+mod models;
+mod timer;
 
 use audio::AudioEngineHandle;
+use chrono::Utc;
 use db::Database;
+use log::warn;
 use macos_bridge::{
-    capture_screenshot,
-    get_active_window_metadata,
-    run_ocr,
-    OCRResult,
-    WindowMetadata,
+    capture_screenshot, get_active_window_metadata, run_ocr, OCRResult, WindowMetadata,
 };
 use tauri::Manager;
 use tauri::State;
+use timer::{
+    commands::{cancel_timer, end_timer, get_timer_state, start_timer},
+    TimerController,
+};
 
-struct AppState {
+pub(crate) struct AppState {
     audio: AudioEngineHandle,
-    db: Database,
+    _db: Database,
+    pub(crate) timer: TimerController,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -87,12 +92,10 @@ fn test_get_window() -> Result<WindowMetadata, String> {
 
 #[tauri::command]
 fn test_capture_screenshot(window_id: u32) -> Result<String, String> {
-    let image_data = capture_screenshot(window_id)
-        .map_err(|e| e.to_string())?;
+    let image_data = capture_screenshot(window_id).map_err(|e| e.to_string())?;
 
     let output_path = std::path::Path::new("/tmp/lefocus_test_screenshot.png");
-    std::fs::write(output_path, &image_data)
-        .map_err(|e| e.to_string())?;
+    std::fs::write(output_path, &image_data).map_err(|e| e.to_string())?;
 
     Ok(format!(
         "Screenshot saved to {} ({} bytes)",
@@ -103,8 +106,7 @@ fn test_capture_screenshot(window_id: u32) -> Result<String, String> {
 
 #[tauri::command]
 fn test_run_ocr(image_path: String) -> Result<OCRResult, String> {
-    let image_data = std::fs::read(&image_path)
-        .map_err(|e| e.to_string())?;
+    let image_data = std::fs::read(&image_path).map_err(|e| e.to_string())?;
 
     run_ocr(&image_data).map_err(|e| e.to_string())
 }
@@ -124,9 +126,30 @@ pub fn run() {
                 let db_path = app_data_dir.join("lefocus.sqlite3");
                 let database = Database::new(db_path)?;
 
+                // Finalize timers that were running when the app last crashed.
+                {
+                    let db_for_recovery = database.clone();
+                    tauri::async_runtime::block_on(async move {
+                        if let Some(session) = db_for_recovery.get_incomplete_session().await? {
+                            let now = Utc::now();
+                            warn!(
+                                "Recovered incomplete session {}; marking as Interrupted",
+                                session.id
+                            );
+                            db_for_recovery
+                                .mark_session_interrupted(&session.id, now)
+                                .await?;
+                        }
+                        Ok::<(), anyhow::Error>(())
+                    })?;
+                }
+
+                let timer_controller = TimerController::new(app.handle().clone(), database.clone());
+
                 app.manage(AppState {
                     audio: AudioEngineHandle::new(),
-                    db: database,
+                    _db: database,
+                    timer: timer_controller,
                 });
 
                 Ok(())
@@ -142,6 +165,10 @@ pub fn run() {
             test_get_window,
             test_capture_screenshot,
             test_run_ocr,
+            get_timer_state,
+            start_timer,
+            end_timer,
+            cancel_timer,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
