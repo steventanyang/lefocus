@@ -1,6 +1,6 @@
-use std::ffi::{CStr, c_char};
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
+use std::ffi::{c_char, CStr};
 
 #[repr(C)]
 struct WindowMetadataFFI {
@@ -126,5 +126,8 @@ unsafe fn c_ptr_to_string(ptr: *mut c_char) -> Result<String> {
     }
 
     let c_str = CStr::from_ptr(ptr);
-    Ok(c_str.to_str().map(|s| s.to_owned()).map_err(|e| anyhow!(e))?)
+    Ok(c_str
+        .to_str()
+        .map(|s| s.to_owned())
+        .map_err(|e| anyhow!(e))?)
 }

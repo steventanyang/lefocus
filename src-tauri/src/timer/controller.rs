@@ -114,12 +114,7 @@ impl TimerController {
 
         {
             let mut state = self.state.lock().await;
-            state.begin_session(
-                session_id,
-                target_ms,
-                started_at,
-                Instant::now(),
-            );
+            state.begin_session(session_id, target_ms, started_at, Instant::now());
         }
 
         self.spawn_ticker().await;
@@ -294,10 +289,7 @@ impl TimerController {
                                 )
                                 .await;
 
-                            let _ = app_handle_clone.emit(
-                                "timer-heartbeat",
-                                heartbeat_payload,
-                            );
+                            let _ = app_handle_clone.emit("timer-heartbeat", heartbeat_payload);
                         });
                     }
                 }

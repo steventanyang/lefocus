@@ -56,17 +56,14 @@ impl TimerState {
         match self.status {
             TimerStatus::Idle | TimerStatus::Stopped => 0,
             TimerStatus::Running => {
-                let remaining =
-                    self.target_ms as i64 - self.current_active_ms() as i64;
+                let remaining = self.target_ms as i64 - self.current_active_ms() as i64;
                 cmp::max(remaining, 0)
             }
         }
     }
 
     pub fn current_active_ms(&self) -> u64 {
-        if let (TimerStatus::Running, Some(anchor)) =
-            (self.status, self.running_anchor)
-        {
+        if let (TimerStatus::Running, Some(anchor)) = (self.status, self.running_anchor) {
             self.active_ms_baseline
                 .saturating_add(anchor.elapsed().as_millis() as u64)
         } else {
@@ -75,9 +72,7 @@ impl TimerState {
     }
 
     pub fn sync_active_from_anchor(&mut self) {
-        if let (TimerStatus::Running, Some(anchor)) =
-            (self.status, self.running_anchor)
-        {
+        if let (TimerStatus::Running, Some(anchor)) = (self.status, self.running_anchor) {
             self.active_ms = self
                 .active_ms_baseline
                 .saturating_add(anchor.elapsed().as_millis() as u64);

@@ -49,12 +49,12 @@ fn apply_migration(tx: &Transaction<'_>, version: i32) -> Result<()> {
             tx.execute_batch(include_str!("schema_v2.sql"))
                 .context("failed to execute schema_v2.sql")?;
             Ok(())
-        },
+        }
         3 => {
             tx.execute_batch(include_str!("schema_v3.sql"))
                 .context("failed to execute schema_v3.sql")?;
             Ok(())
-        },
+        }
         _ => bail!("unknown migration target version: {version}"),
     }
 }
