@@ -1,0 +1,330 @@
+---
+globs: *.tsx,*.ts,*.jsx,*.js
+alwaysApply: false
+---
+
+# You Might Not Need an Effect
+
+Effects are an escape hatch for synchronizing with external systems. If there's no external system involved, you probably don't need an Effect.
+
+## Core Principle
+
+**Effects are for synchronization with external systems** (DOM, network, third-party libraries, browser APIs).
+**Event handlers are for reacting to user interactions** (clicks, form submissions, navigation).
+
+## When NOT to Use Effects
+
+### ❌ Don't: Transform data for rendering
+
+```tsx
+// Bad: Redundant state + Effect
+const [fullName, setFullName] = useState("");
+useEffect(() => {
+  setFullName(firstName + " " + lastName);
+}, [firstName, lastName]);
+
+// Good: Calculate during render
+const fullName = firstName + " " + lastName;
+```
+
+### ❌ Don't: Reset state on prop changes
+
+```tsx
+// Bad: Effect causes double render
+useEffect(() => {
+  setComment("");
+}, [userId]);
+
+// Good: Use a key to reset component
+<Profile userId={userId} key={userId} />;
+```
+
+### ❌ Don't: Adjust state based on props
+
+```tsx
+// Bad: Double render
+useEffect(() => {
+  setSelection(null);
+}, [items]);
+
+// Good: Calculate during render
+const selection = items.find((item) => item.id === selectedId) ?? null;
+
+// Or: Adjust during render if necessary (rare)
+const [prevItems, setPrevItems] = useState(items);
+if (items !== prevItems) {
+  setPrevItems(items);
+  setSelection(null);
+}
+```
+
+### ❌ Don't: Handle user events in Effects
+
+```tsx
+// Bad: Effect doesn't know which button was clicked
+const [jsonToSubmit, setJsonToSubmit] = useState(null);
+useEffect(() => {
+  if (jsonToSubmit !== null) {
+    post("/api/register", jsonToSubmit);
+  }
+}, [jsonToSubmit]);
+
+// Good: Handle in event handler
+function handleSubmit(e) {
+  e.preventDefault();
+  post("/api/register", { firstName, lastName });
+}
+```
+
+### ❌ Don't: Chain Effects to update state
+
+```tsx
+// Bad: Multiple re-renders, fragile logic
+useEffect(() => {
+  if (card !== null && card.gold) {
+    setGoldCardCount((c) => c + 1);
+  }
+}, [card]);
+
+useEffect(() => {
+  if (goldCardCount > 3) {
+    setRound((r) => r + 1);
+  }
+}, [goldCardCount]);
+
+// Good: Calculate in render, update in event handler
+const isGameOver = round > 5;
+
+function handlePlaceCard(nextCard) {
+  setCard(nextCard);
+  if (nextCard.gold) {
+    if (goldCardCount <= 3) {
+      setGoldCardCount(goldCardCount + 1);
+    } else {
+      setGoldCardCount(0);
+      setRound(round + 1);
+    }
+  }
+}
+```
+
+### ❌ Don't: Notify parent in Effect
+
+```tsx
+// Bad: Parent updates after child render
+useEffect(() => {
+  onChange(isOn);
+}, [isOn, onChange]);
+
+// Good: Update both in event handler
+function updateToggle(nextIsOn) {
+  setIsOn(nextIsOn);
+  onChange(nextIsOn);
+}
+
+// Best: Lift state up (controlled component)
+function Toggle({ isOn, onChange }) {
+  // Parent controls the state
+}
+```
+
+## When TO Use Effects
+
+### ✅ Do: Synchronize with external systems
+
+**External store subscription:**
+
+```tsx
+// Good: Subscribe to browser API
+useEffect(() => {
+  function updateState() {
+    setIsOnline(navigator.onLine);
+  }
+
+  window.addEventListener("online", updateState);
+  window.addEventListener("offline", updateState);
+  return () => {
+    window.removeEventListener("online", updateState);
+    window.removeEventListener("offline", updateState);
+  };
+}, []);
+
+// Better: Use useSyncExternalStore for this pattern
+return useSyncExternalStore(
+  subscribe,
+  () => navigator.onLine,
+  () => true
+);
+```
+
+**Analytics on mount:**
+
+```tsx
+// Good: Runs because component was displayed
+useEffect(() => {
+  post("/analytics/event", { eventName: "visit_form" });
+}, []);
+```
+
+**Data fetching with cleanup:**
+
+```tsx
+// Good: Synchronize with network state
+useEffect(() => {
+  let ignore = false;
+
+  fetchResults(query, page).then((json) => {
+    if (!ignore) {
+      setResults(json);
+    }
+  });
+
+  return () => {
+    ignore = true; // Prevent race conditions
+  };
+}, [query, page]);
+```
+
+## Performance Optimization
+
+### Cache expensive calculations with useMemo
+
+```tsx
+// Use useMemo for slow calculations
+const visibleTodos = useMemo(
+  () => getFilteredTodos(todos, filter),
+  [todos, filter]
+);
+```
+
+**Note:** React 19 compiler can auto-memoize, reducing manual useMemo needs.
+
+## One-time Initialization
+
+### App-level initialization
+
+```tsx
+// Option 1: Guard flag
+let didInit = false;
+
+function App() {
+  useEffect(() => {
+    if (!didInit) {
+      didInit = true;
+      loadDataFromLocalStorage();
+      checkAuthToken();
+    }
+  }, []);
+}
+
+// Option 2: Module-level (better)
+if (typeof window !== "undefined") {
+  checkAuthToken();
+  loadDataFromLocalStorage();
+}
+
+function App() {
+  // Already initialized
+}
+```
+
+## Data Flow Best Practices
+
+### Keep data flow top-down
+
+```tsx
+// Bad: Child passes data up in Effect
+function Child({ onFetched }) {
+  const data = useSomeAPI();
+  useEffect(() => {
+    if (data) onFetched(data);
+  }, [data]);
+}
+
+// Good: Parent fetches and passes down
+function Parent() {
+  const data = useSomeAPI();
+  return <Child data={data} />;
+}
+```
+
+### Share logic via functions, not Effects
+
+```tsx
+// Bad: Duplicate calls in Effects
+useEffect(() => {
+  if (product.isInCart) {
+    showNotification(`Added ${product.name}`);
+  }
+}, [product]);
+
+// Good: Shared function called from event handlers
+function buyProduct() {
+  addToCart(product);
+  showNotification(`Added ${product.name}`);
+}
+
+function handleBuyClick() {
+  buyProduct();
+}
+```
+
+## Decision Tree
+
+Ask yourself: **Why does this code need to run?**
+
+1. **User interaction** (click, type, submit) → Event handler
+2. **Component displayed on screen** → Effect
+3. **Derive from existing state/props** → Calculate during render
+4. **Expensive calculation** → useMemo
+5. **Reset state on prop change** → Use `key` prop
+6. **Synchronize multiple components** → Lift state up
+7. **External system sync** (network, DOM, browser API) → Effect
+
+## Common Patterns
+
+### Extract reusable Effects into custom hooks
+
+```tsx
+// Encapsulate Effect logic
+function useData(url) {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    let ignore = false;
+    fetch(url)
+      .then((response) => response.json())
+      .then((json) => {
+        if (!ignore) setData(json);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [url]);
+  return data;
+}
+
+// Use in component
+function SearchResults({ query }) {
+  const results = useData(`/api/search?q=${query}`);
+  // ...
+}
+```
+
+## Quick Reference
+
+| Pattern                 | Solution                | Why                       |
+| ----------------------- | ----------------------- | ------------------------- |
+| Derive data             | Calculate during render | No extra render pass      |
+| Expensive calculation   | `useMemo`               | Cache result              |
+| Reset state             | Use `key` prop          | Automatic reset           |
+| User event logic        | Event handler           | Know exact interaction    |
+| Multiple component sync | Lift state up           | Single source of truth    |
+| External system         | Effect                  | True synchronization need |
+| Race conditions         | Cleanup function        | Ignore stale responses    |
+
+## Remember
+
+- Fewer raw `useEffect` calls = easier maintenance
+- Effects run **after** render, event handlers run **during** interaction
+- Always implement cleanup for subscriptions and async operations
+- Modern frameworks often have better built-in solutions than manual Effects

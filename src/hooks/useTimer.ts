@@ -1,46 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import type { TimerSnapshot } from "../types/timer";
+import { useTimerSnapshot } from "./useTimerSnapshot";
 
 export function useTimer() {
-  const [timerState, setTimerState] = useState<TimerSnapshot | null>(null);
-  const [error, setError] = useState<string>("");
-
-  // Fetch initial timer state on mount
-  useEffect(() => {
-    async function fetchInitialState() {
-      try {
-        const snapshot = await invoke<TimerSnapshot>("get_timer_state");
-        setTimerState(snapshot);
-      } catch (err) {
-        setError(`Failed to get timer state: ${err}`);
-      }
-    }
-    fetchInitialState();
-  }, []);
-
-  // Listen to timer state changes
-  useEffect(() => {
-    const unlistenPromise = listen<TimerSnapshot>("timer-state-changed", (event) => {
-      setTimerState(event.payload);
-    });
-
-    return () => {
-      unlistenPromise.then((unlisten) => unlisten());
-    };
-  }, []);
-
-  // Listen to heartbeat events (for DB sync updates)
-  useEffect(() => {
-    const unlistenPromise = listen<TimerSnapshot>("timer-heartbeat", (event) => {
-      setTimerState(event.payload);
-    });
-
-    return () => {
-      unlistenPromise.then((unlisten) => unlisten());
-    };
-  }, []);
+  const { timerState, error, setError } = useTimerSnapshot();
 
   const startTimer = useCallback(async (durationMs: number) => {
     try {

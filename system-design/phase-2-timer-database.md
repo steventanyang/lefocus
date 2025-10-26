@@ -706,7 +706,7 @@ src/
   - **Pattern:** Message passing to dedicated thread (no spawn_blocking needed)
 - [x] Implement migrations using `PRAGMA user_version` (run on thread startup)
 - [x] Add database initialization to app startup
-- [ ] Test: Verify DB created in Tauri app data directory
+- [x] Test: Verify DB created in Tauri app data directory
 
 #### Step 2: Data Models
 
@@ -726,7 +726,7 @@ src/
   - On start: `active_ms = 0`, `baseline = 0`, `anchor = Some(now)`
   - On tick: `active_ms = baseline + anchor.elapsed()` (for DB write)
   - On stop/cancel: sync from anchor and drop it
-- [ ] Unit tests for state transitions
+- [x] Unit tests for state transitions
 
 #### Step 4: Timer Controller
 
@@ -754,29 +754,29 @@ src/
 
 - [x] Create `src-tauri/src/timer/commands.rs`
 - [x] Register all commands in `lib.rs`
-- [ ] Test commands via Tauri DevTools console
+- [x] Test commands via Tauri DevTools console
 
 #### Step 6: Frontend Types
 
-- [ ] Create `src/types/timer.ts`
-- [ ] Define TypeScript interfaces matching Rust types
-- [ ] Define `TIMER_PRESETS` constant
+- [x] Create `src/types/timer.ts`
+- [x] Define TypeScript interfaces matching Rust types
+- [x] Define `TIMER_PRESETS` constant
 
 #### Step 7: Frontend Components
 
-- [ ] Archive old components to `src/components/archived/`
-- [ ] Create `TimerDisplay.tsx` (MM:SS display)
-- [ ] Create `DurationPicker.tsx` (preset buttons)
-- [ ] Create `TimerControls.tsx` (Start/Cancel/End buttons)
-- [ ] Create `TimerView.tsx` (main component)
-- [ ] Update `App.tsx` to render `TimerView`
+- [x] Archive old components to `src/components/archived/`
+- [x] Create `TimerDisplay.tsx` (MM:SS display)
+- [x] Create `DurationPicker.tsx` (preset buttons)
+- [x] Create `TimerControls.tsx` (Start/Cancel/End buttons)
+- [x] Create `TimerView.tsx` (main component)
+- [x] Update `App.tsx` to render `TimerView`
 
 #### Step 8: State Synchronization
 
-- [ ] Implement event listeners in `TimerView`
-- [ ] Implement 250ms animation interval
-- [ ] Implement heartbeat sync
-- [ ] Test: Verify UI updates within 100ms of state change
+- [x] Implement event listeners in `TimerView`
+- [x] Implement 250ms animation interval
+- [x] Implement heartbeat sync
+- [x] Test: Verify UI updates within 100ms of state change
 
 #### Step 9: Crash Handling
 
@@ -818,34 +818,34 @@ src/
 
 #### ✅ Database
 
-- [ ] SQLite file created in Tauri app data directory
-- [ ] Schema version = 1
-- [ ] Sessions table has correct columns and indexes
+- [x] SQLite file created in Tauri app data directory
+- [x] Schema version = 1
+- [x] Sessions table has correct columns and indexes
 
 #### ✅ Timer Accuracy
 
-- [ ] 25-minute timer completes within ±500ms of 1500 seconds
-- [ ] Active time persists correctly across heartbeats
+- [x] 25-minute timer completes within ±500ms of 1500 seconds
+- [x] Active time persists correctly across heartbeats
 
 #### ✅ State Synchronization
 
-- [ ] UI updates within 100ms of Rust state change
-- [ ] Heartbeat event emitted every 10s (±1s)
-- [ ] Local animation smooth at 60fps (no jank)
+- [x] UI updates within 100ms of Rust state change
+- [x] Heartbeat event emitted every 10s (±1s)
+- [x] Local animation smooth at 60fps (no jank)
 
 #### ✅ UI/UX
 
-- [ ] Duration picker shows 15/25/45 min options
-- [ ] Timer displays in MM:SS format
-- [ ] Button states correct for each status (disabled when invalid)
-- [ ] "Complete!" message shown when timer reaches 0
+- [x] Duration picker shows 15/25/45 min options
+- [x] Timer displays in MM:SS format
+- [x] Button states correct for each status (disabled when invalid)
+- [x] "Complete!" message shown when timer reaches 0
 
 #### ✅ Code Quality
 
-- [ ] Audio/test components moved to `archived/` folder
-- [ ] No compiler warnings
-- [ ] All Tauri commands registered and callable
-- [ ] Database queries use parameterized statements (SQL injection safe)
+- [x] Audio/test components moved to `archived/` folder
+- [x] No compiler warnings
+- [x] All Tauri commands registered and callable
+- [x] Database queries use parameterized statements (SQL injection safe)
 
 ---
 
