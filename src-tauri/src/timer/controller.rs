@@ -5,11 +5,15 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
+use log::error;
 use serde::Serialize;
 use tokio::{sync::Mutex, task::JoinHandle, time};
 use uuid::Uuid;
 
-use crate::db::{Database, Session, SessionInfo, SessionStatus};
+use crate::{
+    db::{Database, Session, SessionInfo, SessionStatus},
+    sensing::SensingController,
+};
 
 use super::{TimerState, TimerStatus};
 
@@ -48,6 +52,7 @@ pub struct TimerController {
     ticker: Arc<Mutex<Option<JoinHandle<()>>>>,
     tick_interval: Duration,
     heartbeat_every_ticks: u32,
+    sensing: Arc<Mutex<SensingController>>,
 }
 
 impl TimerController {
@@ -63,6 +68,7 @@ impl TimerController {
             ticker: Arc::new(Mutex::new(None)),
             tick_interval: Duration::from_secs(1),
             heartbeat_every_ticks: if debug_mode { 1 } else { 10 },
+            sensing: Arc::new(Mutex::new(SensingController::new())),
         }
     }
 
@@ -111,8 +117,14 @@ impl TimerController {
 
         {
             let mut state = self.state.lock().await;
-            state.begin_session(session_id, target_ms, started_at, Instant::now());
+            state.begin_session(session_id.clone(), target_ms, started_at, Instant::now());
         }
+
+        self.sensing
+            .lock()
+            .await
+            .start_sensing(session_id, self.db.clone())
+            .await?;
 
         self.spawn_ticker().await;
         self.emit_state_changed().await?;
@@ -154,6 +166,7 @@ impl TimerController {
             }
         };
 
+        self.sensing.lock().await.stop_sensing().await?;
         self.cancel_ticker().await;
 
         self.db
@@ -190,6 +203,7 @@ impl TimerController {
             (session_id, active_ms)
         };
 
+        self.sensing.lock().await.stop_sensing().await?;
         self.cancel_ticker().await;
 
         self.db
@@ -216,6 +230,7 @@ impl TimerController {
         let db = self.db.clone();
         let tick_interval = self.tick_interval;
         let heartbeat_every = self.heartbeat_every_ticks;
+        let sensing = self.sensing.clone();
 
         let handle = tokio::spawn(async move {
             let mut interval = time::interval(tick_interval);
@@ -242,6 +257,11 @@ impl TimerController {
                         guard.active_ms = guard.active_ms.min(guard.target_ms);
                         guard.clone()
                     };
+
+                    // Stop sensing when timer completes
+                    if let Err(e) = sensing.lock().await.stop_sensing().await {
+                        error!("Failed to stop sensing on timer completion: {}", e);
+                    }
 
                     emit_timer_state(&app_handle, final_snapshot.clone());
 

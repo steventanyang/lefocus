@@ -5,4 +5,4 @@ pub mod models;
 pub mod repositories;
 
 pub use connection::Database;
-pub use models::{Session, SessionInfo, SessionStatus};
+pub use models::{ContextReading, Session, SessionInfo, SessionStatus};

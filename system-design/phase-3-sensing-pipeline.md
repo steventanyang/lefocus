@@ -165,6 +165,13 @@ pub struct SensingController {
 }
 ```
 
+### Patch: Active Window Selection & Cache Reset
+
+- Swift plugin keeps an in-memory `windowCache` keyed by `CGWindowID`; `clearCache()` resets it (called at session start) so stale windows from interrupted runs are flushed.
+- When resolving the active window, the plugin first collects on-screen windows for the bundle that currently has focus, picks those containing the mouse cursor, and falls back to the largest- area window as a tie-breaker.
+- Screenshot capture uses the cached `SCWindow` if it remains on-screen, otherwise triggers a fresh cache refresh before retrying.
+- Combined effect: avoids 1×1 captures from overlay popovers and ensures restarts don’t reuse invalid `SCWindow` handles.
+
 **Implementation:**
 
 ```rust
@@ -937,21 +944,21 @@ Phase 3 is complete when:
 
 ### Code Changes
 
-- [ ] Create `src/sensing/mod.rs` module structure
-- [ ] Create `src/sensing/controller.rs` - Implement `SensingController` struct
-- [ ] Create `src/sensing/loop.rs` - Implement `sensing_loop` and `perform_capture()`
-- [ ] Create `src/sensing/phash.rs` - Implement `compute_phash()` and `compute_hamming_distance()`
-- [ ] Create `src/db/models/context_reading.rs` - Define `ContextReading` struct
-- [ ] Create `src/db/repositories/context_readings.rs` - Implement `insert_context_reading()` method
-- [ ] Create `src/db/schemas/schema_v4.sql` - context_readings table schema
-- [ ] Update `src/db/migrations.rs` to apply schema_v4
-- [ ] Integrate sensing hooks into `TimerController` (add field + call hooks)
+- [x] Create `src/sensing/mod.rs` module structure
+- [x] Create `src/sensing/controller.rs` - Implement `SensingController` struct
+- [x] Create `src/sensing/loop.rs` - Implement `sensing_loop` and `perform_capture()`
+- [x] Create `src/sensing/phash.rs` - Implement `compute_phash()` and `compute_hamming_distance()`
+- [x] Create `src/db/models/context_reading.rs` - Define `ContextReading` struct
+- [x] Create `src/db/repositories/context_readings.rs` - Implement `insert_context_reading()` method
+- [x] Create `src/db/schemas/schema_v4.sql` - context_readings table schema
+- [x] Update `src/db/migrations.rs` to apply schema_v4
+- [x] Integrate sensing hooks into `TimerController` (add field + call hooks)
 
 ### Dependencies
 
-- [ ] Add `image = "0.25"` to Cargo.toml
-- [ ] Add `image-hasher = "2.0"` to Cargo.toml
-- [ ] Add `tokio-util = { version = "0.7", features = ["sync"] }` to Cargo.toml
+- [x] Add `image = "0.25"` to Cargo.toml
+- [x] Add `image-hasher = "2.0"` to Cargo.toml
+- [x] Add `tokio-util = { version = "0.7", features = ["sync"] }` to Cargo.toml
 
 ### Testing
 
