@@ -25,6 +25,7 @@ extern "C" {
     fn macos_sensing_get_active_window_metadata() -> *mut WindowMetadataFFI;
     fn macos_sensing_capture_screenshot(window_id: u32, out_length: *mut usize) -> *mut u8;
     fn macos_sensing_run_ocr(image_data: *const u8, image_length: usize) -> *mut OCRResultFFI;
+    fn macos_sensing_clear_cache();
 
     fn macos_sensing_free_window_metadata(ptr: *mut WindowMetadataFFI);
     fn macos_sensing_free_screenshot_buffer(ptr: *mut u8);
@@ -117,6 +118,12 @@ pub fn run_ocr(image_data: &[u8]) -> Result<OCRResult> {
 
         macos_sensing_free_ocr_result(ptr);
         Ok(result)
+    }
+}
+
+pub fn clear_cache() {
+    unsafe {
+        macos_sensing_clear_cache();
     }
 }
 

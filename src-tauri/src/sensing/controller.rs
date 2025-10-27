@@ -1,8 +1,10 @@
 use anyhow::{bail, Context, Result};
+use log::info;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::db::Database;
+use crate::macos_bridge;
 
 use super::loop_worker::sensing_loop;
 
@@ -23,6 +25,11 @@ impl SensingController {
         if self.handle.is_some() {
             bail!("sensing already active");
         }
+
+        // Clear the macOS sensing cache to prevent using stale window references
+        // from previous sessions (especially after interrupted sessions)
+        info!("Clearing macOS sensing cache before starting new session");
+        macos_bridge::clear_cache();
 
         let cancel_token = CancellationToken::new();
         let token_clone = cancel_token.clone();

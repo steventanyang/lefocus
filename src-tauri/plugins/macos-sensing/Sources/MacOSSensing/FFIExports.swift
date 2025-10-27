@@ -110,6 +110,11 @@ public func macos_sensing_swift_free_window_metadata(_ pointer: UnsafeMutablePoi
     pointer.deallocate()
 }
 
+@_cdecl("macos_sensing_swift_clear_cache")
+public func macos_sensing_swift_clear_cache() {
+    MacOSSensingPlugin.shared.clearCache()
+}
+
 @_cdecl("macos_sensing_swift_free_screenshot_buffer")
 public func macos_sensing_swift_free_screenshot_buffer(_ pointer: UnsafeMutablePointer<UInt8>) {
     pointer.deallocate()

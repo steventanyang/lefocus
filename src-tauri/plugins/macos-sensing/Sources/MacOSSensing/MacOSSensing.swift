@@ -30,6 +30,16 @@ public final class MacOSSensingPlugin {
 
     private init() {}
 
+    // MARK: - Lifecycle
+
+    public func clearCache() {
+        stateQueue.sync {
+            windowCache.removeAll()
+            lastActiveWindowId = nil
+            lastCacheUpdate = .distantPast
+        }
+    }
+
     // MARK: - Window Metadata
 
     public func getActiveWindowMetadata() async throws -> WindowMetadataFFI {

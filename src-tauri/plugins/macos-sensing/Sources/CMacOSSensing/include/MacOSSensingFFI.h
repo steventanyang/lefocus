@@ -23,6 +23,7 @@ typedef struct {
 CMacOSSensing_WindowMetadataFFI *macos_sensing_get_active_window_metadata(void);
 uint8_t *macos_sensing_capture_screenshot(uint32_t window_id, size_t *out_len);
 CMacOSSensing_OCRResultFFI *macos_sensing_run_ocr(const uint8_t *image_data, size_t image_len);
+void macos_sensing_clear_cache(void);
 
 void macos_sensing_free_window_metadata(CMacOSSensing_WindowMetadataFFI *ptr);
 void macos_sensing_free_screenshot_buffer(uint8_t *ptr);
