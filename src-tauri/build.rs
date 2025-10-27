@@ -18,6 +18,10 @@ fn compile_macos_sensing() {
     let manifest_dir =
         PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR missing"));
     let plugin_dir = manifest_dir.join("plugins/macos-sensing");
+    let workspace_root = manifest_dir
+        .parent()
+        .expect("workspace root should exist");
+    let swift_build_dir = workspace_root.join(".swift-build/macos-sensing");
 
     let status = Command::new("swift")
         .args([
@@ -28,6 +32,8 @@ fn compile_macos_sensing() {
             plugin_dir.to_str().expect("plugin path invalid UTF-8"),
             "--product",
             "MacOSSensing",
+            "--scratch-path",
+            swift_build_dir.to_str().expect("scratch path invalid UTF-8"),
         ])
         .status()
         .expect("Failed to spawn swift build");
@@ -36,7 +42,7 @@ fn compile_macos_sensing() {
         panic!("Swift plugin build failed");
     }
 
-    let build_output = plugin_dir.join(".build").join("release");
+    let build_output = swift_build_dir.join("release");
     let dylib_name = "libMacOSSensing.dylib";
     let dylib_path = build_output.join(dylib_name);
     println!(

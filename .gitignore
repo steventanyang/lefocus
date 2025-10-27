@@ -27,3 +27,6 @@ src-tauri/plugins/macos-sensing/.build/
 src-tauri/plugins/macos-sensing/.swift-module-cache/
 src-tauri/plugins/macos-sensing/.clang-module-cache/
 src-tauri/plugins/macos-sensing/.swiftpm/
+.swift-build/
+
+.env*
