@@ -5,6 +5,7 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
+use log::error;
 use serde::Serialize;
 use tokio::{sync::Mutex, task::JoinHandle, time};
 use uuid::Uuid;
@@ -229,6 +230,7 @@ impl TimerController {
         let db = self.db.clone();
         let tick_interval = self.tick_interval;
         let heartbeat_every = self.heartbeat_every_ticks;
+        let sensing = self.sensing.clone();
 
         let handle = tokio::spawn(async move {
             let mut interval = time::interval(tick_interval);
@@ -255,6 +257,11 @@ impl TimerController {
                         guard.active_ms = guard.active_ms.min(guard.target_ms);
                         guard.clone()
                     };
+
+                    // Stop sensing when timer completes
+                    if let Err(e) = sensing.lock().await.stop_sensing().await {
+                        error!("Failed to stop sensing on timer completion: {}", e);
+                    }
 
                     emit_timer_state(&app_handle, final_snapshot.clone());
 
