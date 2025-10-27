@@ -72,20 +72,37 @@ public final class MacOSSensingPlugin {
         stateQueue.sync {
             let bundleId = bundleId ?? ""
 
-            if let lastId = lastActiveWindowId,
-               let cached = windowCache[lastId],
-               cached.owningApplication?.bundleIdentifier == bundleId {
-                return cached
+            if let lastId = lastActiveWindowId, let cached = windowCache[lastId] {
+                let matchesBundle = cached.owningApplication?.bundleIdentifier == bundleId
+                if matchesBundle && cached.isOnScreen {
+                    return cached
+                } else {
+                    windowCache.removeValue(forKey: lastId)
+                    if !cached.isOnScreen {
+                        lastActiveWindowId = nil
+                    }
+                }
             }
 
-            if let match = windowCache.values.first(where: {
+            let candidates = windowCache.values.filter {
                 $0.owningApplication?.bundleIdentifier == bundleId && $0.isOnScreen
-            }) {
-                lastActiveWindowId = match.windowID
-                return match
             }
 
-            return nil
+            guard !candidates.isEmpty else {
+                return nil
+            }
+
+            let best = candidates.max(by: { lhs, rhs in
+                let lhsArea = Double(lhs.frame.size.width) * Double(lhs.frame.size.height)
+                let rhsArea = Double(rhs.frame.size.width) * Double(rhs.frame.size.height)
+                return lhsArea < rhsArea
+            })
+
+            if let best = best {
+                lastActiveWindowId = best.windowID
+            }
+
+            return best
         }
     }
 
@@ -130,7 +147,7 @@ public final class MacOSSensingPlugin {
                 windowCache[windowId]
             }
 
-            if cached == nil {
+            if cached == nil || cached?.isOnScreen == false {
                 try await refreshWindowCache()
                 cached = stateQueue.sync {
                     windowCache[windowId]
@@ -163,6 +180,14 @@ public final class MacOSSensingPlugin {
                     domain: "MacOSSensing",
                     code: 4,
                     userInfo: [NSLocalizedDescriptionKey: "Screenshot capture failed"]
+                )
+            }
+
+            guard cgImage.width > 1, cgImage.height > 1 else {
+                throw NSError(
+                    domain: "MacOSSensing",
+                    code: 7,
+                    userInfo: [NSLocalizedDescriptionKey: "Screenshot too small"]
                 )
             }
 
