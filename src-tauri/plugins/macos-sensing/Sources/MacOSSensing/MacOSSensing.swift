@@ -94,6 +94,8 @@ public final class MacOSSensingPlugin {
                 }
             }
 
+            let pointer = currentCursorLocation()
+
             let candidates = windowCache.values.filter {
                 $0.owningApplication?.bundleIdentifier == bundleId && $0.isOnScreen
             }
@@ -102,7 +104,15 @@ public final class MacOSSensingPlugin {
                 return nil
             }
 
-            let best = candidates.max(by: { lhs, rhs in
+            let prioritized: [SCWindow]
+            if let pointer = pointer {
+                let hits = candidates.filter { windowContainsPoint(window: $0, point: pointer) }
+                prioritized = hits.isEmpty ? candidates : hits
+            } else {
+                prioritized = candidates
+            }
+
+            let best = prioritized.max(by: { lhs, rhs in
                 let lhsArea = Double(lhs.frame.size.width) * Double(lhs.frame.size.height)
                 let rhsArea = Double(rhs.frame.size.width) * Double(rhs.frame.size.height)
                 return lhsArea < rhsArea
@@ -136,6 +146,14 @@ public final class MacOSSensingPlugin {
             boundsWidth: window.frame.size.width,
             boundsHeight: window.frame.size.height
         )
+    }
+
+    private func currentCursorLocation() -> CGPoint? {
+        CGEvent(source: nil)?.location
+    }
+
+    private func windowContainsPoint(window: SCWindow, point: CGPoint) -> Bool {
+        window.frame.contains(point)
     }
 
     private func refreshWindowCache() async throws {

@@ -165,6 +165,13 @@ pub struct SensingController {
 }
 ```
 
+### Patch: Active Window Selection & Cache Reset
+
+- Swift plugin keeps an in-memory `windowCache` keyed by `CGWindowID`; `clearCache()` resets it (called at session start) so stale windows from interrupted runs are flushed.
+- When resolving the active window, the plugin first collects on-screen windows for the bundle that currently has focus, picks those containing the mouse cursor, and falls back to the largest- area window as a tie-breaker.
+- Screenshot capture uses the cached `SCWindow` if it remains on-screen, otherwise triggers a fresh cache refresh before retrying.
+- Combined effect: avoids 1×1 captures from overlay popovers and ensures restarts don’t reuse invalid `SCWindow` handles.
+
 **Implementation:**
 
 ```rust
