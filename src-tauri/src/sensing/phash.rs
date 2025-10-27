@@ -1,16 +1,26 @@
 use anyhow::Result;
-use image::ImageFormat;
+use image::{GenericImageView, ImageFormat};
 use image_hasher::{HashAlg, HasherConfig, ImageHash};
 
 pub fn compute_phash(png_bytes: &[u8]) -> Result<String> {
+    use log::debug;
+    
     let img = image::load_from_memory_with_format(png_bytes, ImageFormat::Png)?;
+    let (width, height) = img.dimensions();
+    
+    debug!("pHash: Processing {}×{} image ({} bytes)", width, height, png_bytes.len());
+    
     let hasher = HasherConfig::new()
         .hash_alg(HashAlg::DoubleGradient)
         .hash_size(8, 8)
         .to_hasher();
 
     let hash = hasher.hash_image(&img);
-    Ok(hash.to_base64())
+    let result = hash.to_base64();
+    
+    debug!("pHash result: {} (len={})", result, result.len());
+    
+    Ok(result)
 }
 
 pub fn compute_hamming_distance(lhs: &str, rhs: &str) -> u32 {

@@ -13,8 +13,8 @@ use super::phash::{compute_hamming_distance, compute_phash};
 
 const CAPTURE_INTERVAL_SECS: u64 = 5;
 const CAPTURE_TIMEOUT_SECS: u64 = 3;
-const OCR_COOLDOWN_SECS: u64 = 20;
-const PHASH_CHANGE_THRESHOLD: u32 = 12;
+const OCR_COOLDOWN_SECS: u64 = 0;
+const PHASH_CHANGE_THRESHOLD: u32 = 8;
 
 pub async fn sensing_loop(session_id: String, db: Database, cancel_token: CancellationToken) {
     let mut ticker = tokio::time::interval(Duration::from_secs(CAPTURE_INTERVAL_SECS));
@@ -61,9 +61,26 @@ async fn perform_capture(
 ) -> Result<()> {
     let metadata = get_active_window_metadata()
         .map_err(|err| anyhow!("active window metadata failed: {err}"))?;
+    
+    // Skip if no bundle_id (system windows like menu bar, dock)
+    if metadata.bundle_id.is_empty() {
+        warn!("Warning: Skipping window_id={} with empty bundle_id (system window)", metadata.window_id);
+        return Ok(());
+    }
 
     let png_bytes = capture_screenshot(metadata.window_id)
         .map_err(|err| anyhow!("screenshot capture failed: {err}"))?;
+    
+    // Skip if screenshot is suspiciously small (likely error/blank)
+    // TODO: remove
+    if png_bytes.len() < 1000 {
+        warn!("Warning: Screenshot too small ({} bytes) for window_id={} ({}), likely hidden/minimized - skipping", 
+            png_bytes.len(), metadata.window_id, metadata.bundle_id);
+        return Ok(());
+    }
+    
+    info!("Screenshot: {} bytes, window_id={}, bundle={}", 
+        png_bytes.len(), metadata.window_id, metadata.bundle_id);
 
     let phash = tokio::task::spawn_blocking({
         let bytes = png_bytes.clone();
@@ -71,6 +88,9 @@ async fn perform_capture(
     })
     .await
     .context("phash worker join failed")??;
+    
+    // TODO: remove
+    info!("Computed pHash: {}", phash);
 
     let should_run_ocr =
         should_perform_ocr(&phash, last_ocr_phash.as_deref(), last_ocr_time.as_ref());

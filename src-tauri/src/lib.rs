@@ -113,6 +113,13 @@ fn test_run_ocr(image_path: String) -> Result<OCRResult, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Initialize logging (reads RUST_LOG env var)
+    env_logger::Builder::from_default_env()
+        .filter_level(log::LevelFilter::Info)
+        .init();
+    
+    log::info!("LeFocus starting up...");
+    
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {

@@ -15,6 +15,14 @@ manually build swift
 `cd src-tauri/plugins/macos-sensing && CLANG_MODULE_CACHE_PATH=$PWD/.clang-module-cache
     SWIFT_MODULE_CACHE_PATH=$PWD/.swift-module-cache swift build -c release`
 
+new build swift 
+
+cd /Users/stevenyang/projects/lefocus && \
+swift build -c release \
+  --package-path src-tauri/plugins/macos-sensing \
+  --product MacOSSensing \
+  --scratch-path .swift-build/macos-sensing
+
 
 scripts
 
