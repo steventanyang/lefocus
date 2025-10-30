@@ -3,10 +3,16 @@ import { useTimer } from "../hooks/useTimer";
 import { TimerDisplay } from "./TimerDisplay";
 import { TimerControls } from "./TimerControls";
 import { DurationPicker } from "./DurationPicker";
+import { SessionResults } from "./SessionResults";
 
 export function TimerView() {
   const { timerState, error, startTimer, endTimer, cancelTimer } = useTimer();
-  const [selectedDuration, setSelectedDuration] = useState<number>(25 * 60 * 1000); // Default 25 min
+  const [selectedDuration, setSelectedDuration] = useState<number>(
+    25 * 60 * 1000
+  ); // Default 25 min
+  const [completedSessionId, setCompletedSessionId] = useState<string | null>(
+    null
+  );
 
   if (!timerState) {
     return (
@@ -16,11 +22,28 @@ export function TimerView() {
     );
   }
 
+  // Show session results if we have a completed session
+  if (completedSessionId) {
+    return (
+      <SessionResults
+        sessionId={completedSessionId}
+        onBack={() => setCompletedSessionId(null)}
+      />
+    );
+  }
+
   const { state, remaining_ms } = timerState;
   const isRunning = state.status === "running";
 
   const handleStart = () => {
     startTimer(selectedDuration);
+  };
+
+  const handleEnd = async () => {
+    const sessionInfo = await endTimer();
+    if (sessionInfo) {
+      setCompletedSessionId(sessionInfo.id);
+    }
   };
 
   return (
@@ -32,14 +55,17 @@ export function TimerView() {
       {state.status === "idle" && (
         <div className="duration-section">
           <label>Duration</label>
-          <DurationPicker selectedDuration={selectedDuration} onSelect={setSelectedDuration} />
+          <DurationPicker
+            selectedDuration={selectedDuration}
+            onSelect={setSelectedDuration}
+          />
         </div>
       )}
 
       <TimerControls
         status={state.status}
         onStart={handleStart}
-        onEnd={endTimer}
+        onEnd={handleEnd}
         onCancel={cancelTimer}
         startDisabled={selectedDuration === null}
       />

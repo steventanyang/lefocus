@@ -30,3 +30,4 @@ src-tauri/plugins/macos-sensing/.swiftpm/
 .swift-build/
 
 .env*
+/target

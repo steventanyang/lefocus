@@ -2,6 +2,8 @@
 
 export type TimerStatus = "idle" | "running" | "stopped";
 
+export type SessionStatus = "active" | "completed" | "interrupted";
+
 export interface TimerState {
   status: TimerStatus;
   session_id: string | null;
@@ -13,4 +15,13 @@ export interface TimerState {
 export interface TimerSnapshot {
   state: TimerState;
   remaining_ms: number;
+}
+
+export interface SessionInfo {
+  id: string;
+  startedAt: string; // ISO 8601 datetime
+  stoppedAt: string | null; // ISO 8601 datetime
+  status: SessionStatus;
+  targetMs: number;
+  activeMs: number;
 }
