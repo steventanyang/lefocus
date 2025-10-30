@@ -14,66 +14,68 @@ function formatDuration(seconds: number): string {
 
 export function SegmentStats({ stats }: SegmentStatsProps) {
   return (
-    <div className="segment-stats">
-      <div className="stat-header">Session Summary</div>
+    <div className="border border-black p-6 flex flex-col gap-6">
+      <div className="text-base font-light tracking-wide uppercase pb-2 border-b border-black">
+        Session Summary
+      </div>
 
-      <div className="stat-grid">
-        <div className="stat-item">
-          <div className="stat-label">Total Duration</div>
-          <div className="stat-value">
+      <div className="grid grid-cols-2 gap-6">
+        <div className="flex flex-col gap-2">
+          <div className="text-xs font-light uppercase tracking-wide">Total Duration</div>
+          <div className="text-2xl font-semibold tabular-nums">
             {formatDuration(stats.totalDurationSecs)}
           </div>
         </div>
 
-        <div className="stat-item">
-          <div className="stat-label">Segments</div>
-          <div className="stat-value">{stats.segmentCount}</div>
+        <div className="flex flex-col gap-2">
+          <div className="text-xs font-light uppercase tracking-wide">Segments</div>
+          <div className="text-2xl font-semibold tabular-nums">{stats.segmentCount}</div>
         </div>
       </div>
 
-      <div className="stat-breakdown">
-        <div className="breakdown-item stable">
-          <div className="breakdown-bar-container">
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <div className="w-full h-2 bg-gray-200 border border-black">
             <div
-              className="breakdown-bar"
+              className="h-full bg-segment-stable transition-all duration-300"
               style={{ width: `${stats.stablePercentage}%` }}
             />
           </div>
-          <div className="breakdown-details">
-            <span className="breakdown-label">Stable</span>
-            <span className="breakdown-value">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-normal">Stable</span>
+            <span className="text-sm font-semibold tabular-nums">
               {formatDuration(stats.stableDurationSecs)} (
               {stats.stablePercentage.toFixed(0)}%)
             </span>
           </div>
         </div>
 
-        <div className="breakdown-item transitioning">
-          <div className="breakdown-bar-container">
+        <div className="flex flex-col gap-2">
+          <div className="w-full h-2 bg-gray-200 border border-black">
             <div
-              className="breakdown-bar"
+              className="h-full bg-segment-transitioning transition-all duration-300"
               style={{ width: `${stats.transitioningPercentage}%` }}
             />
           </div>
-          <div className="breakdown-details">
-            <span className="breakdown-label">Transitioning</span>
-            <span className="breakdown-value">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-normal">Transitioning</span>
+            <span className="text-sm font-semibold tabular-nums">
               {formatDuration(stats.transitioningDurationSecs)} (
               {stats.transitioningPercentage.toFixed(0)}%)
             </span>
           </div>
         </div>
 
-        <div className="breakdown-item distracted">
-          <div className="breakdown-bar-container">
+        <div className="flex flex-col gap-2">
+          <div className="w-full h-2 bg-gray-200 border border-black">
             <div
-              className="breakdown-bar"
+              className="h-full bg-segment-distracted transition-all duration-300"
               style={{ width: `${stats.distractedPercentage}%` }}
             />
           </div>
-          <div className="breakdown-details">
-            <span className="breakdown-label">Distracted</span>
-            <span className="breakdown-value">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-normal">Distracted</span>
+            <span className="text-sm font-semibold tabular-nums">
               {formatDuration(stats.distractedDurationSecs)} (
               {stats.distractedPercentage.toFixed(0)}%)
             </span>

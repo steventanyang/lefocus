@@ -16,8 +16,8 @@ export function TimerView() {
 
   if (!timerState) {
     return (
-      <div className="timer-view">
-        <div className="loading">Loading timer...</div>
+      <div className="w-full max-w-md flex flex-col items-center gap-12">
+        <div className="text-base font-light text-center p-8">Loading timer...</div>
       </div>
     );
   }
@@ -47,14 +47,14 @@ export function TimerView() {
   };
 
   return (
-    <div className="timer-view">
-      <h1>LeFocus</h1>
+    <div className="w-full max-w-md flex flex-col items-center gap-12">
+      <h1 className="text-2xl font-light tracking-wide text-center">LeFocus</h1>
 
       <TimerDisplay remainingMs={remaining_ms} isRunning={isRunning} />
 
       {state.status === "idle" && (
-        <div className="duration-section">
-          <label>Duration</label>
+        <div className="flex flex-col gap-4 items-center w-full">
+          <label className="text-sm font-light tracking-wide uppercase">Duration</label>
           <DurationPicker
             selectedDuration={selectedDuration}
             onSelect={setSelectedDuration}
@@ -70,7 +70,11 @@ export function TimerView() {
         startDisabled={selectedDuration === null}
       />
 
-      {error && <div className="error">{error}</div>}
+      {error && (
+        <div className="text-sm font-normal text-center p-4 border border-black bg-transparent max-w-full">
+          {error}
+        </div>
+      )}
     </div>
   );
 }

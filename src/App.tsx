@@ -3,7 +3,7 @@ import { TimerView } from "./components/TimerView";
 
 function App() {
   return (
-    <main className="container">
+    <main className="min-h-screen flex flex-col items-center justify-center p-8">
       <TimerView />
     </main>
   );

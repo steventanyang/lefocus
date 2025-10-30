@@ -47,89 +47,101 @@ export function SegmentDetailsModal({
     segment.id
   );
 
+  const buttonPrimaryClass = "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-black hover:text-white";
+  const buttonSecondaryClass = "bg-transparent border border-black text-black px-8 py-3.5 text-base font-normal cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-black hover:text-white";
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Segment Details</h2>
-          <button className="modal-close" onClick={onClose}>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[1000] p-8" onClick={onClose}>
+      <div className="bg-white border-2 border-black max-w-[600px] w-full max-h-[90vh] overflow-y-auto flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex justify-between items-center p-6 border-b border-black">
+          <h2 className="text-xl font-normal m-0">Segment Details</h2>
+          <button
+            className="bg-transparent border-none text-[2rem] leading-none cursor-pointer p-0 w-8 h-8 flex items-center justify-center transition-opacity duration-200 hover:opacity-70"
+            onClick={onClose}
+          >
             ×
           </button>
         </div>
 
-        <div className="modal-body">
-          <div className="detail-section">
-            <div className="detail-row">
-              <span className="detail-label">Application</span>
-              <span className="detail-value">
+        <div className="p-6 flex flex-col gap-8">
+          <div className="flex flex-col gap-4">
+            <div className="flex justify-between items-baseline py-2 border-b border-gray-200">
+              <span className="text-sm font-light">Application</span>
+              <span className="text-sm font-normal text-right max-w-[60%] break-words">
                 {segment.appName || segment.bundleId}
               </span>
             </div>
 
             {segment.windowTitle && (
-              <div className="detail-row">
-                <span className="detail-label">Window Title</span>
-                <span className="detail-value">{segment.windowTitle}</span>
+              <div className="flex justify-between items-baseline py-2 border-b border-gray-200">
+                <span className="text-sm font-light">Window Title</span>
+                <span className="text-sm font-normal text-right max-w-[60%] break-words">
+                  {segment.windowTitle}
+                </span>
               </div>
             )}
 
-            <div className="detail-row">
-              <span className="detail-label">Type</span>
-              <span className="detail-value">
+            <div className="flex justify-between items-baseline py-2 border-b border-gray-200">
+              <span className="text-sm font-light">Type</span>
+              <span className="text-sm font-normal text-right max-w-[60%] break-words">
                 {getSegmentTypeLabel(segment.segmentType)}
               </span>
             </div>
 
-            <div className="detail-row">
-              <span className="detail-label">Duration</span>
-              <span className="detail-value">
+            <div className="flex justify-between items-baseline py-2 border-b border-gray-200">
+              <span className="text-sm font-light">Duration</span>
+              <span className="text-sm font-normal text-right max-w-[60%] break-words">
                 {formatDuration(segment.durationSecs)}
               </span>
             </div>
 
-            <div className="detail-row">
-              <span className="detail-label">Time Range</span>
-              <span className="detail-value">
+            <div className="flex justify-between items-baseline py-2 border-b border-gray-200">
+              <span className="text-sm font-light">Time Range</span>
+              <span className="text-sm font-normal text-right max-w-[60%] break-words">
                 {formatTime(segment.startTime)} – {formatTime(segment.endTime)}
               </span>
             </div>
 
-            <div className="detail-row">
-              <span className="detail-label">Readings</span>
-              <span className="detail-value">{segment.readingCount}</span>
+            <div className="flex justify-between items-baseline py-2 border-b border-gray-200">
+              <span className="text-sm font-light">Readings</span>
+              <span className="text-sm font-normal text-right max-w-[60%] break-words">
+                {segment.readingCount}
+              </span>
             </div>
           </div>
 
-          <div className="detail-section">
-            <h3 className="section-title">Confidence Breakdown</h3>
-            <div className="confidence-grid">
-              <div className="confidence-item">
-                <span className="confidence-label">Overall</span>
-                <span className="confidence-value">
+          <div className="flex flex-col gap-4">
+            <h3 className="text-sm font-normal uppercase tracking-wide mb-2">
+              Confidence Breakdown
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-light uppercase tracking-wide">Overall</span>
+                <span className="text-xl font-semibold tabular-nums">
                   {formatConfidence(segment.confidence)}
                 </span>
               </div>
-              <div className="confidence-item">
-                <span className="confidence-label">Duration</span>
-                <span className="confidence-value">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-light uppercase tracking-wide">Duration</span>
+                <span className="text-xl font-semibold tabular-nums">
                   {formatConfidence(segment.durationScore)}
                 </span>
               </div>
-              <div className="confidence-item">
-                <span className="confidence-label">Stability</span>
-                <span className="confidence-value">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-light uppercase tracking-wide">Stability</span>
+                <span className="text-xl font-semibold tabular-nums">
                   {formatConfidence(segment.stabilityScore)}
                 </span>
               </div>
-              <div className="confidence-item">
-                <span className="confidence-label">Visual Clarity</span>
-                <span className="confidence-value">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-light uppercase tracking-wide">Visual Clarity</span>
+                <span className="text-xl font-semibold tabular-nums">
                   {formatConfidence(segment.visualClarityScore)}
                 </span>
               </div>
-              <div className="confidence-item">
-                <span className="confidence-label">OCR Quality</span>
-                <span className="confidence-value">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-light uppercase tracking-wide">OCR Quality</span>
+                <span className="text-xl font-semibold tabular-nums">
                   {formatConfidence(segment.ocrQualityScore)}
                 </span>
               </div>
@@ -137,23 +149,28 @@ export function SegmentDetailsModal({
           </div>
 
           {segment.segmentType === "stable" && interruptions.length > 0 && (
-            <div className="detail-section">
-              <h3 className="section-title">
+            <div className="flex flex-col gap-4">
+              <h3 className="text-sm font-normal uppercase tracking-wide mb-2">
                 Interruptions ({interruptions.length})
               </h3>
               {interruptionsLoading ? (
-                <div className="loading">Loading interruptions...</div>
+                <div className="text-base font-light text-center p-8">
+                  Loading interruptions...
+                </div>
               ) : (
-                <div className="interruptions-list">
+                <div className="flex flex-col gap-2">
                   {interruptions.map((interruption) => (
-                    <div key={interruption.id} className="interruption-item">
-                      <span className="interruption-app">
+                    <div
+                      key={interruption.id}
+                      className="flex justify-between items-center p-3 border border-gray-200 bg-transparent"
+                    >
+                      <span className="text-sm font-normal flex-1">
                         {interruption.appName || interruption.bundleId}
                       </span>
-                      <span className="interruption-duration">
+                      <span className="text-sm font-semibold tabular-nums mx-4">
                         {formatDuration(interruption.durationSecs)}
                       </span>
-                      <span className="interruption-time">
+                      <span className="text-xs font-light text-gray-600">
                         at {formatTime(interruption.timestamp)}
                       </span>
                     </div>
@@ -164,20 +181,22 @@ export function SegmentDetailsModal({
           )}
 
           {segment.segmentSummary && (
-            <div className="detail-section">
-              <h3 className="section-title">Summary</h3>
-              <p className="segment-summary">{segment.segmentSummary}</p>
+            <div className="flex flex-col gap-4">
+              <h3 className="text-sm font-normal uppercase tracking-wide mb-2">Summary</h3>
+              <p className="text-sm font-light leading-relaxed">
+                {segment.segmentSummary}
+              </p>
             </div>
           )}
         </div>
 
-        <div className="modal-footer">
+        <div className="flex gap-4 justify-end p-6 border-t border-black">
           {onRegenerate && (
-            <button className="button-secondary" onClick={onRegenerate}>
+            <button className={buttonSecondaryClass} onClick={onRegenerate}>
               Regenerate Segments
             </button>
           )}
-          <button className="button-primary" onClick={onClose}>
+          <button className={buttonPrimaryClass} onClick={onClose}>
             Close
           </button>
         </div>

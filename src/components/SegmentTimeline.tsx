@@ -8,11 +8,11 @@ interface SegmentTimelineProps {
 function getSegmentTypeClass(type: string): string {
   switch (type) {
     case "stable":
-      return "segment-stable";
+      return "bg-segment-stable";
     case "transitioning":
-      return "segment-transitioning";
+      return "bg-segment-transitioning";
     case "distracted":
-      return "segment-distracted";
+      return "bg-segment-distracted";
     default:
       return "";
   }
@@ -32,9 +32,11 @@ export function SegmentTimeline({
 }: SegmentTimelineProps) {
   if (segments.length === 0) {
     return (
-      <div className="segment-timeline">
-        <div className="timeline-header">Timeline</div>
-        <div className="timeline-empty">No segments found</div>
+      <div className="border border-black p-6 flex flex-col gap-6">
+        <div className="text-base font-light tracking-wide uppercase pb-2 border-b border-black">
+          Timeline
+        </div>
+        <div className="text-center p-8 font-light">No segments found</div>
       </div>
     );
   }
@@ -46,16 +48,18 @@ export function SegmentTimeline({
   );
 
   return (
-    <div className="segment-timeline">
-      <div className="timeline-header">Timeline</div>
+    <div className="border border-black p-6 flex flex-col gap-6">
+      <div className="text-base font-light tracking-wide uppercase pb-2 border-b border-black">
+        Timeline
+      </div>
 
-      <div className="timeline-bars">
+      <div className="flex h-[60px] border border-black overflow-hidden">
         {segments.map((segment) => {
           const widthPercent = (segment.durationSecs / totalDuration) * 100;
           return (
             <button
               key={segment.id}
-              className={`timeline-segment ${getSegmentTypeClass(
+              className={`border-none border-r border-black p-0 cursor-pointer transition-opacity duration-200 bg-transparent hover:opacity-70 last:border-r-0 ${getSegmentTypeClass(
                 segment.segmentType
               )}`}
               style={{ width: `${widthPercent}%` }}
@@ -68,18 +72,18 @@ export function SegmentTimeline({
         })}
       </div>
 
-      <div className="timeline-legend">
-        <div className="legend-item">
-          <span className="legend-color segment-stable" />
-          <span className="legend-label">Stable</span>
+      <div className="flex gap-8 justify-center pt-2">
+        <div className="flex items-center gap-2">
+          <span className="w-4 h-4 border border-black bg-segment-stable" />
+          <span className="text-sm font-light">Stable</span>
         </div>
-        <div className="legend-item">
-          <span className="legend-color segment-transitioning" />
-          <span className="legend-label">Transitioning</span>
+        <div className="flex items-center gap-2">
+          <span className="w-4 h-4 border border-black bg-segment-transitioning" />
+          <span className="text-sm font-light">Transitioning</span>
         </div>
-        <div className="legend-item">
-          <span className="legend-color segment-distracted" />
-          <span className="legend-label">Distracted</span>
+        <div className="flex items-center gap-2">
+          <span className="w-4 h-4 border border-black bg-segment-distracted" />
+          <span className="text-sm font-light">Distracted</span>
         </div>
       </div>
     </div>

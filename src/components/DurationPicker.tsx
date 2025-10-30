@@ -13,12 +13,16 @@ const PRESETS = [
 
 export function DurationPicker({ onSelect, selectedDuration }: DurationPickerProps) {
   return (
-    <div className="duration-picker">
+    <div className="flex gap-4 justify-center">
       {PRESETS.map((preset) => (
         <button
           key={preset.ms}
           onClick={() => onSelect(preset.ms)}
-          className={selectedDuration === preset.ms ? "selected" : ""}
+          className={`bg-transparent border border-black text-black px-6 py-3 text-base font-normal cursor-pointer transition-all duration-200 hover:bg-black hover:text-white ${
+            selectedDuration === preset.ms
+              ? "bg-black text-white font-semibold"
+              : ""
+          }`}
         >
           {preset.label}
         </button>
