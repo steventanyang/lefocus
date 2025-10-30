@@ -15,7 +15,10 @@ use macos_bridge::{
 use tauri::Manager;
 use tauri::State;
 use timer::{
-    commands::{cancel_timer, end_timer, get_timer_state, regenerate_segments, start_timer},
+    commands::{
+        cancel_timer, end_timer, get_interruptions_for_segment, get_segments_for_session,
+        get_timer_state, regenerate_segments, start_timer,
+    },
     TimerController,
 };
 
@@ -178,6 +181,8 @@ pub fn run() {
             end_timer,
             cancel_timer,
             regenerate_segments,
+            get_segments_for_session,
+            get_interruptions_for_segment,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

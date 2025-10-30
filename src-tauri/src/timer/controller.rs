@@ -178,6 +178,40 @@ impl TimerController {
                 stopped_at,
             )
             .await?;
+
+        // Run segmentation
+        {
+            let db_clone = self.db.clone();
+            let session_id = session_snapshot.id.clone();
+            tokio::spawn(async move {
+                use crate::segmentation::{segment_session, SegmentationConfig};
+                use log::info;
+
+                match db_clone.get_context_readings_for_session(&session_id).await {
+                    Ok(readings) => {
+                        match segment_session(readings, &SegmentationConfig::default()) {
+                            Ok((segments, interruptions)) => {
+                                if let Err(e) = db_clone.insert_segments(&session_id, &segments).await {
+                                    log::error!("Failed to insert segments: {}", e);
+                                } else if let Err(e) = db_clone.insert_interruptions(&interruptions).await {
+                                    log::error!("Failed to insert interruptions: {}", e);
+                                } else {
+                                    info!("Created {} segments and {} interruptions for session {}", 
+                                          segments.len(), interruptions.len(), session_id);
+                                }
+                            }
+                            Err(e) => {
+                                log::error!("Segmentation failed: {}", e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("Failed to load readings for segmentation: {}", e);
+                    }
+                }
+            });
+        }
+
         self.emit_state_changed().await?;
 
         let session_info = SessionInfo::from(session_snapshot);
