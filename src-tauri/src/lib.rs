@@ -1,6 +1,7 @@
 mod audio;
 mod db;
 mod macos_bridge;
+mod segmentation;
 mod sensing;
 mod timer;
 
@@ -14,13 +15,13 @@ use macos_bridge::{
 use tauri::Manager;
 use tauri::State;
 use timer::{
-    commands::{cancel_timer, end_timer, get_timer_state, start_timer},
+    commands::{cancel_timer, end_timer, get_timer_state, regenerate_segments, start_timer},
     TimerController,
 };
 
 pub(crate) struct AppState {
     audio: AudioEngineHandle,
-    _db: Database,
+    pub(crate) db: Database,
     pub(crate) timer: TimerController,
 }
 
@@ -155,7 +156,7 @@ pub fn run() {
 
                 app.manage(AppState {
                     audio: AudioEngineHandle::new(),
-                    _db: database,
+                    db: database,
                     timer: timer_controller,
                 });
 
@@ -176,6 +177,7 @@ pub fn run() {
             start_timer,
             end_timer,
             cancel_timer,
+            regenerate_segments,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
