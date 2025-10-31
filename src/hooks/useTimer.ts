@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTimerSnapshot } from "./useTimerSnapshot";
+import { SessionInfo } from "../types/timer";
 
 export function useTimer() {
   const { timerState, error, setError } = useTimerSnapshot();
@@ -14,12 +15,14 @@ export function useTimer() {
     }
   }, []);
 
-  const endTimer = useCallback(async () => {
+  const endTimer = useCallback(async (): Promise<SessionInfo | null> => {
     try {
       setError("");
-      await invoke("end_timer");
+      const sessionInfo = await invoke<SessionInfo>("end_timer");
+      return sessionInfo;
     } catch (err) {
       setError(`Failed to end timer: ${err}`);
+      return null;
     }
   }, []);
 

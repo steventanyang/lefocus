@@ -16,7 +16,7 @@ export function TimerDisplay({ remainingMs, isRunning }: TimerDisplayProps) {
   };
 
   return (
-    <div className="timer-display">
+    <div className="text-[6rem] font-semibold leading-none text-center tracking-tight tabular-nums">
       {formatTime(displayMs)}
     </div>
   );

@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::{
-    db::SessionInfo,
+    db::{models::{Interruption, Segment}, SessionInfo},
     timer::{TimerController, TimerSnapshot, TimerState},
 };
 
@@ -36,4 +36,72 @@ pub async fn end_timer(state: State<'_, AppState>) -> Result<SessionInfo, String
 pub async fn cancel_timer(state: State<'_, AppState>) -> Result<(), String> {
     let controller = controller_from_state(&state);
     controller.cancel_timer().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn regenerate_segments(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<Vec<Segment>, String> {
+    use crate::segmentation::{segment_session, SegmentationConfig};
+    use log::info;
+
+    let db = &state.db;
+
+    // Delete existing segments
+    db.delete_segments_for_session(&session_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Load readings
+    let readings = db
+        .get_context_readings_for_session(&session_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Run segmentation
+    let (segments, interruptions) = segment_session(readings, &SegmentationConfig::default())
+        .map_err(|e| e.to_string())?;
+
+    // Persist segments and interruptions
+    db.insert_segments(&session_id, &segments)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !interruptions.is_empty() {
+        db.insert_interruptions(&interruptions)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+
+    info!(
+        "Regenerated {} segments and {} interruptions for session {}",
+        segments.len(),
+        interruptions.len(),
+        session_id
+    );
+
+    Ok(segments)
+}
+
+#[tauri::command]
+pub async fn get_segments_for_session(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<Vec<Segment>, String> {
+    let db = &state.db;
+    db.get_segments_for_session(&session_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_interruptions_for_segment(
+    state: State<'_, AppState>,
+    segment_id: String,
+) -> Result<Vec<Interruption>, String> {
+    let db = &state.db;
+    db.get_interruptions_for_segment(&segment_id)
+        .await
+        .map_err(|e| e.to_string())
 }

@@ -1589,20 +1589,23 @@ match reading_tx.try_send(reading) {
 
 ---
 
-### Phase 3: Sensing Pipeline (Week 3)
+### Phase 3: Sensing Pipeline (Week 3) ✅ COMPLETED
 
 **Goal:** Context readings collected during session with single combined worker
 
-- [ ] Create `ContextReading` model in `db/models/`
-- [ ] Add `context_readings` table via schema_v4 migration
-- [ ] Implement `SensingController` with start/stop hooks
-- [ ] Implement `sensing_loop` task (5s interval with MissedTickBehavior::Delay)
-- [ ] Implement combined capture worker (metadata + screenshot + pHash + conditional OCR)
-- [ ] Add OCR gating logic (20s cooldown + pHash change detection)
-- [ ] Integrate with `TimerController` (direct Rust hooks)
-- [ ] Write readings to SQLite immediately (no buffering)
+- [x] Create `ContextReading` model in `db/models/`
+- [x] Add `context_readings` table via schema_v4 migration
+- [x] Implement `SensingController` with start/stop hooks
+- [x] Implement `sensing_loop` task (5s interval with MissedTickBehavior::Delay)
+- [x] Implement combined capture worker (metadata + screenshot + pHash + conditional OCR)
+- [x] Add OCR gating logic (20s cooldown + pHash change detection)
+- [x] Integrate with `TimerController` (direct Rust hooks)
+- [x] Write readings to SQLite immediately (no buffering)
+- [x] Add cache clearing on session start to fix interrupted session bug
 
 **Deliverable:** Session produces `context_readings` table rows with window metadata, pHash, and OCR text.
+
+**Status:** Completed. Sensing loop captures window metadata, screenshots, computes pHash, runs OCR with change detection, and persists readings to SQLite. Fixed stale window cache bug for interrupted sessions.
 
 ### Phase 4: Segmentation (Week 4)
 

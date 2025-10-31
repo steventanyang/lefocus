@@ -13,16 +13,23 @@ const PRESETS = [
 
 export function DurationPicker({ onSelect, selectedDuration }: DurationPickerProps) {
   return (
-    <div className="duration-picker">
-      {PRESETS.map((preset) => (
-        <button
-          key={preset.ms}
-          onClick={() => onSelect(preset.ms)}
-          className={selectedDuration === preset.ms ? "selected" : ""}
-        >
-          {preset.label}
-        </button>
-      ))}
+    <div className="flex gap-4 justify-center">
+      {PRESETS.map((preset) => {
+        const isSelected = selectedDuration === preset.ms;
+        return (
+          <button
+            key={preset.ms}
+            onClick={() => onSelect(preset.ms)}
+            className={
+              isSelected
+                ? "bg-black border border-black text-white px-6 py-3 text-base font-semibold cursor-pointer transition-all duration-200"
+                : "bg-transparent border border-black text-black px-6 py-3 text-base font-normal cursor-pointer transition-all duration-200 hover:bg-black hover:text-white"
+            }
+          >
+            {preset.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
