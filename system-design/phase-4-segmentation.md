@@ -372,6 +372,7 @@ fn score_ocr_quality(segment: &Segment) -> f64 {
 ## Edge Cases & Handling
 
 ### Case 1: Very Short Session (<30s)
+
 **Behavior:** Create single segment regardless of min_segment_duration
 
 ```rust
@@ -381,6 +382,7 @@ if session_duration < config.min_segment_duration_secs {
 ```
 
 ### Case 2: No App Switches (Entire Session One App)
+
 **Behavior:** Single stable segment with high confidence
 
 ```rust
@@ -394,6 +396,7 @@ if all_same_bundle_id(&readings) {
 ```
 
 ### Case 3: Rapid Switching Entire Session
+
 **Behavior:** Single "Distracted" segment (≥3 min duration)
 
 ```rust
@@ -409,6 +412,7 @@ if is_all_transitioning(&segments) {
 ```
 
 ### Case 4: Segment at Timer Boundary
+
 **Behavior:** Accept segment even if <min_segment_duration
 
 ```rust
@@ -419,6 +423,7 @@ if segment.end_time == session_end_time {
 ```
 
 ### Case 5: Multiple Brief Interruptions
+
 **Pattern:** VS Code (15s) → Slack (5s) → VS Code (10s) → Chrome (3s) → VS Code (20s)
 **Behavior:** Merge all into one stable VS Code segment with 2 interruptions
 
@@ -427,6 +432,7 @@ if segment.end_time == session_end_time {
 ```
 
 ### Case 6: Missing/Failed Readings
+
 **Behavior:** Treat gaps as segment boundaries (don't interpolate)
 
 ```rust
@@ -518,7 +524,7 @@ interface TimelineProps {
 function SessionSummaryTimeline({ segments, sessionDuration }: TimelineProps) {
   return (
     <div className="timeline">
-      {segments.map(segment => (
+      {segments.map((segment) => (
         <TimelineBlock
           key={segment.id}
           segment={segment}
@@ -535,11 +541,11 @@ function SessionSummaryTimeline({ segments, sessionDuration }: TimelineProps) {
 function getSegmentColor(segment: Segment): string {
   // Use app icon dominant color (Phase 5)
   // For now, deterministic hash of bundle_id
-  if (segment.segment_type === 'transitioning') {
-    return '#FFA500'; // Orange, striped pattern
+  if (segment.segment_type === "transitioning") {
+    return "#FFA500"; // Orange, striped pattern
   }
-  if (segment.segment_type === 'distracted') {
-    return '#FF6B6B'; // Red, diagonal stripes
+  if (segment.segment_type === "distracted") {
+    return "#FF6B6B"; // Red, diagonal stripes
   }
 
   // Stable: hash bundle_id to color
@@ -551,7 +557,7 @@ function getSegmentColor(segment: Segment): string {
 
 ```tsx
 function SegmentDetailsModal({ segment }: { segment: Segment }) {
-  if (segment.segment_type === 'stable') {
+  if (segment.segment_type === "stable") {
     return (
       <div>
         <h3>{segment.app_name}</h3>
@@ -561,9 +567,10 @@ function SegmentDetailsModal({ segment }: { segment: Segment }) {
         {segment.interruptions.length > 0 && (
           <div className="interruptions">
             <h4>Interruptions:</h4>
-            {segment.interruptions.map(int => (
+            {segment.interruptions.map((int) => (
               <div key={int.id}>
-                {int.app_name} - {int.duration_secs}s at {formatTime(int.timestamp)}
+                {int.app_name} - {int.duration_secs}s at{" "}
+                {formatTime(int.timestamp)}
               </div>
             ))}
           </div>
@@ -574,11 +581,15 @@ function SegmentDetailsModal({ segment }: { segment: Segment }) {
     // Transitioning/Distracted: show app breakdown
     return (
       <div>
-        <h3>{segment.segment_type === 'transitioning' ? 'Transitioning' : 'Distracted'}</h3>
+        <h3>
+          {segment.segment_type === "transitioning"
+            ? "Transitioning"
+            : "Distracted"}
+        </h3>
         <p>Duration: {formatDuration(segment.duration_secs)}</p>
 
         <h4>App Breakdown:</h4>
-        {getAppBreakdown(segment).map(app => (
+        {getAppBreakdown(segment).map((app) => (
           <div key={app.bundle_id}>
             {app.app_name}: {app.duration_secs}s ({app.percentage}%)
           </div>
@@ -602,7 +613,7 @@ function AppTimeBreakdown({ segments }: BarChartProps) {
 
   return (
     <div className="bar-chart">
-      {appStats.map(app => (
+      {appStats.map((app) => (
         <div key={app.bundle_id} className="bar-row">
           <div className="app-label">{app.app_name}</div>
           <div className="bar-container">
@@ -610,7 +621,7 @@ function AppTimeBreakdown({ segments }: BarChartProps) {
               className="bar-fill"
               style={{
                 width: `${(app.total_time / totalTime) * 100}%`,
-                backgroundColor: getSegmentColor(app.bundle_id)
+                backgroundColor: getSegmentColor(app.bundle_id),
               }}
             />
           </div>
@@ -627,12 +638,12 @@ function aggregateAppStats(segments: Segment[]): AppStat[] {
   const stats = new Map<string, AppStat>();
 
   for (const segment of segments) {
-    if (segment.segment_type === 'stable') {
+    if (segment.segment_type === "stable") {
       // Count full segment time
       const stat = stats.get(segment.bundle_id) ?? {
         bundle_id: segment.bundle_id,
         app_name: segment.app_name,
-        total_time: 0
+        total_time: 0,
       };
       stat.total_time += segment.duration_secs;
       stats.set(segment.bundle_id, stat);
@@ -641,8 +652,11 @@ function aggregateAppStats(segments: Segment[]): AppStat[] {
       const key = segment.segment_type;
       const stat = stats.get(key) ?? {
         bundle_id: key,
-        app_name: segment.segment_type === 'transitioning' ? 'Transitioning' : 'Distracted',
-        total_time: 0
+        app_name:
+          segment.segment_type === "transitioning"
+            ? "Transitioning"
+            : "Distracted",
+        total_time: 0,
       };
       stat.total_time += segment.duration_secs;
       stats.set(key, stat);
@@ -729,10 +743,10 @@ mod tests {
 ### Benchmarks
 
 | Session Length | Readings | Segments | Time Budget |
-|---------------|----------|----------|-------------|
-| 5 minutes     | ~60      | 1-3      | <10ms       |
-| 25 minutes    | ~300     | 3-8      | <50ms       |
-| 50 minutes    | ~600     | 5-15     | <100ms      |
+| -------------- | -------- | -------- | ----------- |
+| 5 minutes      | ~60      | 1-3      | <10ms       |
+| 25 minutes     | ~300     | 3-8      | <50ms       |
+| 50 minutes     | ~600     | 5-15     | <100ms      |
 
 **Target:** O(n) complexity where n = reading count
 
@@ -774,17 +788,20 @@ Phase 4 is complete when:
 ### From Phase 3 to Phase 4
 
 1. **Run schema migration:**
+
    ```sql
    -- db/schemas/schema_v5.sql
    -- Creates segments and interruptions tables
    ```
 
 2. **Update db/mod.rs:**
+
    ```rust
    const CURRENT_SCHEMA_VERSION: i64 = 5;
    ```
 
 3. **Add segmentation module:**
+
    ```bash
    mkdir -p src/segmentation
    touch src/segmentation/{mod.rs,algorithm.rs,merge.rs,scoring.rs,config.rs}
@@ -823,6 +840,7 @@ fn bundle_id_to_color(bundle_id: &str) -> String {
 ### Future: Icon-based Colors (Phase 5)
 
 Extract dominant color from app icon using macOS APIs:
+
 ```swift
 func getDominantColor(bundleId: String) -> NSColor? {
     guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId),

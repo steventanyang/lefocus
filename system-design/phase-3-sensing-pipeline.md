@@ -691,6 +691,72 @@ Returns Ok(()) to sensing_loop
 
 ---
 
+## Implementation Updates
+
+### Drain Mode for Final Capture
+
+**Problem:** When timer ends, sensing loop was cancelled immediately, causing the last capture (started at ~55s for a 60s timer) to be dropped mid-flight.
+
+**Solution:** Implement drain mode using `watch::channel<bool>`:
+- Timer signals drain mode instead of cancelling immediately
+- Sensing loop checks drain flag: if set, finishes current capture but doesn't start new ones
+- Timer waits 12 seconds (CAPTURE_TIMEOUT_SECS + buffer) for in-flight capture to complete
+- Then fully shuts down sensing loop
+
+**Implementation:**
+```rust
+// SensingController adds drain channel
+let (drain_tx, drain_rx) = watch::channel(false);
+sensing_loop(..., drain_rx)
+
+// Sensing loop checks drain mode
+tokio::select! {
+    _ = ticker.tick() => {
+        if *drain_rx.borrow() { break; }  // Exit if draining
+        // ... perform capture ...
+    }
+    _ = drain_rx.changed() => {
+        // Drain signaled - finish current capture then exit
+    }
+}
+
+// Timer controller
+sensing.drain_sensing();  // Signal drain
+tokio::time::sleep(Duration::from_secs(12)).await;  // Wait for completion
+sensing.stop_sensing().await?;  // Fully shutdown
+```
+
+### Blocking Operations on Dedicated Thread Pool
+
+**Problem:** OCR and screenshot capture were blocking Tokio worker threads, causing slowdowns and queue buildup (especially near end of sessions where OCR took 5-6 seconds).
+
+**Solution:** Move blocking FFI calls to `tokio::task::spawn_blocking()`:
+- `capture_screenshot()` → blocking pool
+- `run_ocr()` → blocking pool  
+- `compute_phash()` → blocking pool (already done)
+
+**Implementation:**
+```rust
+// Screenshot capture
+let png_bytes = tokio::task::spawn_blocking(move || {
+    capture_screenshot(window_id)
+}).await??;
+
+// OCR processing
+let ocr_result = tokio::task::spawn_blocking({
+    let bytes = png_bytes.clone();
+    move || run_ocr(&bytes)
+}).await??;
+```
+
+**Benefits:**
+- Tokio worker threads stay responsive for async work
+- Better resource utilization
+- Prevents queue buildup in Vision framework serial queue
+- OCR cooldown set to 20 seconds (was 0) to reduce frequency
+
+---
+
 ## Performance Budget
 
 ### CPU Usage
