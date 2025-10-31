@@ -32,7 +32,7 @@ export function SegmentTimeline({
 }: SegmentTimelineProps) {
   if (segments.length === 0) {
     return (
-      <div className="border border-black p-6 flex flex-col gap-6">
+      <div className="bg-white border border-black p-6 flex flex-col gap-6">
         <div className="text-base font-light tracking-wide uppercase pb-2 border-b border-black">
           Timeline
         </div>
@@ -48,18 +48,18 @@ export function SegmentTimeline({
   );
 
   return (
-    <div className="border border-black p-6 flex flex-col gap-6">
+    <div className="bg-white border border-black p-6 flex flex-col gap-6">
       <div className="text-base font-light tracking-wide uppercase pb-2 border-b border-black">
         Timeline
       </div>
 
-      <div className="flex h-[60px] border border-black overflow-hidden">
+      <div className="flex h-[60px] border border-black overflow-hidden bg-white">
         {segments.map((segment) => {
           const widthPercent = (segment.durationSecs / totalDuration) * 100;
           return (
             <button
               key={segment.id}
-              className={`border-none border-r border-black p-0 cursor-pointer transition-opacity duration-200 bg-transparent hover:opacity-70 last:border-r-0 ${getSegmentTypeClass(
+              className={`border-none border-r border-black p-0 cursor-pointer transition-opacity duration-200 hover:opacity-70 last:border-r-0 ${getSegmentTypeClass(
                 segment.segmentType
               )}`}
               style={{ width: `${widthPercent}%` }}
