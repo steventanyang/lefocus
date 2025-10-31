@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
-use tokio::sync::watch;
 use tokio::time::{Duration, Instant, MissedTickBehavior};
 use tokio_util::sync::CancellationToken;
 
@@ -27,7 +26,6 @@ pub async fn sensing_loop(
     session_id: String,
     db: Database,
     cancel_token: CancellationToken,
-    mut drain_rx: watch::Receiver<bool>,
 ) {
     let mut ticker = tokio::time::interval(Duration::from_secs(CAPTURE_INTERVAL_SECS));
     ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
@@ -39,12 +37,6 @@ pub async fn sensing_loop(
     loop {
         tokio::select! {
             _ = ticker.tick() => {
-                // Check drain mode before starting new capture
-                if *drain_rx.borrow() {
-                    log_info!("Drain mode: skipping new capture, shutting down");
-                    break;
-                }
-
                 let timestamp = Utc::now();
                 let fut = perform_capture(
                     &session_id,
@@ -60,17 +52,6 @@ pub async fn sensing_loop(
                     Ok(Err(err)) => log_error!("sensing capture failed for session {}: {err:?}", session_id),
                     Err(_) => log_warn!("sensing capture timeout (> {}s) session {}", CAPTURE_TIMEOUT_SECS, session_id),
                 }
-
-                // Check drain mode again after capture completes
-                if *drain_rx.borrow() {
-                    log_info!("Drain mode activated: will exit after current capture completes");
-                    break;
-                }
-            }
-            _ = drain_rx.changed() => {
-                // Drain mode was signaled - finish current capture if any, then exit
-                log_info!("Drain mode activated: will exit after current capture completes");
-                // Continue loop to finish any in-flight capture, then exit on next tick check
             }
             _ = cancel_token.cancelled() => {
                 log_info!("sensing loop shutting down");
