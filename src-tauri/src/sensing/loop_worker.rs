@@ -13,7 +13,7 @@ use crate::{
 use super::phash::{compute_hamming_distance, compute_phash};
 
 const CAPTURE_INTERVAL_SECS: u64 = 5;
-const CAPTURE_TIMEOUT_SECS: u64 = 10;
+const CAPTURE_TIMEOUT_SECS: u64 = 5;
 const OCR_COOLDOWN_SECS: u64 = 20;
 const PHASH_CHANGE_THRESHOLD: u32 = 8;
 
