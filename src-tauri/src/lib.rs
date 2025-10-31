@@ -4,6 +4,7 @@ mod macos_bridge;
 mod segmentation;
 mod sensing;
 mod timer;
+mod utils;
 
 use audio::AudioEngineHandle;
 use chrono::Utc;
