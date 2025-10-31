@@ -292,7 +292,17 @@ impl TimerController {
                         guard.clone()
                     };
 
-                    // Stop sensing when timer completes
+                    // Drain sensing: signal to finish current capture, then stop
+                    {
+                        let mut sensing_guard = sensing.lock().await;
+                        sensing_guard.drain_sensing();
+                    }
+
+                    // Wait up to 12 seconds for in-flight capture to complete
+                    // (CAPTURE_TIMEOUT_SECS = 10s + 2s buffer)
+                    tokio::time::sleep(Duration::from_secs(12)).await;
+
+                    // Now stop sensing completely
                     if let Err(e) = sensing.lock().await.stop_sensing().await {
                         error!("Failed to stop sensing on timer completion: {}", e);
                     }
