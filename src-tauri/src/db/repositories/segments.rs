@@ -4,25 +4,12 @@ use rusqlite::{params, Row};
 use crate::db::{
     connection::Database,
     helpers::parse_datetime,
-    models::{Interruption, Segment, SegmentType},
+    models::{Interruption, Segment},
 };
 
 fn row_to_segment(row: &Row) -> Result<Segment, rusqlite::Error> {
     let start_time_str: String = row.get("start_time")?;
     let end_time_str: String = row.get("end_time")?;
-    let segment_type_str: String = row.get("segment_type")?;
-
-    let segment_type = match segment_type_str.as_str() {
-        "stable" => SegmentType::Stable,
-        "transitioning" => SegmentType::Transitioning,
-        "distracted" => SegmentType::Distracted,
-        other => {
-            return Err(rusqlite::Error::SqliteFailure(
-                rusqlite::ffi::Error::new(1),
-                Some(format!("unknown segment type: {other}")),
-            ))
-        }
-    };
 
     Ok(Segment {
         id: row.get("id")?,
@@ -35,7 +22,6 @@ fn row_to_segment(row: &Row) -> Result<Segment, rusqlite::Error> {
         bundle_id: row.get("bundle_id")?,
         app_name: row.get("app_name")?,
         window_title: row.get("window_title")?,
-        segment_type,
         confidence: row.get("confidence")?,
         duration_score: row.get("duration_score")?,
         stability_score: row.get("stability_score")?,
@@ -83,7 +69,6 @@ impl Database {
                         bundle_id,
                         app_name,
                         window_title,
-                        segment_type,
                         confidence,
                         duration_score,
                         stability_score,
@@ -92,7 +77,7 @@ impl Database {
                         reading_count,
                         unique_phash_count,
                         segment_summary
-                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
                     params![
                         segment.id,
                         segment.session_id,
@@ -102,7 +87,6 @@ impl Database {
                         segment.bundle_id,
                         segment.app_name,
                         segment.window_title,
-                        segment.segment_type.as_str(),
                         segment.confidence,
                         segment.duration_score,
                         segment.stability_score,
@@ -165,7 +149,7 @@ impl Database {
         let session_id = session_id.to_string();
         self.execute(move |conn| {
             let mut stmt = conn.prepare(
-                "SELECT 
+                "SELECT
                     id,
                     session_id,
                     start_time,
@@ -174,7 +158,6 @@ impl Database {
                     bundle_id,
                     app_name,
                     window_title,
-                    segment_type,
                     confidence,
                     duration_score,
                     stability_score,

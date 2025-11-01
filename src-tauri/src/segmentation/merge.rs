@@ -1,4 +1,4 @@
-use crate::db::models::{Interruption, Segment, SegmentType};
+use crate::db::models::{Interruption, Segment};
 use crate::segmentation::config::SegmentationConfig;
 use uuid::Uuid;
 
@@ -31,14 +31,15 @@ pub fn sandwich_merge(
 
                 // Check if A and C have same bundle_id, and B is short enough
                 if a.bundle_id == c.bundle_id
-                    && b.segment_type == SegmentType::Stable
                     && b.duration_secs <= config.sandwich_max_duration_secs as i64
                 {
                     // Merge: extend A to C's end, add B as interruption
                     let mut merged_segment = a.clone();
                     merged_segment.end_time = c.end_time;
+                    // Duration includes the capture interval after the last reading
+                    const CAPTURE_INTERVAL_SECS: i64 = 5;
                     merged_segment.duration_secs =
-                        (c.end_time - a.start_time).num_seconds();
+                        (c.end_time - a.start_time).num_seconds() + CAPTURE_INTERVAL_SECS;
                     // Update reading_count to sum readings from both A and C segments
                     merged_segment.reading_count = a.reading_count + c.reading_count;
 

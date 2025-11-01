@@ -1,4 +1,4 @@
-use crate::db::models::{ContextReading, Segment, SegmentType};
+use crate::db::models::{ContextReading, Segment};
 use crate::segmentation::config::SegmentationConfig;
 use std::collections::HashSet;
 
@@ -29,23 +29,19 @@ fn score_duration(duration_secs: i64) -> f64 {
     1.0 / (1.0 + (-0.02 * (duration_secs as f64 - 120.0)).exp())
 }
 
-/// Score stability: 1.0 for stable segments, dominant app percentage for transitioning/distracted.
+/// Score stability: percentage of readings with same bundle_id as segment.
 fn score_stability(segment: &Segment, readings: &[ContextReading]) -> f64 {
-    match segment.segment_type {
-        SegmentType::Stable => 1.0,
-        SegmentType::Transitioning | SegmentType::Distracted => {
-            // Count readings with same bundle_id as segment
-            let same_bundle_count = readings
-                .iter()
-                .filter(|r| r.window_metadata.bundle_id == segment.bundle_id)
-                .count();
-            if readings.is_empty() {
-                0.0
-            } else {
-                same_bundle_count as f64 / readings.len() as f64
-            }
-        }
+    if readings.is_empty() {
+        return 0.5; // Default if no readings
     }
+
+    // Count readings with same bundle_id as segment
+    let same_bundle_count = readings
+        .iter()
+        .filter(|r| r.window_metadata.bundle_id == segment.bundle_id)
+        .count();
+
+    same_bundle_count as f64 / readings.len() as f64
 }
 
 /// Score visual clarity: 1.0 - (unique_phash_count / reading_count)

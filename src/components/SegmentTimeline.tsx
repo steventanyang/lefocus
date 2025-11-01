@@ -5,17 +5,16 @@ interface SegmentTimelineProps {
   onSegmentClick: (segment: Segment) => void;
 }
 
-function getSegmentTypeClass(type: string): string {
-  switch (type) {
-    case "stable":
-      return "bg-segment-stable";
-    case "transitioning":
-      return "bg-segment-transitioning";
-    case "distracted":
-      return "bg-segment-distracted";
-    default:
-      return "";
-  }
+function getConfidenceColorClass(confidence: number): string {
+  if (confidence >= 0.7) return "bg-green-500"; // High confidence - focused work
+  if (confidence >= 0.4) return "bg-yellow-400"; // Medium confidence - mixed
+  return "bg-red-400"; // Low confidence - unclear
+}
+
+function getConfidenceLabel(confidence: number): string {
+  if (confidence >= 0.7) return "Focused";
+  if (confidence >= 0.4) return "Mixed";
+  return "Unclear";
 }
 
 function formatDuration(seconds: number): string {
@@ -59,14 +58,14 @@ export function SegmentTimeline({
           return (
             <button
               key={segment.id}
-              className={`border-none border-r border-black p-0 cursor-pointer transition-opacity duration-200 hover:opacity-70 last:border-r-0 ${getSegmentTypeClass(
-                segment.segmentType
+              className={`border-none border-r border-black p-0 cursor-pointer transition-opacity duration-200 hover:opacity-70 last:border-r-0 ${getConfidenceColorClass(
+                segment.confidence
               )}`}
               style={{ width: `${widthPercent}%` }}
               onClick={() => onSegmentClick(segment)}
               title={`${segment.appName || segment.bundleId} - ${formatDuration(
                 segment.durationSecs
-              )}`}
+              )} (${getConfidenceLabel(segment.confidence)})`}
             />
           );
         })}
@@ -74,16 +73,16 @@ export function SegmentTimeline({
 
       <div className="flex gap-8 justify-center pt-2">
         <div className="flex items-center gap-2">
-          <span className="w-4 h-4 border border-black bg-segment-stable" />
-          <span className="text-sm font-light">Stable</span>
+          <span className="w-4 h-4 border border-black bg-green-500" />
+          <span className="text-sm font-light">Focused (≥70%)</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-4 h-4 border border-black bg-segment-transitioning" />
-          <span className="text-sm font-light">Transitioning</span>
+          <span className="w-4 h-4 border border-black bg-yellow-400" />
+          <span className="text-sm font-light">Mixed (40-70%)</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-4 h-4 border border-black bg-segment-distracted" />
-          <span className="text-sm font-light">Distracted</span>
+          <span className="w-4 h-4 border border-black bg-red-400" />
+          <span className="text-sm font-light">Unclear (&lt;40%)</span>
         </div>
       </div>
     </div>

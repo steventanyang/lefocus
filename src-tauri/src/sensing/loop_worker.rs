@@ -72,15 +72,37 @@ async fn perform_capture(
     let capture_start = Instant::now();
     
     let metadata_start = Instant::now();
-    let metadata = get_active_window_metadata()
+    let mut metadata = get_active_window_metadata()
         .map_err(|err| anyhow!("active window metadata failed: {err}"))?;
     let metadata_duration_ms = metadata_start.elapsed().as_millis();
-    
-    // Skip if no bundle_id (system windows like menu bar, dock)
-    if metadata.bundle_id.is_empty() {
+
+    // Handle system windows (menu bar, dock, Spotlight, etc.) with empty bundle_id
+    // Record them as "System UI" instead of skipping to maintain timeline continuity
+    let is_system_window = metadata.bundle_id.is_empty();
+    if is_system_window {
+        log_info!("Detected system window (window_id={}), recording as System UI - took {}ms",
+            metadata.window_id, metadata_duration_ms);
+        metadata.bundle_id = "com.apple.system".to_string();
+        metadata.owner_name = "System UI".to_string();
+
+        // For system windows, save metadata-only reading (no screenshot/phash/OCR)
+        let reading = ContextReading {
+            id: None,
+            session_id: session_id.to_string(),
+            timestamp,
+            window_metadata: metadata,
+            phash: None,
+            ocr_text: None,
+            ocr_confidence: None,
+            ocr_word_count: None,
+        };
+
+        db.insert_context_reading(&reading)
+            .await
+            .context("failed to persist system window reading")?;
+
         let capture_duration_ms = capture_start.elapsed().as_millis();
-        log_warn!("Warning: Skipping window_id={} with empty bundle_id (system window) - took {}ms (metadata: {}ms)", 
-            metadata.window_id, capture_duration_ms, metadata_duration_ms);
+        log_info!("System window captured in {}ms (metadata only)", capture_duration_ms);
         return Ok(());
     }
 

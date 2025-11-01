@@ -1,24 +1,6 @@
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum SegmentType {
-    Stable,
-    Transitioning,
-    Distracted,
-}
-
-impl SegmentType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            SegmentType::Stable => "stable",
-            SegmentType::Transitioning => "transitioning",
-            SegmentType::Distracted => "distracted",
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Segment {
@@ -30,7 +12,6 @@ pub struct Segment {
     pub bundle_id: String,
     pub app_name: Option<String>,
     pub window_title: Option<String>,
-    pub segment_type: SegmentType,
     pub confidence: f64,
     pub duration_score: Option<f64>,
     pub stability_score: Option<f64>,

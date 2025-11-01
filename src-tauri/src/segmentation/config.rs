@@ -7,15 +7,6 @@ pub struct SegmentationConfig {
     /// Sandwich merge: A→B→A where B is this short gets merged
     pub sandwich_max_duration_secs: u64,
 
-    /// Transition detection window
-    pub transition_window_secs: u64,
-
-    /// Number of switches required to mark as transitioning
-    pub transition_switch_threshold: usize,
-
-    /// Classify transition vs distracted
-    pub distracted_threshold_secs: u64,
-
     /// Confidence scoring weights
     pub weight_duration: f64,
     pub weight_stability: f64,
@@ -28,9 +19,6 @@ impl Default for SegmentationConfig {
         Self {
             min_segment_duration_secs: 30,
             sandwich_max_duration_secs: 12,
-            transition_window_secs: 60,
-            transition_switch_threshold: 3,
-            distracted_threshold_secs: 180,
             weight_duration: 0.30,
             weight_stability: 0.40,
             weight_visual: 0.15,

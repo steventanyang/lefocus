@@ -1,6 +1,6 @@
 # Phase 4: Segmentation
 
-**Status:** Not Started
+**Status:** Implemented (Simplified)
 **Dependencies:** Phase 3 (Sensing Pipeline)
 
 ## Overview
@@ -10,18 +10,17 @@ Phase 4 implements the **segmentation algorithm** that transforms raw `context_r
 **Key Concepts:**
 
 - **Segment**: A continuous period focused on one thing (e.g., "VS Code for 15 minutes")
-- **Segment Types**:
-  - **Stable** - Focused on one app for sustained period
-  - **Transitioning** - Rapid switching, short duration (<3 min)
-  - **Distracted** - Rapid switching, longer duration (≥3 min)
-- **Interruptions**: Brief switches within a stable segment (e.g., checking Slack for 3s)
+- **Interruptions**: Brief switches within a segment (e.g., checking Slack for 3s) - merged via sandwich pattern
 - **Confidence Score**: 0.0-1.0 rating based on duration, stability, visual clarity, OCR quality
+  - High (≥0.7): Focused work
+  - Medium (0.4-0.7): Mixed activity
+  - Low (<0.4): Unclear/fragmented
 
 **Design Principles:**
 
 - **Deterministic:** Same readings always produce same segments
 - **Fast:** Runs in <100ms for typical 25-min session (~300 readings)
-- **Tunable:** All thresholds exposed as constants for easy adjustment
+- **Simple:** No artificial segment type categories - confidence score indicates quality
 - **On-demand:** Computed when session ends (not live during session)
 
 ---
@@ -52,27 +51,19 @@ Phase 4 implements the **segmentation algorithm** that transforms raw `context_r
 │                    Segmentation Algorithm                       │
 │                                                                 │
 │  ┌──────────────────────────────────────────────────┐          │
-│  │  1. Preprocess readings (group by bundle_id)    │          │
+│  │  1. Group readings by bundle_id                 │          │
 │  └──────────────┬───────────────────────────────────┘          │
 │                 ▼                                               │
 │  ┌──────────────────────────────────────────────────┐          │
-│  │  2. Detect transitions (3+ switches in 60s)     │          │
+│  │  2. Create segments from groups                 │          │
 │  └──────────────┬───────────────────────────────────┘          │
 │                 ▼                                               │
 │  ┌──────────────────────────────────────────────────┐          │
-│  │  3. Create initial segments (stable/transition) │          │
+│  │  3. Sandwich merge (A→B→A where B ≤12s)         │          │
 │  └──────────────┬───────────────────────────────────┘          │
 │                 ▼                                               │
 │  ┌──────────────────────────────────────────────────┐          │
-│  │  4. Sandwich merge (A→B→A where B ≤12s)         │          │
-│  └──────────────┬───────────────────────────────────┘          │
-│                 ▼                                               │
-│  ┌──────────────────────────────────────────────────┐          │
-│  │  5. Classify transitions (by duration </>3min)  │          │
-│  └──────────────┬───────────────────────────────────┘          │
-│                 ▼                                               │
-│  ┌──────────────────────────────────────────────────┐          │
-│  │  6. Score confidence (4-factor weighted)        │          │
+│  │  4. Score confidence (4-factor weighted)        │          │
 │  └──────────────┬───────────────────────────────────┘          │
 │                 ▼                                               │
 │              Vec<Segment>                                       │
@@ -92,37 +83,34 @@ src/
 
   db/
     models/
-      segment.rs        - Segment, Interruption structs
+      segment.rs        - Segment, Interruption structs (no SegmentType)
     repositories/
       segments.rs       - CRUD operations for segments
     schemas/
-      schema_v5.sql     - segments + interruptions tables
+      schema_v6.sql     - segments + interruptions tables (removed segment_type)
 ```
 
 ---
 
 ## Database Schema
 
-### Migration: schema_v5.sql
+### Migration: schema_v6.sql
 
 ```sql
--- Segments table
+-- Segments table (simplified - no segment_type)
 CREATE TABLE segments (
     id TEXT PRIMARY KEY,
     session_id TEXT NOT NULL,
 
     -- Time bounds
-    start_time TIMESTAMP NOT NULL,
-    end_time TIMESTAMP NOT NULL,
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
     duration_secs INTEGER NOT NULL,
 
     -- Primary identity
     bundle_id TEXT NOT NULL,
     app_name TEXT,
-    window_title TEXT,  -- Most common window title in this segment
-
-    -- Segment classification
-    segment_type TEXT NOT NULL,  -- 'stable', 'transitioning', 'distracted'
+    window_title TEXT,
 
     -- Confidence scoring (0.0 to 1.0)
     confidence REAL NOT NULL,
@@ -142,9 +130,8 @@ CREATE TABLE segments (
 );
 
 CREATE INDEX idx_segments_session ON segments(session_id, start_time);
-CREATE INDEX idx_segments_type ON segments(segment_type);
 
--- Interruptions table (brief switches within stable segments)
+-- Interruptions table (brief switches within any segment)
 CREATE TABLE interruptions (
     id TEXT PRIMARY KEY,
     segment_id TEXT NOT NULL,
@@ -152,7 +139,7 @@ CREATE TABLE interruptions (
     bundle_id TEXT NOT NULL,
     app_name TEXT,
 
-    timestamp TIMESTAMP NOT NULL,
+    timestamp TEXT NOT NULL,
     duration_secs INTEGER NOT NULL,
 
     FOREIGN KEY (segment_id) REFERENCES segments(id) ON DELETE CASCADE
@@ -172,15 +159,8 @@ pub struct SegmentationConfig {
     // Minimum segment duration (ignore shorter segments unless at timer boundary)
     pub min_segment_duration_secs: u64,  // Default: 30
 
-    // Sandwich merge: A→B→A where B is this short gets merged
+    // Sandwich merge: A→B→A where B is this short gets merged as interruption
     pub sandwich_max_duration_secs: u64,  // Default: 12
-
-    // Transition detection window
-    pub transition_window_secs: u64,      // Default: 60
-    pub transition_switch_threshold: usize, // Default: 3 (3+ switches in 60s)
-
-    // Classify transition vs distracted
-    pub distracted_threshold_secs: u64,   // Default: 180 (3 minutes)
 
     // Confidence scoring weights
     pub weight_duration: f64,             // Default: 0.30
@@ -194,9 +174,6 @@ impl Default for SegmentationConfig {
         Self {
             min_segment_duration_secs: 30,
             sandwich_max_duration_secs: 12,
-            transition_window_secs: 60,
-            transition_switch_threshold: 3,
-            distracted_threshold_secs: 180,
             weight_duration: 0.30,
             weight_stability: 0.40,
             weight_visual: 0.15,
@@ -208,7 +185,7 @@ impl Default for SegmentationConfig {
 
 ### Algorithm Steps
 
-#### Step 1: Preprocess Readings
+#### Step 1: Group Readings
 
 ```rust
 // Group consecutive readings by bundle_id
@@ -225,117 +202,61 @@ fn group_readings(readings: Vec<ContextReading>) -> Vec<ReadingGroup> {
 }
 ```
 
-#### Step 2: Detect Transitions
+#### Step 2: Create Initial Segments
 
 ```rust
-// Mark groups as "transitioning" if:
-// - 3+ app switches within 60 seconds
-// OR
-// - Median dwell time < 10 seconds
-
-fn detect_transitions(groups: &mut [ReadingGroup], config: &SegmentationConfig) {
-    for window in groups.windows(config.transition_window_secs) {
-        let switch_count = count_unique_bundles(window);
-        if switch_count >= config.transition_switch_threshold {
-            mark_as_transitioning(window);
-        }
-    }
-}
-```
-
-#### Step 3: Create Initial Segments
-
-```rust
-// Convert ReadingGroups to Segments
-// - Consecutive transitioning groups → single segment
-// - Stable groups → individual segments
-
+// Convert ReadingGroups to Segments (1:1 mapping)
 fn create_initial_segments(groups: Vec<ReadingGroup>) -> Vec<Segment> {
-    let mut segments = Vec::new();
-    let mut transition_accumulator = Vec::new();
-
-    for group in groups {
-        if group.is_transitioning {
-            transition_accumulator.push(group);
-        } else {
-            // Flush accumulated transitions
-            if !transition_accumulator.is_empty() {
-                segments.push(merge_transition_groups(transition_accumulator));
-                transition_accumulator.clear();
-            }
-            // Add stable segment
-            segments.push(Segment::from_group(group, SegmentType::Stable));
+    groups.into_iter().map(|group| {
+        Segment {
+            bundle_id: group.bundle_id,
+            app_name: group.app_name,
+            start_time: group.start_time,
+            end_time: group.end_time,
+            readings: group.readings,
+            // ...
         }
-    }
-
-    segments
+    }).collect()
 }
 ```
 
-#### Step 4: Sandwich Merge
+#### Step 3: Sandwich Merge
 
 ```rust
 // Pattern: A → B → A (where B duration ≤ 12s)
 // Result: Single A segment with B as interruption
 
 fn sandwich_merge(segments: Vec<Segment>, config: &SegmentationConfig) -> Vec<Segment> {
-    let mut result = Vec::new();
-    let mut i = 0;
+    // Recursively merge A→B→A patterns
+    // No segment type checks - works on all segments
 
     while i < segments.len() {
         if i + 2 < segments.len() {
             let (a, b, c) = (&segments[i], &segments[i+1], &segments[i+2]);
 
-            // Check sandwich pattern
             if a.bundle_id == c.bundle_id
-               && b.segment_type == SegmentType::Stable
                && b.duration_secs <= config.sandwich_max_duration_secs {
-
                 // Merge: extend A to C's end, add B as interruption
-                let mut merged = a.clone();
-                merged.end_time = c.end_time;
-                merged.duration_secs = (c.end_time - a.start_time).num_seconds();
                 merged.add_interruption(Interruption::from_segment(b));
-
-                result.push(merged);
                 i += 3;
                 continue;
             }
         }
-
-        result.push(segments[i].clone());
         i += 1;
     }
-
-    result
 }
 ```
 
-#### Step 5: Classify Transition vs Distracted
-
-```rust
-// Transition segments >= 3 minutes become "Distracted"
-
-fn classify_segments(segments: &mut [Segment], config: &SegmentationConfig) {
-    for segment in segments {
-        if segment.segment_type == SegmentType::Transitioning
-           && segment.duration_secs >= config.distracted_threshold_secs {
-            segment.segment_type = SegmentType::Distracted;
-        }
-    }
-}
-```
-
-#### Step 6: Confidence Scoring
+#### Step 4: Confidence Scoring
 
 ```rust
 // 4-factor weighted average
 
-fn compute_confidence(segment: &Segment, config: &SegmentationConfig) -> f64 {
+fn compute_confidence(segment: &Segment, readings: &[ContextReading], config: &SegmentationConfig) -> f64 {
     let duration_score = score_duration(segment.duration_secs);
-    let stability_score = score_stability(segment);
+    let stability_score = score_stability(segment, readings);
     let visual_score = score_visual_clarity(segment);
-    let ocr_score = score_ocr_quality(segment);
+    let ocr_score = score_ocr_quality(segment, readings);
 
     config.weight_duration * duration_score
         + config.weight_stability * stability_score
@@ -343,27 +264,31 @@ fn compute_confidence(segment: &Segment, config: &SegmentationConfig) -> f64 {
         + config.weight_ocr * ocr_score
 }
 
-fn score_duration(duration_secs: u64) -> f64 {
-    // Sigmoid: 30s=0.3, 60s=0.5, 120s=0.7, 300s=0.9
+fn score_duration(duration_secs: i64) -> f64 {
+    // Sigmoid: 30s≈0.3, 60s≈0.5, 120s≈0.7, 300s≈0.9
     1.0 / (1.0 + (-0.02 * (duration_secs as f64 - 120.0)).exp())
 }
 
-fn score_stability(segment: &Segment) -> f64 {
-    // % of readings with same bundle_id (already 1.0 for stable segments)
-    // For transitioning/distracted, measure dominant app percentage
-    segment.reading_count as f64 / segment.total_readings as f64
+fn score_stability(segment: &Segment, readings: &[ContextReading]) -> f64 {
+    // % of readings with same bundle_id as segment
+    let same_bundle_count = readings.iter()
+        .filter(|r| r.window_metadata.bundle_id == segment.bundle_id)
+        .count();
+    same_bundle_count as f64 / readings.len() as f64
 }
 
 fn score_visual_clarity(segment: &Segment) -> f64 {
-    // If unique_phash_count is high, content changed a lot (unstable)
-    // If unique_phash_count is low, content stable
+    // Lower unique_phash_count = more stable visuals
     let change_ratio = segment.unique_phash_count as f64 / segment.reading_count as f64;
     1.0 - change_ratio.min(1.0)
 }
 
-fn score_ocr_quality(segment: &Segment) -> f64 {
+fn score_ocr_quality(segment: &Segment, readings: &[ContextReading]) -> f64 {
     // Average OCR confidence from readings
-    segment.avg_ocr_confidence.unwrap_or(0.5)
+    let avg = readings.iter()
+        .filter_map(|r| r.ocr_confidence)
+        .sum::<f64>() / readings.len() as f64;
+    avg.max(0.5) // Default 0.5 if no OCR data
 }
 ```
 
@@ -383,12 +308,11 @@ if session_duration < config.min_segment_duration_secs {
 
 ### Case 2: No App Switches (Entire Session One App)
 
-**Behavior:** Single stable segment with high confidence
+**Behavior:** Single segment with high confidence (0.95)
 
 ```rust
 if all_same_bundle_id(&readings) {
     return vec![Segment {
-        segment_type: SegmentType::Stable,
         confidence: 0.95,
         // ...
     }];
@@ -397,18 +321,12 @@ if all_same_bundle_id(&readings) {
 
 ### Case 3: Rapid Switching Entire Session
 
-**Behavior:** Single "Distracted" segment (≥3 min duration)
+**Behavior:** Multiple short segments, low confidence scores indicate fragmented focus
 
 ```rust
-if is_all_transitioning(&segments) {
-    let total_duration = session_end - session_start;
-    let segment_type = if total_duration >= config.distracted_threshold_secs {
-        SegmentType::Distracted
-    } else {
-        SegmentType::Transitioning
-    };
-    // Merge all into one segment
-}
+// Natural result of algorithm - many short segments
+// Confidence scores naturally low due to short duration
+// No special case handling needed
 ```
 
 ### Case 4: Segment at Timer Boundary
@@ -539,17 +457,14 @@ function SessionSummaryTimeline({ segments, sessionDuration }: TimelineProps) {
 }
 
 function getSegmentColor(segment: Segment): string {
-  // Use app icon dominant color (Phase 5)
-  // For now, deterministic hash of bundle_id
-  if (segment.segment_type === "transitioning") {
-    return "#FFA500"; // Orange, striped pattern
+  // Color based on confidence score
+  if (segment.confidence >= 0.7) {
+    return "#10B981"; // Green - focused
+  } else if (segment.confidence >= 0.4) {
+    return "#FBBF24"; // Yellow - mixed
+  } else {
+    return "#EF4444"; // Red - unclear
   }
-  if (segment.segment_type === "distracted") {
-    return "#FF6B6B"; // Red, diagonal stripes
-  }
-
-  // Stable: hash bundle_id to color
-  return bundleIdToColor(segment.bundle_id);
 }
 ```
 
@@ -557,46 +472,33 @@ function getSegmentColor(segment: Segment): string {
 
 ```tsx
 function SegmentDetailsModal({ segment }: { segment: Segment }) {
-  if (segment.segment_type === "stable") {
-    return (
-      <div>
-        <h3>{segment.app_name}</h3>
-        <p>Duration: {formatDuration(segment.duration_secs)}</p>
-        <p>Confidence: {(segment.confidence * 100).toFixed(0)}%</p>
+  return (
+    <div>
+      <h3>{segment.app_name}</h3>
+      <p>Duration: {formatDuration(segment.duration_secs)}</p>
+      <p>Confidence: {(segment.confidence * 100).toFixed(0)}%</p>
 
-        {segment.interruptions.length > 0 && (
-          <div className="interruptions">
-            <h4>Interruptions:</h4>
-            {segment.interruptions.map((int) => (
-              <div key={int.id}>
-                {int.app_name} - {int.duration_secs}s at{" "}
-                {formatTime(int.timestamp)}
-              </div>
-            ))}
-          </div>
-        )}
+      {/* Confidence breakdown */}
+      <div className="confidence-scores">
+        <div>Duration: {(segment.duration_score * 100).toFixed(0)}%</div>
+        <div>Stability: {(segment.stability_score * 100).toFixed(0)}%</div>
+        <div>Visual: {(segment.visual_clarity_score * 100).toFixed(0)}%</div>
+        <div>OCR: {(segment.ocr_quality_score * 100).toFixed(0)}%</div>
       </div>
-    );
-  } else {
-    // Transitioning/Distracted: show app breakdown
-    return (
-      <div>
-        <h3>
-          {segment.segment_type === "transitioning"
-            ? "Transitioning"
-            : "Distracted"}
-        </h3>
-        <p>Duration: {formatDuration(segment.duration_secs)}</p>
 
-        <h4>App Breakdown:</h4>
-        {getAppBreakdown(segment).map((app) => (
-          <div key={app.bundle_id}>
-            {app.app_name}: {app.duration_secs}s ({app.percentage}%)
-          </div>
-        ))}
-      </div>
-    );
-  }
+      {/* Show interruptions for any segment */}
+      {segment.interruptions.length > 0 && (
+        <div className="interruptions">
+          <h4>Interruptions:</h4>
+          {segment.interruptions.map((int) => (
+            <div key={int.id}>
+              {int.app_name} - {int.duration_secs}s at {formatTime(int.timestamp)}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 ```
 
@@ -638,32 +540,18 @@ function aggregateAppStats(segments: Segment[]): AppStat[] {
   const stats = new Map<string, AppStat>();
 
   for (const segment of segments) {
-    if (segment.segment_type === "stable") {
-      // Count full segment time
-      const stat = stats.get(segment.bundle_id) ?? {
-        bundle_id: segment.bundle_id,
-        app_name: segment.app_name,
-        total_time: 0,
-      };
-      stat.total_time += segment.duration_secs;
-      stats.set(segment.bundle_id, stat);
-    } else {
-      // For transitioning/distracted, show as single "Transitioning"/"Distracted" entry
-      const key = segment.segment_type;
-      const stat = stats.get(key) ?? {
-        bundle_id: key,
-        app_name:
-          segment.segment_type === "transitioning"
-            ? "Transitioning"
-            : "Distracted",
-        total_time: 0,
-      };
-      stat.total_time += segment.duration_secs;
-      stats.set(key, stat);
-    }
+    const stat = stats.get(segment.bundle_id) ?? {
+      bundle_id: segment.bundle_id,
+      app_name: segment.app_name,
+      total_time: 0,
+    };
+    stat.total_time += segment.duration_secs;
+    stats.set(segment.bundle_id, stat);
   }
 
-  return Array.from(stats.values()).sort((a, b) => b.total_time - a.total_time);
+  return Array.from(stats.values())
+    .sort((a, b) => b.total_time - a.total_time)
+    .slice(0, 5); // Top 5 apps
 }
 ```
 
@@ -684,7 +572,7 @@ mod tests {
         let segments = segment_session(readings, &SegmentationConfig::default()).unwrap();
 
         assert_eq!(segments.len(), 1);
-        assert_eq!(segments[0].segment_type, SegmentType::Stable);
+        assert_eq!(segments[0].bundle_id, "com.microsoft.VSCode");
         assert!(segments[0].confidence > 0.9);
     }
 
@@ -704,7 +592,7 @@ mod tests {
     }
 
     #[test]
-    fn test_transition_detection() {
+    fn test_rapid_switching() {
         let mut readings = Vec::new();
         readings.extend(create_test_readings("com.google.Chrome", 2));  // 10s
         readings.extend(create_test_readings("com.slack.Slack", 1));     // 5s
@@ -713,25 +601,25 @@ mod tests {
 
         let segments = segment_session(readings, &SegmentationConfig::default()).unwrap();
 
-        assert_eq!(segments.len(), 2);
-        assert_eq!(segments[0].segment_type, SegmentType::Transitioning);
-        assert_eq!(segments[1].segment_type, SegmentType::Stable);
-        assert_eq!(segments[1].bundle_id, "com.microsoft.VSCode");
+        assert_eq!(segments.len(), 4); // Four separate segments
+        // First three segments have low confidence due to short duration
+        assert!(segments[0].confidence < 0.5);
+        assert!(segments[1].confidence < 0.5);
+        assert!(segments[2].confidence < 0.5);
+        // Last segment has higher confidence
+        assert!(segments[3].confidence > 0.5);
     }
 
     #[test]
-    fn test_distracted_classification() {
-        // Rapid switching for 5 minutes
+    fn test_confidence_scoring() {
         let mut readings = Vec::new();
-        for _ in 0..60 {
-            readings.extend(create_test_readings("com.google.Chrome", 1));
-            readings.extend(create_test_readings("com.slack.Slack", 1));
-        }
+        // Long stable session should have high confidence
+        readings.extend(create_test_readings("com.microsoft.VSCode", 60)); // 5 min
 
         let segments = segment_session(readings, &SegmentationConfig::default()).unwrap();
 
         assert_eq!(segments.len(), 1);
-        assert_eq!(segments[0].segment_type, SegmentType::Distracted);
+        assert!(segments[0].confidence >= 0.7); // High confidence
     }
 }
 ```
@@ -756,19 +644,23 @@ mod tests {
 
 Phase 4 is complete when:
 
-- [ ] `segments` and `interruptions` tables exist in schema_v5
-- [ ] `segment_session()` function implemented with all steps
-- [ ] Sandwich merge logic working correctly
-- [ ] Transition/Distracted classification working
-- [ ] Confidence scoring implemented (4-factor)
-- [ ] Segmentation runs automatically on session end
-- [ ] Manual `regenerate_segments` command available for interrupted sessions
-- [ ] UI displays timeline with colored segment blocks
-- [ ] UI displays horizontal bar chart with app time breakdown
-- [ ] Clicking segment shows details modal with interruptions/breakdown
-- [ ] All tunable constants exposed in `SegmentationConfig`
-- [ ] Unit tests pass for all edge cases
-- [ ] Segmentation completes in <100ms for 25-min session
+- [x] `segments` and `interruptions` tables exist in schema_v6
+- [x] `segment_session()` function implemented (simplified algorithm)
+- [x] Sandwich merge logic working correctly
+- [x] Confidence scoring implemented (4-factor)
+- [x] Segmentation runs automatically on session end
+- [x] Manual `regenerate_segments` command available for interrupted sessions
+- [x] UI displays timeline with confidence-based colored segment blocks
+- [x] UI displays top apps breakdown (instead of segment types)
+- [x] Clicking segment shows details modal with confidence breakdown and interruptions
+- [x] All tunable constants exposed in `SegmentationConfig`
+- [x] Segmentation completes in <100ms for 25-min session
+
+**Simplifications Made:**
+- Removed segment type classification (Stable/Transitioning/Distracted)
+- Removed transition detection logic (~100 lines)
+- Confidence score is now the primary quality indicator
+- UI color-codes by confidence instead of segment type
 
 ---
 
@@ -785,70 +677,56 @@ Phase 4 is complete when:
 
 ## Migration Guide
 
-### From Phase 3 to Phase 4
+### From v5 to v6 (Simplified Segmentation)
 
 1. **Run schema migration:**
 
    ```sql
-   -- db/schemas/schema_v5.sql
-   -- Creates segments and interruptions tables
+   -- db/schemas/schema_v6.sql
+   -- Removes segment_type column from segments table
    ```
 
-2. **Update db/mod.rs:**
+2. **Update db/migrations.rs:**
 
    ```rust
-   const CURRENT_SCHEMA_VERSION: i64 = 5;
+   const CURRENT_SCHEMA_VERSION: i32 = 6;
    ```
 
-3. **Add segmentation module:**
+3. **Database changes:**
+   - Removed `segment_type` column
+   - Removed `idx_segments_type` index
+   - All segments now treated uniformly
 
-   ```bash
-   mkdir -p src/segmentation
-   touch src/segmentation/{mod.rs,algorithm.rs,merge.rs,scoring.rs,config.rs}
-   ```
+4. **Code changes:**
+   - Removed `SegmentType` enum from models
+   - Removed transition detection from algorithm
+   - Removed classification step
+   - Simplified merge logic (no type checks)
 
-4. **Update timer/controller.rs:**
-   Add segmentation call in `end_session()`
-
-5. **Create UI components:**
-   ```bash
-   mkdir -p src/components/session-summary
-   touch src/components/session-summary/{Timeline.tsx,BarChart.tsx,SegmentDetails.tsx}
-   ```
+5. **Frontend changes:**
+   - Timeline colors now based on confidence score
+   - Stats show top apps instead of segment types
+   - Removed segment type display from UI
 
 ---
 
-## Appendix: Color Assignment Strategy
+## Appendix: Confidence-Based Color Scheme
 
-### Deterministic Bundle ID → Color
+### Timeline Colors
 
-```rust
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+Segments are colored based on confidence score to visually indicate quality:
 
-fn bundle_id_to_color(bundle_id: &str) -> String {
-    let mut hasher = DefaultHasher::new();
-    bundle_id.hash(&mut hasher);
-    let hash = hasher.finish();
-
-    // Generate HSL color with fixed saturation/lightness
-    let hue = (hash % 360) as f64;
-    format!("hsl({}, 70%, 60%)", hue)
+```typescript
+function getConfidenceColor(confidence: number): string {
+  if (confidence >= 0.7) return "#10B981"; // Green - Focused
+  if (confidence >= 0.4) return "#FBBF24"; // Yellow - Mixed
+  return "#EF4444"; // Red - Unclear
 }
 ```
 
-### Future: Icon-based Colors (Phase 5)
+**Color Meanings:**
+- **Green (≥70%)**: High confidence - focused, sustained work
+- **Yellow (40-70%)**: Medium confidence - mixed activity
+- **Red (<40%)**: Low confidence - fragmented, unclear
 
-Extract dominant color from app icon using macOS APIs:
-
-```swift
-func getDominantColor(bundleId: String) -> NSColor? {
-    guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId),
-          let icon = NSWorkspace.shared.icon(forFile: app.path) else {
-        return nil
-    }
-
-    // Extract dominant color from icon bitmap
-    return extractDominantColor(from: icon)
-}
-```
+This provides immediate visual feedback about session quality without needing to understand artificial segment type categories.

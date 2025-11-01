@@ -25,19 +25,6 @@ function formatConfidence(value: number | null): string {
   return `${(value * 100).toFixed(0)}%`;
 }
 
-function getSegmentTypeLabel(type: string): string {
-  switch (type) {
-    case "stable":
-      return "Stable";
-    case "transitioning":
-      return "Transitioning";
-    case "distracted":
-      return "Distracted";
-    default:
-      return type;
-  }
-}
-
 export function SegmentDetailsModal({
   segment,
   onClose,
@@ -80,13 +67,6 @@ export function SegmentDetailsModal({
                 </span>
               </div>
             )}
-
-            <div className="flex justify-between items-baseline py-2 border-b border-gray-200">
-              <span className="text-sm font-light">Type</span>
-              <span className="text-sm font-normal text-right max-w-[60%] break-words">
-                {getSegmentTypeLabel(segment.segmentType)}
-              </span>
-            </div>
 
             <div className="flex justify-between items-baseline py-2 border-b border-gray-200">
               <span className="text-sm font-light">Duration</span>
@@ -148,7 +128,7 @@ export function SegmentDetailsModal({
             </div>
           </div>
 
-          {segment.segmentType === "stable" && interruptions.length > 0 && (
+          {interruptions.length > 0 && (
             <div className="flex flex-col gap-4">
               <h3 className="text-sm font-normal uppercase tracking-wide mb-2">
                 Interruptions ({interruptions.length})
