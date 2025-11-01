@@ -693,39 +693,6 @@ Returns Ok(()) to sensing_loop
 
 ## Implementation Updates
 
-### Drain Mode for Final Capture
-
-**Problem:** When timer ends, sensing loop was cancelled immediately, causing the last capture (started at ~55s for a 60s timer) to be dropped mid-flight.
-
-**Solution:** Implement drain mode using `watch::channel<bool>`:
-- Timer signals drain mode instead of cancelling immediately
-- Sensing loop checks drain flag: if set, finishes current capture but doesn't start new ones
-- Timer waits 12 seconds (CAPTURE_TIMEOUT_SECS + buffer) for in-flight capture to complete
-- Then fully shuts down sensing loop
-
-**Implementation:**
-```rust
-// SensingController adds drain channel
-let (drain_tx, drain_rx) = watch::channel(false);
-sensing_loop(..., drain_rx)
-
-// Sensing loop checks drain mode
-tokio::select! {
-    _ = ticker.tick() => {
-        if *drain_rx.borrow() { break; }  // Exit if draining
-        // ... perform capture ...
-    }
-    _ = drain_rx.changed() => {
-        // Drain signaled - finish current capture then exit
-    }
-}
-
-// Timer controller
-sensing.drain_sensing();  // Signal drain
-tokio::time::sleep(Duration::from_secs(12)).await;  // Wait for completion
-sensing.stop_sensing().await?;  // Fully shutdown
-```
-
 ### Blocking Operations on Dedicated Thread Pool
 
 **Problem:** OCR and screenshot capture were blocking Tokio worker threads, causing slowdowns and queue buildup (especially near end of sessions where OCR took 5-6 seconds).

@@ -88,7 +88,6 @@ This phase teaches you:
 │  ┌─────────────────────────────────────┐   │
 │  │ MacOSSensingPlugin (Swift Class)    │   │
 │  │  - windowCache: [CGWindowID: SCWindow] │
-│  │  - ocrRequest: VNRecognizeTextRequest  │
 │  └─────────────────────────────────────┘   │
 └─────────────────────────────────────────────┘
 ```
@@ -125,59 +124,92 @@ src-tauri/
         │       ├── include/
         │       │   └── MacOSSensingFFI.h    # C ABI header (exported)
         │       └── MacOSSensingFFI.c        # C shim wrapping Swift
-        └── .build/                   # Swift build artifacts (gitignored)
-            └── release/
-                └── libMacOSSensing.dylib
+        └── .swift-build/             # Swift build artifacts (gitignored, at workspace root)
+            └── macos-sensing/
+                └── release/
+                    └── libMacOSSensing.dylib
 ```
 
 ---
 
 ## 4. Build System Setup
 
-### 4.1 `build.rs` - Swift Compiler Integration (updated)
+### 4.1 `build.rs` - Swift Compiler Integration
 
 ```rust
 // src-tauri/build.rs
 
-use std::process::Command;
 use std::env;
 use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
 
 fn main() {
-    // Build Swift dylib first, then run tauri_build
+    println!("cargo:warning=[BUILD] Starting build process...");
+
     #[cfg(target_os = "macos")]
     {
-        let manifest_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-        let plugin_dir = format!("{}/plugins/macos-sensing", manifest_dir);
-
-        let output = Command::new("swift")
-            .args(&["build", "-c", "release", "--package-path", &plugin_dir, "--product", "MacOSSensing"])
-            .output()
-            .expect("Failed to compile Swift plugin");
-        if !output.status.success() {
-            panic!("Swift compilation failed:\n{}", String::from_utf8_lossy(&output.stderr));
-        }
-
-        let build_output = format!("{}/plugins/macos-sensing/.build/release", manifest_dir);
-        let dylib_name = "libMacOSSensing.dylib";
-        let dylib_path = format!("{}/{}", build_output, dylib_name);
-
-        println!("cargo:rustc-link-search=native={}", build_output);
-        println!("cargo:rustc-link-lib=dylib=MacOSSensing");
-        println!("cargo:rustc-link-arg=-Wl,-rpath,{}", build_output);
-        println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../Frameworks");
-        println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../Resources");
-
-        // copy to resources for bundling
-        let resources_dir = format!("{}/resources", manifest_dir);
-        let _ = fs::create_dir_all(&resources_dir);
-        fs::copy(&dylib_path, format!("{}/{}", resources_dir, dylib_name))
-            .expect("Failed to copy libMacOSSensing.dylib into resources/");
-
-        println!("cargo:rerun-if-changed={}/plugins/macos-sensing/Sources", manifest_dir);
+        println!("cargo:warning=[BUILD] macOS detected - compiling Swift plugin");
+        compile_macos_sensing();
+        println!("cargo:warning=[BUILD] Swift plugin compilation complete");
     }
 
+    println!("cargo:warning=[BUILD] Running Tauri build...");
     tauri_build::build();
+    println!("cargo:warning=[BUILD] Build process complete!");
+}
+
+#[cfg(target_os = "macos")]
+fn compile_macos_sensing() {
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR missing"));
+    let plugin_dir = manifest_dir.join("plugins/macos-sensing");
+    let workspace_root = manifest_dir.parent().expect("workspace root should exist");
+    let swift_build_dir = workspace_root.join(".swift-build/macos-sensing");
+
+    println!("cargo:warning=[SWIFT] Building Swift plugin...");
+
+    let status = Command::new("swift")
+        .args([
+            "build", "-c", "release",
+            "--package-path", plugin_dir.to_str().expect("plugin path invalid UTF-8"),
+            "--product", "MacOSSensing",
+            "--scratch-path", swift_build_dir.to_str().expect("scratch path invalid UTF-8"),
+        ])
+        .status()
+        .expect("Failed to spawn swift build");
+
+    if !status.success() {
+        println!("cargo:warning=[SWIFT] ❌ Build failed!");
+        panic!("Swift plugin build failed");
+    }
+
+    println!("cargo:warning=[SWIFT] ✅ Swift build successful");
+
+    let build_output = swift_build_dir.join("release");
+    let dylib_name = "libMacOSSensing.dylib";
+    let dylib_path = build_output.join(dylib_name);
+
+    println!("cargo:warning=[RUST] Configuring Rust linker...");
+    println!("cargo:rustc-link-search=native={}", build_output.to_str().expect("link path invalid UTF-8"));
+    println!("cargo:rustc-link-lib=dylib=MacOSSensing");
+    println!("cargo:rustc-link-arg=-Wl,-rpath,{}", build_output.to_str().expect("link path invalid UTF-8"));
+    println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../Frameworks");
+    println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../Resources");
+
+    println!("cargo:warning=[COPY] Copying dylib to resources...");
+    let resources_dir = manifest_dir.join("resources");
+    let target_resource = resources_dir.join(dylib_name);
+    let _ = fs::create_dir_all(&resources_dir);
+    fs::copy(&dylib_path, &target_resource)
+        .expect("Failed to copy libMacOSSensing.dylib into resources/");
+
+    println!("cargo:warning=[COPY] ✅ Dylib copied successfully");
+
+    println!("cargo:warning=[WATCH] Registering file watchers for Swift files...");
+    println!("cargo:rerun-if-changed={}", plugin_dir.join("Sources/MacOSSensing").to_str().unwrap());
+    println!("cargo:rerun-if-changed={}", plugin_dir.join("Sources/CMacOSSensing").to_str().unwrap());
+    println!("cargo:rerun-if-changed={}", plugin_dir.join("Package.swift").to_str().unwrap());
+    println!("cargo:warning=[WATCH] ✅ File watchers registered");
 }
 ```
 
@@ -227,6 +259,7 @@ let package = Package(
 
 ```
 # Swift build artifacts
+.swift-build/
 src-tauri/plugins/macos-sensing/.build/
 src-tauri/plugins/macos-sensing/.swiftpm/
 ```
@@ -262,18 +295,10 @@ public class MacOSSensingPlugin {
     public static let shared = MacOSSensingPlugin()
 
     // Window cache (refreshed every 5s)
-private var windowCache: [CGWindowID: SCWindow] = [:]
-private var lastCacheUpdate: Date = .distantPast
+    private var windowCache: [CGWindowID: SCWindow] = [:]
+    private var lastCacheUpdate: Date = .distantPast
     private var lastActiveWindowId: CGWindowID?
     private let stateQueue = DispatchQueue(label: "MacOSSensing.State")
-
-    // Reusable OCR request (pre-warmed)
-    private lazy var ocrRequest: VNRecognizeTextRequest = {
-        let req = VNRecognizeTextRequest()
-        req.recognitionLevel = .fast
-        req.usesLanguageCorrection = false
-        return req
-    }()
 
     // Concurrency caps
     private let captureSemaphore = DispatchSemaphore(value: 1)
@@ -426,16 +451,24 @@ private func refreshWindowCache() async throws {
             }
 
                 // 2. Perform OCR and extract results under serial queue
+                // Create new request each time to prevent Vision framework state accumulation
                 let (recognizedText, avgConfidence, wordCount): (String, Double, UInt64) = ocrQueue.sync {
                     do {
-            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-                        try handler.perform([self.ocrRequest])
-                        let observations = (self.ocrRequest.results as? [VNRecognizedTextObservation]) ?? []
-                        let text = observations
-                .compactMap { $0.topCandidates(1).first?.string }
-                .joined(separator: "\n")
+                        let request = VNRecognizeTextRequest()
+                        request.recognitionLevel = .fast
+                        request.usesLanguageCorrection = false
+
+                        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+                        try handler.perform([request])
+
+                        guard let observations = request.results else {
+                            return ("", 0.0, UInt64(0))
+                        }
+
+                        let lines = observations.compactMap { $0.topCandidates(1).first?.string }
                         let confidences = observations.compactMap { $0.topCandidates(1).first?.confidence }
-                        let avg = confidences.isEmpty ? 0.0 : confidences.reduce(0, +) / Double(confidences.count)
+                        let text = lines.joined(separator: "\n")
+                        let avg = confidences.isEmpty ? 0.0 : confidences.reduce(0.0) { $0 + Double($1) } / Double(confidences.count)
                         return (text, avg, UInt64(observations.count))
                     } catch {
                         return ("", 0.0, UInt64(0))
@@ -889,9 +922,9 @@ cd src-tauri
 cargo clean
 cargo build
 
-# Should see Swift compilation output, then Rust compilation
+# Should see Swift compilation output with build logs, then Rust compilation
 # Check that dylib exists:
-ls -lh plugins/macos-sensing/.build/release/libMacOSSensing.dylib
+ls -lh .swift-build/macos-sensing/release/libMacOSSensing.dylib
 ```
 
 ### 8.2 Test UI (`src/App.tsx`)

@@ -132,31 +132,21 @@ Build a **deterministic, on-device Pomodoro companion** that:
 ```
 Timer Start Event
     ↓
-Spawn Tokio Tasks:
-  - sensing_loop (polling window metadata every 5s)
-  - screenshot_worker (processes screenshot requests)
-  - ocr_worker (processes OCR requests)
+Spawn sensing_loop task (single combined worker)
     ↓
-Every 5s: Poll window metadata + heartbeat
-    ↓
-Send event to bounded channel → screenshot_worker
-    ↓
-screenshot_worker: Capture & compute pHash
-    ↓
-If visual change OR OCR cooldown elapsed:
-  Send to bounded channel → ocr_worker
-    ↓
-ocr_worker: Run Vision OCR (non-blocking)
-    ↓
-Accumulate readings in bounded channel (backpressure-aware)
+Every 5s (sensing_loop tick):
+  1. Get window metadata (Swift FFI)
+  2. Capture screenshot (Swift FFI, blocking pool)
+  3. Compute pHash (Rust, blocking pool)
+  4. Check OCR cooldown + pHash change → run OCR if needed (Swift FFI, blocking pool)
+  5. Drop PNG bytes (never persist)
+  6. Write ContextReading to SQLite immediately
     ↓
 Timer End Event
     ↓
-Collect all readings from channel
+Cancel sensing_loop via CancellationToken (stops immediately)
     ↓
 Run segmentation algorithm → Vec<Segment>
-    ↓
-Persist to SQLite
     ↓
 Generate summary JSON → Emit to frontend
 ```
@@ -211,7 +201,7 @@ import ScreenCaptureKit  // macOS 13+ screen capture API
 
 | Technology        | Rationale                                                                                   |
 | ----------------- | ------------------------------------------------------------------------------------------- |
-| **Tokio**         | Async runtime for polling loops, non-blocking I/O, bounded channels (mpsc) for backpressure |
+| **Tokio**         | Async runtime for polling loops, non-blocking I/O, blocking task pool for FFI calls |
 | **SQLite**        | Local persistence with ACID, query support for historical data                              |
 | **image-hasher**  | Battle-tested pHash impl, avoid reinventing                                                 |
 | **image-compare** | SSIM calculation for structural change detection                                            |
@@ -258,205 +248,111 @@ impl TimerController {
 
 - Timer ticks on dedicated tokio task (1s interval)
 - Emits progress events to frontend via Tauri event system
-- On start: Spawns worker tasks:
-  - `sensing_loop` (polls window metadata)
-  - `screenshot_worker` (captures & processes screenshots)
-  - `ocr_worker` (runs Vision OCR)
-- On stop: Cancels all workers via `CancellationToken`, triggers segmentation
+- On start: Spawns `sensing_loop` task (single combined worker)
+- On stop: Cancels `sensing_loop` via `CancellationToken` (stops immediately), triggers segmentation
 
 ---
 
 ### 4.2 Context Sensing Pipeline
 
-**Responsibility:** Poll window metadata, capture screenshots, detect changes with backpressure handling.
+**Responsibility:** Poll window metadata, capture screenshots, detect changes, run OCR conditionally.
 
 #### Architecture Overview
 
-The sensing pipeline uses a **multi-task worker architecture** with bounded channels to prevent memory bloat and handle backpressure:
+The sensing pipeline uses a **single combined worker** (`sensing_loop`) that performs all operations inline:
 
 ```
-┌─────────────────┐
-│  sensing_loop   │  (Polls metadata every 5s, emits heartbeats)
-└────────┬────────┘
-         │ SensingEvent
-         ↓
-   ┌────────────────┐  (bounded, capacity=10)
-   │ event_channel  │
-   └────────┬───────┘
-            │
-     ┌──────┴────────┐
-     │               │
-     ↓               ↓
-┌────────────┐  ┌─────────────┐
-│screenshot_ │  │  ocr_worker │  (Separate workers)
-│  worker    │  │             │
-└─────┬──────┘  └──────┬──────┘
-      │                │
-      │ ContextReading │
-      └────────┬───────┘
-               ↓
-         ┌──────────────┐  (bounded, capacity=500)
-         │reading_channel│
-         └───────────────┘
-```
+┌─────────────────────┐
+│   TimerController    │
+└──────────┬──────────┘
+           │ spawns
+           ▼
+┌─────────────────────┐
+│  SensingController  │
+└──────────┬──────────┘
+           │ start_sensing()
+           ▼
+┌─────────────────────┐
+│    sensing_loop      │  (Single combined worker)
+│  - Every 5s tick:   │
+│    1. Get metadata  │
+│    2. Capture PNG   │
+│    3. Compute pHash │
+│    4. Run OCR*      │
+│    5. Write to DB   │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│      Database       │  (Immediate writes to WAL)
+└─────────────────────┘
 
-#### Event Types
-
-```rust
-enum SensingEvent {
-    WindowChange {
-        window: WindowMetadata,
-        timestamp: DateTime<Utc>,
-    },
-    Heartbeat {
-        window: WindowMetadata,
-        timestamp: DateTime<Utc>,
-    },
-}
+* OCR only if: cooldown elapsed (20s) AND pHash changed
 ```
 
 #### Main Polling Loop
 
 ```rust
 async fn sensing_loop(
-    session_id: Uuid,
-    event_tx: mpsc::Sender<SensingEvent>,
+    session_id: String,
+    db: Database,
     cancel_token: CancellationToken,
-) -> Result<()> {
-    let mut interval = tokio::time::interval(Duration::from_secs(POLL_INTERVAL_SECS));
-    let mut last_window: Option<WindowMetadata> = None;
-    let mut heartbeat_counter = 0;
+) {
+    let mut ticker = tokio::time::interval(Duration::from_secs(5));
+    let mut last_ocr_phash: Option<String> = None;
+    let mut last_ocr_time: Option<Instant> = None;
 
     loop {
         tokio::select! {
-            _ = interval.tick() => {
-                // 1. Get active window metadata (Swift plugin call)
-                let window = get_active_window_metadata().await?;
-
-                // 2. Check if window changed
-                let window_changed = last_window.as_ref()
-                    .map(|w| w.window_id != window.window_id)  // Use stable window ID
-                    .unwrap_or(true);
-
-                heartbeat_counter += 1;
-
-                // 3. Emit event (WindowChange or Heartbeat)
-                let event = if window_changed {
-                    heartbeat_counter = 0;  // Reset on window change
-                    SensingEvent::WindowChange {
-                        window: window.clone(),
-                        timestamp: Utc::now(),
-                    }
-                } else if heartbeat_counter >= HEARTBEAT_INTERVAL_TICKS {
-                    // Periodic heartbeat even if window unchanged
-                    heartbeat_counter = 0;
-                    SensingEvent::Heartbeat {
-                        window: window.clone(),
-                        timestamp: Utc::now(),
-                    }
-                } else {
-                    // Skip this tick (no change, not time for heartbeat)
-                    last_window = Some(window);
-                    continue;
-                };
-
-                // 4. Send to event channel with backpressure handling
-                match event_tx.try_send(event) {
-                    Ok(_) => {}
-                    Err(mpsc::error::TrySendError::Full(_)) => {
-                        log::warn!("Event channel full, dropping event (backpressure)");
-                        // Intentionally drop event under load
-                    }
-                    Err(mpsc::error::TrySendError::Closed(_)) => {
-                        log::error!("Event channel closed");
-                        break;
-                    }
-                }
-
-                last_window = Some(window);
+            _ = ticker.tick() => {
+                let timestamp = Utc::now();
+                perform_capture(&session_id, timestamp, &db, 
+                                &mut last_ocr_phash, &mut last_ocr_time).await;
             }
-            _ = cancel_token.cancelled() => {
-                log::info!("Sensing loop cancelled");
-                break;
-            }
+            _ = cancel_token.cancelled() => break,
         }
     }
-
-    Ok(())
 }
-```
 
-#### Screenshot Worker
-
-```rust
-async fn screenshot_worker(
-    mut event_rx: mpsc::Receiver<SensingEvent>,
-    reading_tx: mpsc::Sender<ContextReading>,
-    cancel_token: CancellationToken,
-) -> Result<()> {
-    let mut last_phash: Option<ImageHash> = None;
-    let mut last_screenshot_time = Instant::now();
-
-    loop {
-        tokio::select! {
-            Some(event) = event_rx.recv() => {
-                let (window, timestamp, is_heartbeat) = match event {
-                    SensingEvent::WindowChange { window, timestamp } => (window, timestamp, false),
-                    SensingEvent::Heartbeat { window, timestamp } => (window, timestamp, true),
-                };
-
-                // Rate limit screenshots (avoid excessive capture on heartbeats)
-                if is_heartbeat && last_screenshot_time.elapsed() < Duration::from_secs(15) {
-                    continue;  // Skip heartbeat screenshot if too soon
-                }
-
-                // 1. Capture screenshot (PNG/BGRA from Swift)
-                let screenshot_data = capture_active_window_screenshot(&window).await?;
-                let screenshot = image::load_from_memory(&screenshot_data)?;
-                last_screenshot_time = Instant::now();
-
-                // 2. Compute pHash
-                let phash = compute_phash(&screenshot);
-
-                // 3. Check for visual change
-                let visual_change = if let Some(ref prev) = last_phash {
-                    hamming_distance(prev, &phash) >= PHASH_THRESHOLD
-                } else {
-                    true
-                };
-
-                // 4. Create reading (OCR will be added later by ocr_worker)
-                let reading = ContextReading {
-                    timestamp,
-                    window_metadata: window.clone(),
-                    phash: phash.clone(),
-                    ssim_grid: None,
-                    ocr_text: None,
-                    ocr_confidence: None,
-                };
-
-                // 5. Send to reading channel
-                match reading_tx.try_send(reading) {
-                    Ok(_) => {}
-                    Err(mpsc::error::TrySendError::Full(_)) => {
-                        log::warn!("Reading channel full, coalescing heartbeat");
-                        // Under load, drop this reading (graceful degradation)
-                    }
-                    Err(mpsc::error::TrySendError::Closed(_)) => break,
-                }
-
-                // 6. If visual change, trigger OCR (via separate channel)
-                // (OCR worker implementation not shown here)
-
-                last_phash = Some(phash);
-            }
-            _ = cancel_token.cancelled() => {
-                log::info!("Screenshot worker cancelled");
-                break;
-            }
-        }
-    }
-
+async fn perform_capture(...) -> Result<()> {
+    // 1. Get window metadata (Swift FFI)
+    let metadata = get_active_window_metadata()?;
+    
+    // 2. Capture screenshot (Swift FFI, blocking pool)
+    let png_bytes = tokio::task::spawn_blocking(|| {
+        capture_screenshot(window_id)
+    }).await??;
+    
+    // 3. Compute pHash (Rust, blocking pool)
+    let phash = tokio::task::spawn_blocking({
+        let bytes = Arc::clone(&png_bytes);
+        move || compute_phash(&bytes)
+    }).await??;
+    
+    // 4. Conditionally run OCR (Swift FFI, blocking pool)
+    let ocr_result = if should_run_ocr(&phash, &last_ocr_phash, &last_ocr_time) {
+        tokio::task::spawn_blocking({
+            let bytes = Arc::clone(&png_bytes);
+            move || run_ocr(&bytes)
+        }).await??.ok()
+    } else {
+        None
+    };
+    
+    // 5. Drop PNG bytes (never persist)
+    drop(png_bytes);
+    
+    // 6. Write to SQLite immediately
+    db.insert_context_reading(&ContextReading {
+        session_id,
+        timestamp,
+        window_metadata: metadata,
+        phash: Some(phash),
+        ocr_text: ocr_result.as_ref().map(|r| r.text.clone()),
+        ocr_confidence: ocr_result.as_ref().map(|r| r.confidence),
+        ocr_word_count: ocr_result.as_ref().map(|r| r.word_count),
+    }).await?;
+    
     Ok(())
 }
 ```
@@ -464,32 +360,11 @@ async fn screenshot_worker(
 #### Sensing Configuration
 
 ```rust
-const POLL_INTERVAL_SECS: u64 = 5;           // Window metadata polling
-const HEARTBEAT_INTERVAL_TICKS: u32 = 3;     // Every 3 ticks (15s) without window change
-const OCR_COOLDOWN_SECS: u64 = 15;           // Min time between OCR runs
-const PHASH_THRESHOLD: u32 = 12;             // Hamming distance for visual change
-const SSIM_TILE_THRESHOLD: f64 = 0.75;       // Per-tile similarity (if used)
-const SCREENSHOT_MAX_WIDTH: u32 = 1280;      // Downscale target
-
-// Channel capacities (backpressure control)
-const EVENT_CHANNEL_CAPACITY: usize = 10;    // Sensing events
-const READING_CHANNEL_CAPACITY: usize = 500; // Context readings (25min @ 5s = 300)
-const OCR_CHANNEL_CAPACITY: usize = 20;      // OCR requests
+const CAPTURE_INTERVAL_SECS: u64 = 5;      // Poll every 5s
+const CAPTURE_TIMEOUT_SECS: u64 = 10;      // Max capture time
+const OCR_COOLDOWN_SECS: u64 = 20;         // Min time between OCR runs
+const PHASH_CHANGE_THRESHOLD: u32 = 8;     // Hamming distance for OCR trigger
 ```
-
-#### Backpressure Handling Strategy
-
-**When channels fill up:**
-
-1. **Event channel full** → Drop new events (prefer keeping system responsive)
-2. **Reading channel full** → Coalesce heartbeats (drop, keep window changes)
-3. **OCR channel full** → Skip OCR for this reading (degrade gracefully)
-
-**Rationale:** Under load (e.g., rapid window switching), we prioritize:
-
-- System responsiveness (don't block)
-- Key events (window changes > heartbeats)
-- Graceful degradation (lower confidence > crash)
 
 ---
 
@@ -1338,18 +1213,16 @@ mod db {
 
 **During Session:**
 
-- Readings accumulated in bounded channel (`reading_channel`, capacity 500)
-- NOT persisted until session end (P0 simplification)
-- Channel backpressure prevents unbounded memory growth
+- Readings written to SQLite immediately (WAL mode)
+- Screenshot PNG bytes dropped immediately after pHash/OCR (never persisted)
 
 **On Session End:**
 
-1. Drain `reading_channel` → collect all readings into `Vec<ContextReading>`
-2. Write all readings to `context_readings` table (batch insert, single transaction)
-3. Run segmentation algorithm on collected readings
-4. Write segments to `segments` table
-5. Update session status to `Completed`
-6. Drop channel and collected readings (reclaim RAM)
+1. Sensing loop cancelled via `CancellationToken` (stops immediately)
+2. Run segmentation algorithm on readings from database
+3. Write segments to `segments` table
+4. Update session status to `Completed`
+5. Generate summary JSON → Emit to frontend
 
 **Retention Policy (Future):**
 
@@ -1375,7 +1248,7 @@ mod db {
 
 - Use `tokio::time::interval` (non-blocking timers)
 - Downscale screenshots before processing (≤1280px)
-- OCR rate-limited to ≥15s intervals
+- OCR rate-limited to ≥20s intervals (cooldown + pHash change detection)
 - Vision framework `.fast` mode (lower accuracy, faster)
 
 ### 9.2 Memory Budget
@@ -1385,31 +1258,15 @@ mod db {
 | React app            | ~50 MB       | ~70 MB      | DOM + state                            |
 | Tauri runtime        | ~30 MB       | ~40 MB      | WebView bridge                         |
 | Rust backend         | ~50 MB       | ~80 MB      | Tokio threads + task overhead          |
-| **Bounded channels** | **~15 MB**   | **~25 MB**  | **See breakdown below**                |
 | Screenshot buffers   | ~10 MB       | ~20 MB      | 1-2 concurrent (processed immediately) |
 | SQLite cache         | ~20 MB       | ~30 MB      | Read cache                             |
-| **Total**            | **~175 MB**  | **~295 MB** | **Target met**                         |
-
-#### Channel Memory Breakdown
-
-| Channel           | Capacity | Item Size  | Memory        |
-| ----------------- | -------- | ---------- | ------------- |
-| `event_channel`   | 10       | ~200 bytes | ~2 KB         |
-| `reading_channel` | 500      | ~100 KB    | ~50 MB (peak) |
-| `ocr_channel`     | 20       | ~50 KB     | ~1 MB         |
-
-**Note:** `reading_channel` peak assumes worst-case (all slots filled). In practice:
-
-- Heartbeats coalesced under load (fewer items)
-- Channel drains at session end → memory freed
-- Steady-state: ~150-200 readings (15-20 MB)
+| **Total**            | **~160 MB**  | **~240 MB** | **Target met**                         |
 
 **Mitigation strategies:**
 
 - Drop screenshot data immediately after pHash computation
-- Use bounded channels with backpressure (prevent unbounded growth)
-- Coalesce heartbeats when channels approach capacity
-- Batch database writes at session end (avoid per-reading overhead)
+- Immediate database writes prevent memory accumulation
+- OCR runs conditionally (cooldown + pHash change)
 
 ### 9.3 Battery Impact
 
@@ -1426,7 +1283,6 @@ mod db {
 
 - Reduce poll frequency if battery < 20% (fallback to 10s intervals)
 - Skip OCR on battery power (optional setting)
-- Coalesce database writes (1 transaction at session end)
 
 ---
 
@@ -1518,34 +1374,11 @@ let title = metadata.title.unwrap_or_else(|| "[Untitled]".to_string());
 
 ### 10.5 Memory Pressure
 
-#### Scenario: Reading channel approaching capacity
+#### Scenario: Database write queue backing up
 
-**Mitigation:** Built-in via bounded channels with backpressure.
+**Mitigation:** Immediate writes prevent queue buildup. SQLite WAL mode handles concurrent access efficiently.
 
-```rust
-// In screenshot_worker, when sending readings:
-match reading_tx.try_send(reading) {
-    Ok(_) => {}
-    Err(mpsc::error::TrySendError::Full(reading)) => {
-        // Channel full - apply backpressure
-        if reading.is_heartbeat {
-            log::warn!("Reading channel full, dropping heartbeat (backpressure)");
-            // Drop heartbeats first (least important)
-        } else {
-            // If window change, wait briefly then retry
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            let _ = reading_tx.send(reading).await;  // Blocking send
-        }
-    }
-    Err(mpsc::error::TrySendError::Closed(_)) => break,
-}
-```
-
-**Impact:**
-
-- Heartbeats dropped first (graceful degradation)
-- Window changes preserved (blocking send with backpressure)
-- Memory bounded at `READING_CHANNEL_CAPACITY * ~100KB = 50 MB` max
+**Impact:** If database writes are slow, sensing loop will naturally slow down (awaiting write completion), but no data loss.
 
 ---
 
@@ -1900,7 +1733,6 @@ lefocus/
 | **Sandwich merge**        | Merging segments when brief interruption occurs (A → B → A becomes A with interruption) |
 | **Transitioning segment** | Special segment capturing rapid switching behavior (≥3 switches/60s)                    |
 | **Heartbeat**             | Periodic context sample taken even when window hasn't changed (every 15s)               |
-| **Backpressure**          | Flow control mechanism where bounded channels drop/delay events when full               |
 | **CGWindowID**            | Stable macOS window identifier used instead of frame bounds for matching                |
 
 ---
