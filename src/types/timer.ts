@@ -25,3 +25,20 @@ export interface SessionInfo {
   targetMs: number;
   activeMs: number;
 }
+
+export interface TopApp {
+  bundleId: string;
+  appName: string | null;
+  durationSecs: number;
+  percentage: number;
+}
+
+export interface SessionSummary {
+  id: string;
+  startedAt: string; // ISO 8601 datetime
+  stoppedAt: string | null; // ISO 8601 datetime
+  status: SessionStatus;
+  targetMs: number;
+  activeMs: number;
+  topApps: TopApp[];
+}

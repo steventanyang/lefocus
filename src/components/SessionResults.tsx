@@ -7,9 +7,10 @@ import { SegmentDetailsModal } from "./SegmentDetailsModal";
 interface SessionResultsProps {
   sessionId: string;
   onBack: () => void;
+  backButtonText?: string;
 }
 
-export function SessionResults({ sessionId, onBack }: SessionResultsProps) {
+export function SessionResults({ sessionId, onBack, backButtonText = "Back to Timer" }: SessionResultsProps) {
   const { segments, loading, error } = useSegments(sessionId);
   const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
 
@@ -30,7 +31,7 @@ export function SessionResults({ sessionId, onBack }: SessionResultsProps) {
       <div className="w-full max-w-3xl flex flex-col gap-8">
         <div className="text-sm font-normal text-center p-4 border border-black bg-transparent max-w-full">{error}</div>
         <button className={buttonPrimaryClass} onClick={onBack}>
-          Back to Timer
+          {backButtonText}
         </button>
       </div>
     );
@@ -59,7 +60,7 @@ export function SessionResults({ sessionId, onBack }: SessionResultsProps) {
 
           <div className="flex gap-4 justify-center pt-4">
             <button className={buttonPrimaryClass} onClick={onBack}>
-              Back to Timer
+              {backButtonText}
             </button>
           </div>
         </div>
