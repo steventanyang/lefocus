@@ -1,7 +1,10 @@
-import { SegmentStats as Stats } from "../types/segment";
+import { SegmentStats as Stats, Segment } from "../types/segment";
+import { getAppColor } from "../constants/appColors";
 
 interface SegmentStatsProps {
   stats: Stats;
+  segments: Segment[];
+  onSegmentClick: (segment: Segment) => void;
 }
 
 function formatDuration(seconds: number): string {
@@ -12,76 +15,70 @@ function formatDuration(seconds: number): string {
   return `${mins}m ${secs}s`;
 }
 
-export function SegmentStats({ stats }: SegmentStatsProps) {
+export function SegmentStats({ stats, segments, onSegmentClick }: SegmentStatsProps) {
+  const totalDuration = segments.reduce((sum, seg) => sum + seg.durationSecs, 0);
+
   return (
     <div className="border border-black p-6 flex flex-col gap-6">
       <div className="text-base font-light tracking-wide uppercase pb-2 border-b border-black">
         Session Summary
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
-        <div className="flex flex-col gap-2">
-          <div className="text-xs font-light uppercase tracking-wide">Total Duration</div>
-          <div className="text-2xl font-semibold tabular-nums">
-            {formatDuration(stats.totalDurationSecs)}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <div className="text-xs font-light uppercase tracking-wide">Segments</div>
-          <div className="text-2xl font-semibold tabular-nums">{stats.segmentCount}</div>
+      <div className="flex flex-col gap-2">
+        <div className="text-xs font-light uppercase tracking-wide">Total Duration</div>
+        <div className="text-2xl font-semibold tabular-nums">
+          {formatDuration(stats.totalDurationSecs)}
         </div>
       </div>
 
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <div className="w-full h-2 bg-gray-200 border border-black">
-            <div
-              className="h-full bg-segment-stable transition-all duration-300"
-              style={{ width: `${stats.stablePercentage}%` }}
-            />
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm font-normal">Stable</span>
-            <span className="text-sm font-semibold tabular-nums">
-              {formatDuration(stats.stableDurationSecs)} (
-              {stats.stablePercentage.toFixed(0)}%)
-            </span>
-          </div>
+      {/* Timeline embedded here */}
+      {segments.length > 0 && (
+        <div className="flex h-[60px] border border-black overflow-hidden bg-white">
+          {segments.map((segment) => {
+            const widthPercent = (segment.durationSecs / totalDuration) * 100;
+            const backgroundColor = getAppColor(segment.bundleId, segment.confidence);
+            return (
+              <button
+                key={segment.id}
+                className="border-none border-r border-black p-0 cursor-pointer transition-opacity duration-200 hover:opacity-70 last:border-r-0"
+                style={{
+                  width: `${widthPercent}%`,
+                  backgroundColor
+                }}
+                onClick={() => onSegmentClick(segment)}
+                title={`${segment.appName || segment.bundleId} - ${formatDuration(
+                  segment.durationSecs
+                )}`}
+              />
+            );
+          })}
         </div>
+      )}
 
-        <div className="flex flex-col gap-2">
-          <div className="w-full h-2 bg-gray-200 border border-black">
-            <div
-              className="h-full bg-segment-transitioning transition-all duration-300"
-              style={{ width: `${stats.transitioningPercentage}%` }}
-            />
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm font-normal">Transitioning</span>
-            <span className="text-sm font-semibold tabular-nums">
-              {formatDuration(stats.transitioningDurationSecs)} (
-              {stats.transitioningPercentage.toFixed(0)}%)
-            </span>
-          </div>
+      {stats.topApps.length > 0 && (
+        <div className="flex flex-col gap-4">
+          <h3 className="text-xs font-light uppercase tracking-wide">Top Applications</h3>
+          {stats.topApps.map((app) => (
+            <div key={app.bundleId} className="flex flex-col gap-2">
+              <div className="w-full h-2 bg-gray-200 border border-black">
+                <div
+                  className="h-full transition-all duration-300"
+                  style={{
+                    width: `${app.percentage}%`,
+                    backgroundColor: getAppColor(app.bundleId)
+                  }}
+                />
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-normal">{app.appName || app.bundleId}</span>
+                <span className="text-sm font-semibold tabular-nums">
+                  {formatDuration(app.durationSecs)} ({app.percentage.toFixed(0)}%)
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
-
-        <div className="flex flex-col gap-2">
-          <div className="w-full h-2 bg-gray-200 border border-black">
-            <div
-              className="h-full bg-segment-distracted transition-all duration-300"
-              style={{ width: `${stats.distractedPercentage}%` }}
-            />
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-sm font-normal">Distracted</span>
-            <span className="text-sm font-semibold tabular-nums">
-              {formatDuration(stats.distractedDurationSecs)} (
-              {stats.distractedPercentage.toFixed(0)}%)
-            </span>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

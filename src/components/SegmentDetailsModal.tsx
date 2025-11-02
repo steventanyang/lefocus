@@ -1,10 +1,10 @@
 import { Segment } from "../types/segment";
 import { useInterruptions } from "../hooks/useSegments";
+import { getAppColor } from "../constants/appColors";
 
 interface SegmentDetailsModalProps {
   segment: Segment;
   onClose: () => void;
-  onRegenerate?: () => void;
 }
 
 function formatDuration(seconds: number): string {
@@ -25,30 +25,15 @@ function formatConfidence(value: number | null): string {
   return `${(value * 100).toFixed(0)}%`;
 }
 
-function getSegmentTypeLabel(type: string): string {
-  switch (type) {
-    case "stable":
-      return "Stable";
-    case "transitioning":
-      return "Transitioning";
-    case "distracted":
-      return "Distracted";
-    default:
-      return type;
-  }
-}
-
 export function SegmentDetailsModal({
   segment,
   onClose,
-  onRegenerate,
 }: SegmentDetailsModalProps) {
   const { interruptions, loading: interruptionsLoading } = useInterruptions(
     segment.id
   );
 
   const buttonPrimaryClass = "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-black hover:text-white";
-  const buttonSecondaryClass = "bg-transparent border border-black text-black px-8 py-3.5 text-base font-normal cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-black hover:text-white";
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[1000] p-8" onClick={onClose}>
@@ -67,9 +52,15 @@ export function SegmentDetailsModal({
           <div className="flex flex-col gap-4">
             <div className="flex justify-between items-baseline py-2 border-b border-gray-200">
               <span className="text-sm font-light">Application</span>
-              <span className="text-sm font-normal text-right max-w-[60%] break-words">
-                {segment.appName || segment.bundleId}
-              </span>
+              <div className="flex items-center gap-2">
+                <span
+                  className="w-3 h-3 border border-black flex-shrink-0"
+                  style={{ backgroundColor: getAppColor(segment.bundleId, segment.confidence) }}
+                />
+                <span className="text-sm font-normal text-right max-w-[60%] break-words">
+                  {segment.appName || segment.bundleId}
+                </span>
+              </div>
             </div>
 
             {segment.windowTitle && (
@@ -80,13 +71,6 @@ export function SegmentDetailsModal({
                 </span>
               </div>
             )}
-
-            <div className="flex justify-between items-baseline py-2 border-b border-gray-200">
-              <span className="text-sm font-light">Type</span>
-              <span className="text-sm font-normal text-right max-w-[60%] break-words">
-                {getSegmentTypeLabel(segment.segmentType)}
-              </span>
-            </div>
 
             <div className="flex justify-between items-baseline py-2 border-b border-gray-200">
               <span className="text-sm font-light">Duration</span>
@@ -148,7 +132,7 @@ export function SegmentDetailsModal({
             </div>
           </div>
 
-          {segment.segmentType === "stable" && interruptions.length > 0 && (
+          {interruptions.length > 0 && (
             <div className="flex flex-col gap-4">
               <h3 className="text-sm font-normal uppercase tracking-wide mb-2">
                 Interruptions ({interruptions.length})
@@ -164,9 +148,15 @@ export function SegmentDetailsModal({
                       key={interruption.id}
                       className="flex justify-between items-center p-3 border border-gray-200 bg-transparent"
                     >
-                      <span className="text-sm font-normal flex-1">
-                        {interruption.appName || interruption.bundleId}
-                      </span>
+                      <div className="flex items-center gap-2 flex-1">
+                        <span
+                          className="w-2 h-2 border border-black flex-shrink-0"
+                          style={{ backgroundColor: getAppColor(interruption.bundleId) }}
+                        />
+                        <span className="text-sm font-normal">
+                          {interruption.appName || interruption.bundleId}
+                        </span>
+                      </div>
                       <span className="text-sm font-semibold tabular-nums mx-4">
                         {formatDuration(interruption.durationSecs)}
                       </span>
@@ -191,11 +181,6 @@ export function SegmentDetailsModal({
         </div>
 
         <div className="flex gap-4 justify-end p-6 border-t border-black">
-          {onRegenerate && (
-            <button className={buttonSecondaryClass} onClick={onRegenerate}>
-              Regenerate Segments
-            </button>
-          )}
           <button className={buttonPrimaryClass} onClick={onClose}>
             Close
           </button>

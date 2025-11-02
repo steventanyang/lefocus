@@ -292,7 +292,7 @@ impl TimerController {
                         guard.clone()
                     };
 
-                    // Stop sensing when timer completes
+                    // Stop sensing immediately
                     if let Err(e) = sensing.lock().await.stop_sensing().await {
                         error!("Failed to stop sensing on timer completion: {}", e);
                     }

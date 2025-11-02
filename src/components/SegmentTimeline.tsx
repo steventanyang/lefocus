@@ -1,21 +1,9 @@
 import { Segment } from "../types/segment";
+import { getAppColor, getConfidenceColor, getConfidenceLabel } from "../constants/appColors";
 
 interface SegmentTimelineProps {
   segments: Segment[];
   onSegmentClick: (segment: Segment) => void;
-}
-
-function getSegmentTypeClass(type: string): string {
-  switch (type) {
-    case "stable":
-      return "bg-segment-stable";
-    case "transitioning":
-      return "bg-segment-transitioning";
-    case "distracted":
-      return "bg-segment-distracted";
-    default:
-      return "";
-  }
 }
 
 function formatDuration(seconds: number): string {
@@ -56,17 +44,19 @@ export function SegmentTimeline({
       <div className="flex h-[60px] border border-black overflow-hidden bg-white">
         {segments.map((segment) => {
           const widthPercent = (segment.durationSecs / totalDuration) * 100;
+          const backgroundColor = getAppColor(segment.bundleId, segment.confidence);
           return (
             <button
               key={segment.id}
-              className={`border-none border-r border-black p-0 cursor-pointer transition-opacity duration-200 hover:opacity-70 last:border-r-0 ${getSegmentTypeClass(
-                segment.segmentType
-              )}`}
-              style={{ width: `${widthPercent}%` }}
+              className="border-none border-r border-black p-0 cursor-pointer transition-opacity duration-200 hover:opacity-70 last:border-r-0"
+              style={{
+                width: `${widthPercent}%`,
+                backgroundColor
+              }}
               onClick={() => onSegmentClick(segment)}
               title={`${segment.appName || segment.bundleId} - ${formatDuration(
                 segment.durationSecs
-              )}`}
+              )} (${getConfidenceLabel(segment.confidence)})`}
             />
           );
         })}
@@ -74,16 +64,25 @@ export function SegmentTimeline({
 
       <div className="flex gap-8 justify-center pt-2">
         <div className="flex items-center gap-2">
-          <span className="w-4 h-4 border border-black bg-segment-stable" />
-          <span className="text-sm font-light">Stable</span>
+          <span
+            className="w-4 h-4 border border-black"
+            style={{ backgroundColor: getConfidenceColor(0.8) }}
+          />
+          <span className="text-sm font-light">Focused (≥70%)</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-4 h-4 border border-black bg-segment-transitioning" />
-          <span className="text-sm font-light">Transitioning</span>
+          <span
+            className="w-4 h-4 border border-black"
+            style={{ backgroundColor: getConfidenceColor(0.55) }}
+          />
+          <span className="text-sm font-light">Mixed (40-70%)</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-4 h-4 border border-black bg-segment-distracted" />
-          <span className="text-sm font-light">Distracted</span>
+          <span
+            className="w-4 h-4 border border-black"
+            style={{ backgroundColor: getConfidenceColor(0.2) }}
+          />
+          <span className="text-sm font-light">Unclear (&lt;40%)</span>
         </div>
       </div>
     </div>

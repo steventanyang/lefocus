@@ -691,6 +691,39 @@ Returns Ok(()) to sensing_loop
 
 ---
 
+## Implementation Updates
+
+### Blocking Operations on Dedicated Thread Pool
+
+**Problem:** OCR and screenshot capture were blocking Tokio worker threads, causing slowdowns and queue buildup (especially near end of sessions where OCR took 5-6 seconds).
+
+**Solution:** Move blocking FFI calls to `tokio::task::spawn_blocking()`:
+- `capture_screenshot()` → blocking pool
+- `run_ocr()` → blocking pool  
+- `compute_phash()` → blocking pool (already done)
+
+**Implementation:**
+```rust
+// Screenshot capture
+let png_bytes = tokio::task::spawn_blocking(move || {
+    capture_screenshot(window_id)
+}).await??;
+
+// OCR processing
+let ocr_result = tokio::task::spawn_blocking({
+    let bytes = png_bytes.clone();
+    move || run_ocr(&bytes)
+}).await??;
+```
+
+**Benefits:**
+- Tokio worker threads stay responsive for async work
+- Better resource utilization
+- Prevents queue buildup in Vision framework serial queue
+- OCR cooldown set to 20 seconds (was 0) to reduce frequency
+
+---
+
 ## Performance Budget
 
 ### CPU Usage

@@ -31,28 +31,10 @@ export function useSegments(sessionId: string | null) {
     loadSegments();
   }, [loadSegments]);
 
-  const regenerateSegments = useCallback(async () => {
-    if (!sessionId) return;
-
-    try {
-      setLoading(true);
-      setError("");
-      const result = await invoke<Segment[]>("regenerate_segments", {
-        sessionId,
-      });
-      setSegments(result);
-    } catch (err) {
-      setError(`Failed to regenerate segments: ${err}`);
-    } finally {
-      setLoading(false);
-    }
-  }, [sessionId]);
-
   return {
     segments,
     loading,
     error,
-    regenerateSegments,
     reload: loadSegments,
   };
 }
@@ -94,44 +76,46 @@ export function calculateSegmentStats(segments: Segment[]): SegmentStats {
   if (segments.length === 0) {
     return {
       totalDurationSecs: 0,
-      stableDurationSecs: 0,
-      transitioningDurationSecs: 0,
-      distractedDurationSecs: 0,
-      stablePercentage: 0,
-      transitioningPercentage: 0,
-      distractedPercentage: 0,
       segmentCount: 0,
       interruptionCount: 0,
+      topApps: [],
     };
   }
 
-  const stableDuration = segments
-    .filter((s) => s.segmentType === "stable")
-    .reduce((sum, s) => sum + s.durationSecs, 0);
+  const totalDuration = segments.reduce(
+    (sum, s) => sum + s.durationSecs,
+    0
+  );
 
-  const transitioningDuration = segments
-    .filter((s) => s.segmentType === "transitioning")
-    .reduce((sum, s) => sum + s.durationSecs, 0);
+  // Group segments by app
+  const appDurations = new Map<string, { bundleId: string; appName: string | null; durationSecs: number }>();
 
-  const distractedDuration = segments
-    .filter((s) => s.segmentType === "distracted")
-    .reduce((sum, s) => sum + s.durationSecs, 0);
+  for (const segment of segments) {
+    const existing = appDurations.get(segment.bundleId);
+    if (existing) {
+      existing.durationSecs += segment.durationSecs;
+    } else {
+      appDurations.set(segment.bundleId, {
+        bundleId: segment.bundleId,
+        appName: segment.appName,
+        durationSecs: segment.durationSecs,
+      });
+    }
+  }
 
-  const totalDuration =
-    stableDuration + transitioningDuration + distractedDuration;
+  // Sort by duration and take top apps
+  const topApps = Array.from(appDurations.values())
+    .sort((a, b) => b.durationSecs - a.durationSecs)
+    .slice(0, 5)
+    .map(app => ({
+      ...app,
+      percentage: totalDuration > 0 ? (app.durationSecs / totalDuration) * 100 : 0,
+    }));
 
   return {
     totalDurationSecs: totalDuration,
-    stableDurationSecs: stableDuration,
-    transitioningDurationSecs: transitioningDuration,
-    distractedDurationSecs: distractedDuration,
-    stablePercentage:
-      totalDuration > 0 ? (stableDuration / totalDuration) * 100 : 0,
-    transitioningPercentage:
-      totalDuration > 0 ? (transitioningDuration / totalDuration) * 100 : 0,
-    distractedPercentage:
-      totalDuration > 0 ? (distractedDuration / totalDuration) * 100 : 0,
     segmentCount: segments.length,
     interruptionCount: 0, // Will be populated by parent component if needed
+    topApps,
   };
 }

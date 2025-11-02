@@ -1,7 +1,5 @@
 // Segment type definitions matching Rust backend
 
-export type SegmentType = "stable" | "transitioning" | "distracted";
-
 export interface Segment {
   id: string;
   sessionId: string;
@@ -11,7 +9,6 @@ export interface Segment {
   bundleId: string;
   appName: string | null;
   windowTitle: string | null;
-  segmentType: SegmentType;
   confidence: number;
   durationScore: number | null;
   stabilityScore: number | null;
@@ -31,14 +28,16 @@ export interface Interruption {
   durationSecs: number;
 }
 
+export interface AppDuration {
+  bundleId: string;
+  appName: string | null;
+  durationSecs: number;
+  percentage: number;
+}
+
 export interface SegmentStats {
   totalDurationSecs: number;
-  stableDurationSecs: number;
-  transitioningDurationSecs: number;
-  distractedDurationSecs: number;
-  stablePercentage: number;
-  transitioningPercentage: number;
-  distractedPercentage: number;
   segmentCount: number;
   interruptionCount: number;
+  topApps: AppDuration[];
 }

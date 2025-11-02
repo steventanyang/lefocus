@@ -21,13 +21,6 @@ public final class MacOSSensingPlugin {
     private let captureGate = CaptureGate()
     private let ocrQueue = DispatchQueue(label: "MacOSSensing.OCR")
 
-    private lazy var ocrRequest: VNRecognizeTextRequest = {
-        let request = VNRecognizeTextRequest()
-        request.recognitionLevel = .fast
-        request.usesLanguageCorrection = false
-        return request
-    }()
-
     private init() {}
 
     // MARK: - Lifecycle
@@ -247,10 +240,16 @@ public final class MacOSSensingPlugin {
 
             let metrics: (String, Double, UInt64) = ocrQueue.sync {
                 do {
+                    // Create a new request for each OCR call to prevent state accumulation
+                    // Vision framework may cache memory internally if reusing the same request
+                    let request = VNRecognizeTextRequest()
+                    request.recognitionLevel = .fast
+                    request.usesLanguageCorrection = false
+                    
                     let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-                    try handler.perform([ocrRequest])
+                    try handler.perform([request])
 
-                    guard let observations = ocrRequest.results else {
+                    guard let observations = request.results else {
                         return ("", 0.0, 0)
                     }
 
