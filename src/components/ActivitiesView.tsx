@@ -17,20 +17,17 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
   const [segmentsBySession, setSegmentsBySession] = useState<
     Record<string, Segment[]>
   >({});
-  const [segmentsLoading, setSegmentsLoading] = useState(false);
 
   // Fetch segments for all sessions
   useEffect(() => {
     if (sessions.length === 0) {
       setSegmentsBySession({});
-      setSegmentsLoading(false);
       return;
     }
 
     let cancelled = false;
 
     const fetchAllSegments = async () => {
-      setSegmentsLoading(true);
       const segmentsMap: Record<string, Segment[]> = {};
 
       // Fetch segments for all sessions in parallel
@@ -56,7 +53,6 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
 
       if (!cancelled) {
         setSegmentsBySession(segmentsMap);
-        setSegmentsLoading(false);
       }
     };
 
