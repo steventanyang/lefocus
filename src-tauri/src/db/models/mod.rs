@@ -4,4 +4,4 @@ pub mod session;
 
 pub use context_reading::ContextReading;
 pub use segment::{Interruption, Segment};
-pub use session::{Session, SessionInfo, SessionStatus};
+pub use session::{Session, SessionInfo, SessionStatus, SessionSummary, TopApp};

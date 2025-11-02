@@ -1,3 +1,9 @@
+//! Context reading data model.
+//!
+//! See system design documentation: Phase 3 (phase-3-sensing-pipeline.md)
+//!
+//! Represents a single sensing snapshot captured during a focus session.
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 

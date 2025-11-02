@@ -4,7 +4,7 @@ use rusqlite::{params, Row};
 use crate::db::{
     connection::Database,
     helpers::parse_datetime,
-    models::{Interruption, Segment},
+    models::{Interruption, Segment, TopApp},
 };
 
 fn row_to_segment(row: &Row) -> Result<Segment, rusqlite::Error> {
@@ -215,6 +215,61 @@ impl Database {
             }
 
             Ok(interruptions)
+        })
+        .await
+    }
+
+    /// Get top N apps for a session, aggregated by bundle_id with durations and percentages.
+    pub async fn get_top_apps_for_session(
+        &self,
+        session_id: &str,
+        limit: usize,
+    ) -> Result<Vec<TopApp>> {
+        let session_id = session_id.to_string();
+        self.execute(move |conn| {
+            // First check if there are any segments
+            let total_duration: i64 = conn.query_row(
+                "SELECT COALESCE(SUM(duration_secs), 0) FROM segments WHERE session_id = ?1",
+                params![&session_id],
+                |row| row.get(0),
+            )?;
+
+            // If no segments, return empty vec
+            if total_duration == 0 {
+                return Ok(Vec::new());
+            }
+
+            let mut stmt = conn.prepare(
+                "SELECT
+                    bundle_id,
+                    app_name,
+                    SUM(duration_secs) as total_duration,
+                    (SUM(duration_secs) * 100.0 / ?2) as percentage
+                 FROM segments
+                 WHERE session_id = ?1
+                 GROUP BY bundle_id
+                 ORDER BY total_duration DESC
+                 LIMIT ?3",
+            )?;
+
+            let apps_iter = stmt.query_map(
+                params![&session_id, total_duration, limit as i64],
+                |row| {
+                    Ok(TopApp {
+                        bundle_id: row.get("bundle_id")?,
+                        app_name: row.get("app_name")?,
+                        duration_secs: row.get::<_, i64>("total_duration")? as u32,
+                        percentage: row.get("percentage")?,
+                    })
+                },
+            )?;
+
+            let mut apps = Vec::new();
+            for app_result in apps_iter {
+                apps.push(app_result?);
+            }
+
+            Ok(apps)
         })
         .await
     }

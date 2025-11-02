@@ -1,3 +1,10 @@
+//! Segment and interruption data models.
+//!
+//! See system design documentation: Phase 4 (phase-4-segmentation.md)
+//!
+//! Segments represent continuous time intervals where the user focused on a single context (app/window).
+//! Interruptions represent brief context switches that were merged into a parent segment.
+
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 

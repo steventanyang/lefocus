@@ -149,4 +149,24 @@ impl Database {
         })
         .await
     }
+
+    pub async fn list_sessions(&self) -> Result<Vec<Session>> {
+        self.execute(|conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, started_at, stopped_at, status, target_ms, active_ms, created_at, updated_at
+                 FROM sessions
+                 WHERE status IN ('Completed', 'Interrupted')
+                 ORDER BY started_at DESC",
+            )?;
+
+            let mut rows = stmt.query([])?;
+            let mut sessions = Vec::new();
+            while let Some(row) = rows.next()? {
+                sessions.push(row_to_session(row)?);
+            }
+
+            Ok(sessions)
+        })
+        .await
+    }
 }
