@@ -5,7 +5,11 @@ import { TimerControls } from "./TimerControls";
 import { DurationPicker } from "./DurationPicker";
 import { SessionResults } from "./SessionResults";
 
-export function TimerView() {
+interface TimerViewProps {
+  onNavigate: (view: "timer" | "activities") => void;
+}
+
+export function TimerView({ onNavigate }: TimerViewProps) {
   const { timerState, error, startTimer, endTimer, cancelTimer } = useTimer();
   const [selectedDuration, setSelectedDuration] = useState<number>(
     25 * 60 * 1000
@@ -48,7 +52,15 @@ export function TimerView() {
 
   return (
     <div className="w-full max-w-md flex flex-col items-center gap-12">
-      <h1 className="text-2xl font-light tracking-wide text-center">LeFocus</h1>
+      <div className="w-full flex items-center justify-between">
+        <h1 className="text-2xl font-light tracking-wide">LeFocus</h1>
+        <button
+          className="text-sm font-light border border-black px-3 py-1 hover:bg-black hover:text-white transition-colors"
+          onClick={() => onNavigate("activities")}
+        >
+          Activities
+        </button>
+      </div>
 
       <TimerDisplay remainingMs={remaining_ms} isRunning={isRunning} />
 

@@ -7,7 +7,43 @@ export function useSegments(sessionId: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
 
-  const loadSegments = useCallback(async () => {
+  useEffect(() => {
+    if (!sessionId) {
+      setSegments([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadSegments = async () => {
+      try {
+        setLoading(true);
+        setError("");
+        const result = await invoke<Segment[]>("get_segments_for_session", {
+          sessionId,
+        });
+        if (!cancelled) {
+          setSegments(result);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(`Failed to load segments: ${err}`);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadSegments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
+
+  const reload = useCallback(async () => {
     if (!sessionId) {
       setSegments([]);
       return;
@@ -27,15 +63,11 @@ export function useSegments(sessionId: string | null) {
     }
   }, [sessionId]);
 
-  useEffect(() => {
-    loadSegments();
-  }, [loadSegments]);
-
   return {
     segments,
     loading,
     error,
-    reload: loadSegments,
+    reload,
   };
 }
 
@@ -50,6 +82,8 @@ export function useInterruptions(segmentId: string | null) {
       return;
     }
 
+    let cancelled = false;
+
     const loadInterruptions = async () => {
       try {
         setLoading(true);
@@ -58,15 +92,25 @@ export function useInterruptions(segmentId: string | null) {
           "get_interruptions_for_segment",
           { segmentId }
         );
-        setInterruptions(result);
+        if (!cancelled) {
+          setInterruptions(result);
+        }
       } catch (err) {
-        setError(`Failed to load interruptions: ${err}`);
+        if (!cancelled) {
+          setError(`Failed to load interruptions: ${err}`);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     loadInterruptions();
+
+    return () => {
+      cancelled = true;
+    };
   }, [segmentId]);
 
   return { interruptions, loading, error };

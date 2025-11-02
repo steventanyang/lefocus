@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::{
-    db::{models::{Interruption, Segment}, SessionInfo},
+    db::{models::{Interruption, Segment, SessionSummary}, SessionInfo},
     timer::{TimerController, TimerSnapshot, TimerState},
 };
 
@@ -58,4 +58,34 @@ pub async fn get_interruptions_for_segment(
     db.get_interruptions_for_segment(&segment_id)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn list_sessions(state: State<'_, AppState>) -> Result<Vec<SessionSummary>, String> {
+    let db = &state.db;
+    
+    // Get all sessions (completed + interrupted)
+    let sessions = db.list_sessions()
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    // For each session, get top 3 apps
+    let mut summaries = Vec::new();
+    for session in sessions {
+        let top_apps = db.get_top_apps_for_session(&session.id, 3)
+            .await
+            .map_err(|e| e.to_string())?;
+        
+        summaries.push(SessionSummary {
+            id: session.id,
+            started_at: session.started_at,
+            stopped_at: session.stopped_at,
+            status: session.status,
+            target_ms: session.target_ms,
+            active_ms: session.active_ms,
+            top_apps,
+        });
+    }
+    
+    Ok(summaries)
 }
