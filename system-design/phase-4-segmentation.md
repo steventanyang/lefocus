@@ -397,35 +397,7 @@ pub async fn end_session(&mut self) -> Result<()> {
 
 ### 2. Manual Regeneration (for interrupted sessions)
 
-```rust
-#[tauri::command]
-pub async fn regenerate_segments(
-    state: tauri::State<'_, AppState>,
-    session_id: String,
-) -> Result<Vec<Segment>, String> {
-    let db = &state.db;
-
-    // Delete existing segments
-    db.delete_segments_for_session(&session_id)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    // Re-run segmentation
-    let readings = db.get_context_readings_for_session(&session_id)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let config = SegmentationConfig::default();
-    let segments = segmentation::segment_session(readings, &config)
-        .map_err(|e| e.to_string())?;
-
-    db.insert_segments(&session_id, &segments)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(segments)
-}
-```
+**Note:** Manual regeneration was deprecated and removed to simplify UX. Segmentation now only runs automatically on session completion.
 
 ---
 
@@ -649,7 +621,6 @@ Phase 4 is complete when:
 - [x] Sandwich merge logic working correctly
 - [x] Confidence scoring implemented (4-factor)
 - [x] Segmentation runs automatically on session end
-- [x] Manual `regenerate_segments` command available for interrupted sessions
 - [x] UI displays timeline with confidence-based colored segment blocks
 - [x] UI displays top apps breakdown (instead of segment types)
 - [x] Clicking segment shows details modal with confidence breakdown and interruptions
@@ -659,6 +630,7 @@ Phase 4 is complete when:
 **Simplifications Made:**
 - Removed segment type classification (Stable/Transitioning/Distracted)
 - Removed transition detection logic (~100 lines)
+- Removed manual regenerate_segments command (UX simplification)
 - Confidence score is now the primary quality indicator
 - UI color-codes by confidence instead of segment type
 

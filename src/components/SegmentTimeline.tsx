@@ -1,20 +1,9 @@
 import { Segment } from "../types/segment";
+import { getAppColor, getConfidenceColor, getConfidenceLabel } from "../constants/appColors";
 
 interface SegmentTimelineProps {
   segments: Segment[];
   onSegmentClick: (segment: Segment) => void;
-}
-
-function getConfidenceColorClass(confidence: number): string {
-  if (confidence >= 0.7) return "bg-green-500"; // High confidence - focused work
-  if (confidence >= 0.4) return "bg-yellow-400"; // Medium confidence - mixed
-  return "bg-red-400"; // Low confidence - unclear
-}
-
-function getConfidenceLabel(confidence: number): string {
-  if (confidence >= 0.7) return "Focused";
-  if (confidence >= 0.4) return "Mixed";
-  return "Unclear";
 }
 
 function formatDuration(seconds: number): string {
@@ -55,13 +44,15 @@ export function SegmentTimeline({
       <div className="flex h-[60px] border border-black overflow-hidden bg-white">
         {segments.map((segment) => {
           const widthPercent = (segment.durationSecs / totalDuration) * 100;
+          const backgroundColor = getAppColor(segment.bundleId, segment.confidence);
           return (
             <button
               key={segment.id}
-              className={`border-none border-r border-black p-0 cursor-pointer transition-opacity duration-200 hover:opacity-70 last:border-r-0 ${getConfidenceColorClass(
-                segment.confidence
-              )}`}
-              style={{ width: `${widthPercent}%` }}
+              className="border-none border-r border-black p-0 cursor-pointer transition-opacity duration-200 hover:opacity-70 last:border-r-0"
+              style={{
+                width: `${widthPercent}%`,
+                backgroundColor
+              }}
               onClick={() => onSegmentClick(segment)}
               title={`${segment.appName || segment.bundleId} - ${formatDuration(
                 segment.durationSecs
@@ -73,15 +64,24 @@ export function SegmentTimeline({
 
       <div className="flex gap-8 justify-center pt-2">
         <div className="flex items-center gap-2">
-          <span className="w-4 h-4 border border-black bg-green-500" />
+          <span
+            className="w-4 h-4 border border-black"
+            style={{ backgroundColor: getConfidenceColor(0.8) }}
+          />
           <span className="text-sm font-light">Focused (≥70%)</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-4 h-4 border border-black bg-yellow-400" />
+          <span
+            className="w-4 h-4 border border-black"
+            style={{ backgroundColor: getConfidenceColor(0.55) }}
+          />
           <span className="text-sm font-light">Mixed (40-70%)</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-4 h-4 border border-black bg-red-400" />
+          <span
+            className="w-4 h-4 border border-black"
+            style={{ backgroundColor: getConfidenceColor(0.2) }}
+          />
           <span className="text-sm font-light">Unclear (&lt;40%)</span>
         </div>
       </div>

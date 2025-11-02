@@ -31,28 +31,10 @@ export function useSegments(sessionId: string | null) {
     loadSegments();
   }, [loadSegments]);
 
-  const regenerateSegments = useCallback(async () => {
-    if (!sessionId) return;
-
-    try {
-      setLoading(true);
-      setError("");
-      const result = await invoke<Segment[]>("regenerate_segments", {
-        sessionId,
-      });
-      setSegments(result);
-    } catch (err) {
-      setError(`Failed to regenerate segments: ${err}`);
-    } finally {
-      setLoading(false);
-    }
-  }, [sessionId]);
-
   return {
     segments,
     loading,
     error,
-    regenerateSegments,
     reload: loadSegments,
   };
 }

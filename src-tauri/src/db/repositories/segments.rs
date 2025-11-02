@@ -185,33 +185,6 @@ impl Database {
         .await
     }
 
-    /// Delete all segments and interruptions for a session (for regeneration).
-    pub async fn delete_segments_for_session(
-        &self,
-        session_id: &str,
-    ) -> Result<()> {
-        let session_id = session_id.to_string();
-        self.execute(move |conn| {
-            // Delete interruptions first (foreign key constraint)
-            conn.execute(
-                "DELETE FROM interruptions
-                WHERE segment_id IN (
-                    SELECT id FROM segments WHERE session_id = ?1
-                )",
-                params![session_id],
-            )?;
-
-            // Delete segments
-            conn.execute(
-                "DELETE FROM segments WHERE session_id = ?1",
-                params![session_id],
-            )?;
-
-            Ok(())
-        })
-        .await
-    }
-
     /// Get interruptions for a specific segment.
     pub async fn get_interruptions_for_segment(
         &self,
