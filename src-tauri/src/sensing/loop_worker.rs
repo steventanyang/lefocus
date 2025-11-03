@@ -22,11 +22,7 @@ const CAPTURE_TIMEOUT_SECS: u64 = 10;
 const OCR_COOLDOWN_SECS: u64 = 20;
 const PHASH_CHANGE_THRESHOLD: u32 = 8;
 
-pub async fn sensing_loop(
-    session_id: String,
-    db: Database,
-    cancel_token: CancellationToken,
-) {
+pub async fn sensing_loop(session_id: String, db: Database, cancel_token: CancellationToken) {
     let mut ticker = tokio::time::interval(Duration::from_secs(CAPTURE_INTERVAL_SECS));
     ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
@@ -70,7 +66,7 @@ async fn perform_capture(
     last_ocr_time: &mut Option<Instant>,
 ) -> Result<()> {
     let capture_start = Instant::now();
-    
+
     let metadata_start = Instant::now();
     let mut metadata = get_active_window_metadata()
         .map_err(|err| anyhow!("active window metadata failed: {err}"))?;
@@ -80,8 +76,11 @@ async fn perform_capture(
     // Record them as "System UI" instead of skipping to maintain timeline continuity
     let is_system_window = metadata.bundle_id.is_empty();
     if is_system_window {
-        log_info!("Detected system window (window_id={}), recording as System UI - took {}ms",
-            metadata.window_id, metadata_duration_ms);
+        log_info!(
+            "Detected system window (window_id={}), recording as System UI - took {}ms",
+            metadata.window_id,
+            metadata_duration_ms
+        );
         metadata.bundle_id = "com.apple.system".to_string();
         metadata.owner_name = "System UI".to_string();
 
@@ -102,20 +101,21 @@ async fn perform_capture(
             .context("failed to persist system window reading")?;
 
         let capture_duration_ms = capture_start.elapsed().as_millis();
-        log_info!("System window captured in {}ms (metadata only)", capture_duration_ms);
+        log_info!(
+            "System window captured in {}ms (metadata only)",
+            capture_duration_ms
+        );
         return Ok(());
     }
 
     let window_id = metadata.window_id;
     let screenshot_start = Instant::now();
-    let png_bytes = tokio::task::spawn_blocking(move || {
-        capture_screenshot(window_id)
-    })
-    .await
-    .context("screenshot capture worker join failed")?
-    .map_err(|err| anyhow!("screenshot capture failed: {err}"))?;
+    let png_bytes = tokio::task::spawn_blocking(move || capture_screenshot(window_id))
+        .await
+        .context("screenshot capture worker join failed")?
+        .map_err(|err| anyhow!("screenshot capture failed: {err}"))?;
     let screenshot_duration_ms = screenshot_start.elapsed().as_millis();
-    
+
     // Skip if screenshot is suspiciously small (likely error/blank)
     // TODO: remove
     if png_bytes.len() < 1000 {
@@ -124,9 +124,14 @@ async fn perform_capture(
             png_bytes.len(), metadata.window_id, metadata.bundle_id, capture_duration_ms, screenshot_duration_ms);
         return Ok(());
     }
-    
-    log_info!("Screenshot: {} bytes, window_id={}, bundle={}, screenshot_time={}ms", 
-        png_bytes.len(), metadata.window_id, metadata.bundle_id, screenshot_duration_ms);
+
+    log_info!(
+        "Screenshot: {} bytes, window_id={}, bundle={}, screenshot_time={}ms",
+        png_bytes.len(),
+        metadata.window_id,
+        metadata.bundle_id,
+        screenshot_duration_ms
+    );
 
     // Wrap PNG bytes in Arc to share between tasks without cloning the actual data
     let png_bytes_arc = Arc::new(png_bytes);
@@ -139,9 +144,13 @@ async fn perform_capture(
     .await
     .context("phash worker join failed")??;
     let phash_duration_ms = phash_start.elapsed().as_millis();
-    
+
     // TODO: remove
-    log_info!("Computed pHash: {}, total_phash_time={}ms", phash, phash_duration_ms);
+    log_info!(
+        "Computed pHash: {}, total_phash_time={}ms",
+        phash,
+        phash_duration_ms
+    );
 
     let should_run_ocr =
         should_perform_ocr(&phash, last_ocr_phash.as_deref(), last_ocr_time.as_ref());
@@ -157,8 +166,12 @@ async fn perform_capture(
         {
             Ok(result) => {
                 let ocr_duration_ms = ocr_start.elapsed().as_millis();
-                log_info!("OCR completed: {} words, confidence={:.2}, ocr_time={}ms", 
-                    result.word_count, result.confidence, ocr_duration_ms);
+                log_info!(
+                    "OCR completed: {} words, confidence={:.2}, ocr_time={}ms",
+                    result.word_count,
+                    result.confidence,
+                    ocr_duration_ms
+                );
                 *last_ocr_time = Some(Instant::now());
                 *last_ocr_phash = Some(phash.clone());
                 (

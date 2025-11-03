@@ -191,13 +191,21 @@ impl TimerController {
                     Ok(readings) => {
                         match segment_session(readings, &SegmentationConfig::default()) {
                             Ok((segments, interruptions)) => {
-                                if let Err(e) = db_clone.insert_segments(&session_id, &segments).await {
+                                if let Err(e) =
+                                    db_clone.insert_segments(&session_id, &segments).await
+                                {
                                     log::error!("Failed to insert segments: {}", e);
-                                } else if let Err(e) = db_clone.insert_interruptions(&interruptions).await {
+                                } else if let Err(e) =
+                                    db_clone.insert_interruptions(&interruptions).await
+                                {
                                     log::error!("Failed to insert interruptions: {}", e);
                                 } else {
-                                    info!("Created {} segments and {} interruptions for session {}", 
-                                          segments.len(), interruptions.len(), session_id);
+                                    info!(
+                                        "Created {} segments and {} interruptions for session {}",
+                                        segments.len(),
+                                        interruptions.len(),
+                                        session_id
+                                    );
                                 }
                             }
                             Err(e) => {

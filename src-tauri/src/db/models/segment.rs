@@ -51,4 +51,3 @@ impl Interruption {
         Duration::seconds(self.duration_secs)
     }
 }
-

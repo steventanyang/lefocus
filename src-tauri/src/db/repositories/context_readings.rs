@@ -93,12 +93,24 @@ impl Database {
                 let ocr_confidence: Option<f64> = row.get(10)?;
                 let ocr_word_count: Option<i64> = row.get(11)?;
 
-                let timestamp = parse_datetime(&timestamp_str, "timestamp")
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))))?;
-                let window_id_u32 = to_u64(window_id, "window_id")
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))))? as u32;
-                let bounds: WindowBounds = from_str(&bounds_json)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))))?;
+                let timestamp = parse_datetime(&timestamp_str, "timestamp").map_err(|e| {
+                    rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        e.to_string(),
+                    )))
+                })?;
+                let window_id_u32 = to_u64(window_id, "window_id").map_err(|e| {
+                    rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        e.to_string(),
+                    )))
+                })? as u32;
+                let bounds: WindowBounds = from_str(&bounds_json).map_err(|e| {
+                    rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        e.to_string(),
+                    )))
+                })?;
 
                 let window_metadata = WindowMetadata {
                     window_id: window_id_u32,
