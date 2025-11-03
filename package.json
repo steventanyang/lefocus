@@ -16,10 +16,15 @@
     "db:ver:custom": "bash scripts/db_user_version.sh --db \"$HOME/Library/Application Support/com.stevenyang.lefocus/lefocus.sqlite3\" print"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.90.6",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
+    "@types/react-color": "^3.0.13",
+    "perfect-freehand": "^1.2.2",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-color": "^2.19.3",
+    "react-dom": "^19.1.0",
+    "simplify-js": "^1.2.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.16",

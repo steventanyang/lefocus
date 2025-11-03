@@ -6,7 +6,7 @@ import { SessionResults } from "./SessionResults";
 import { Segment } from "../types/segment";
 
 interface ActivitiesViewProps {
-  onNavigate: (view: "timer" | "activities") => void;
+  onNavigate: (view: "timer" | "activities" | "settings") => void;
 }
 
 export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
@@ -82,12 +82,20 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-light tracking-wide">Activities</h1>
-        <button
-          className="text-sm font-light border border-black px-3 py-1 hover:bg-black hover:text-white transition-colors"
-          onClick={() => onNavigate("timer")}
-        >
-          ← Back to Timer
-        </button>
+        <div className="flex gap-2">
+          <button
+            className="text-sm font-light border border-black px-3 py-1 hover:bg-black hover:text-white transition-colors"
+            onClick={() => onNavigate("settings")}
+          >
+            Settings
+          </button>
+          <button
+            className="text-sm font-light border border-black px-3 py-1 hover:bg-black hover:text-white transition-colors"
+            onClick={() => onNavigate("timer")}
+          >
+            ← Back to Timer
+          </button>
+        </div>
       </div>
 
       {/* Loading state */}

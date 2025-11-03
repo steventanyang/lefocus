@@ -6,7 +6,7 @@ import { DurationPicker } from "./DurationPicker";
 import { SessionResults } from "./SessionResults";
 
 interface TimerViewProps {
-  onNavigate: (view: "timer" | "activities") => void;
+  onNavigate: (view: "timer" | "activities" | "settings") => void;
 }
 
 export function TimerView({ onNavigate }: TimerViewProps) {

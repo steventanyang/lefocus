@@ -1,5 +1,6 @@
 import { SegmentStats as Stats, Segment } from "../types/segment";
-import { getAppColor } from "../constants/appColors";
+import { getAppColor } from "../lib/appColors";
+import { AppLogo } from "./AppLogo";
 
 interface SegmentStatsProps {
   stats: Stats;
@@ -70,7 +71,10 @@ export function SegmentStats({ stats, segments, onSegmentClick }: SegmentStatsPr
                 />
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm font-normal">{app.appName || app.bundleId}</span>
+                <div className="flex items-center gap-2">
+                  <AppLogo bundleId={app.bundleId} appName={app.appName} size={24} />
+                  <span className="text-sm font-normal">{app.appName || app.bundleId}</span>
+                </div>
                 <span className="text-sm font-semibold tabular-nums">
                   {formatDuration(app.durationSecs)} ({app.percentage.toFixed(0)}%)
                 </span>

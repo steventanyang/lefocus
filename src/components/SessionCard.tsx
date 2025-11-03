@@ -1,6 +1,7 @@
 import { SessionSummary } from "../types/timer";
 import { Segment } from "../types/segment";
-import { getAppColor } from "../constants/appColors";
+import { getAppColor } from "../lib/appColors";
+import { AppLogo } from "./AppLogo";
 
 interface SessionCardProps {
   session: SessionSummary;
@@ -151,10 +152,7 @@ export function SessionCard({ session, segments, onClick }: SessionCardProps) {
           {session.topApps.map((app) => (
             <div key={app.bundleId} className="flex justify-between items-center gap-4">
               <div className="flex items-center gap-2 min-w-0 flex-1">
-                <div
-                  className="w-3 h-3 border border-black flex-shrink-0"
-                  style={{ backgroundColor: getAppColor(app.bundleId) }}
-                />
+                <AppLogo bundleId={app.bundleId} appName={app.appName} size={12} />
                 <span className="text-sm font-normal truncate">
                   {app.appName || app.bundleId}
                 </span>
