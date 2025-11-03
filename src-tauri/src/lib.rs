@@ -1,3 +1,4 @@
+mod app_config_commands;
 mod audio;
 mod db;
 mod macos_bridge;
@@ -6,6 +7,10 @@ mod sensing;
 mod timer;
 mod utils;
 
+use app_config_commands::{
+    delete_app_config, get_all_app_configs, get_all_detected_apps, get_app_config,
+    upsert_app_config,
+};
 use audio::AudioEngineHandle;
 use chrono::Utc;
 use db::Database;
@@ -184,6 +189,11 @@ pub fn run() {
             get_segments_for_session,
             get_interruptions_for_segment,
             list_sessions,
+            get_app_config,
+            get_all_app_configs,
+            upsert_app_config,
+            delete_app_config,
+            get_all_detected_apps,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
