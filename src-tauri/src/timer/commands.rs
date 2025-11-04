@@ -21,19 +21,12 @@ pub async fn get_timer_state(state: State<'_, AppState>) -> Result<TimerSnapshot
 pub async fn start_timer(
     state: State<'_, AppState>,
     target_ms: u64,
-    mode: Option<String>,
+    mode: Option<TimerMode>,
 ) -> Result<TimerState, String> {
     let controller = controller_from_state(&state);
 
-    // Parse mode from string
-    let timer_mode = match mode.as_deref() {
-        Some("stopwatch") => Some(TimerMode::Stopwatch),
-        Some("countdown") => Some(TimerMode::Countdown),
-        _ => None,
-    };
-
     controller
-        .start_timer(target_ms, timer_mode)
+        .start_timer(target_ms, mode)
         .await
         .map_err(|e| e.to_string())
 }

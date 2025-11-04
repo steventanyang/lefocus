@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTimer } from "@/hooks/useTimer";
 import { useEndTimerMutation } from "@/hooks/queries";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { TimerDisplay } from "./TimerDisplay";
 import { TimerControls } from "./TimerControls";
 import { DurationPicker } from "./DurationPicker";
@@ -23,10 +24,32 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     null
   );
 
+  // Calculate state-dependent values (handle null case)
+  const isIdle = timerState?.state.status === "idle" || false;
+  const startDisabled =
+    selectedMode === "countdown" && selectedDuration === null;
+
+  const handleStart = () => {
+    if (timerState) {
+      startTimer(selectedDuration, selectedMode);
+    }
+  };
+
+  // Set up keyboard shortcuts (must be called unconditionally)
+  useKeyboardShortcuts({
+    onStart: handleStart,
+    onNavigateActivities: () => onNavigate("activities"),
+    onSwitchMode: setSelectedMode,
+    isIdle,
+    startDisabled,
+  });
+
   if (!timerState) {
     return (
       <div className="w-full max-w-md flex flex-col items-center gap-12">
-        <div className="text-base font-light text-center p-8">Loading timer...</div>
+        <div className="text-base font-light text-center p-8">
+          Loading timer...
+        </div>
       </div>
     );
   }
@@ -44,10 +67,6 @@ export function TimerView({ onNavigate }: TimerViewProps) {
 
   const { state, remaining_ms } = timerState;
   const isRunning = state.status === "running";
-
-  const handleStart = () => {
-    startTimer(selectedDuration, selectedMode);
-  };
 
   const handleEnd = async () => {
     // Use mutation to end timer - automatically invalidates sessions cache
@@ -95,11 +114,17 @@ export function TimerView({ onNavigate }: TimerViewProps) {
         </div>
       </div>
 
-      <TimerDisplay remainingMs={remaining_ms} isRunning={isRunning} mode={state.mode} />
+      <TimerDisplay
+        remainingMs={remaining_ms}
+        isRunning={isRunning}
+        mode={state.mode}
+      />
 
       {state.status === "idle" && selectedMode === "countdown" && (
         <div className="flex flex-col gap-4 items-center w-full">
-          <label className="text-sm font-light tracking-wide uppercase">Duration</label>
+          <label className="text-sm font-light tracking-wide uppercase">
+            Duration
+          </label>
           <DurationPicker
             selectedDuration={selectedDuration}
             onSelect={setSelectedDuration}
@@ -113,7 +138,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
         onStart={handleStart}
         onEnd={handleEnd}
         onCancel={cancelTimer}
-        startDisabled={selectedMode === "countdown" && selectedDuration === null}
+        startDisabled={startDisabled}
       />
 
       {error && (

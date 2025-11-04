@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useSessionsList, useSegmentsForSessions } from "@/hooks/queries";
+import { useNavigationShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionCard } from "@/components/session/SessionCard";
 import { SessionResults } from "@/components/session/SessionResults";
 import type { SessionSummary } from "@/types/timer";
@@ -16,6 +17,9 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
 
   // Fetch segments for all sessions in parallel with automatic caching and deduplication
   const { segmentsBySession } = useSegmentsForSessions(sessions);
+
+  // Set up keyboard shortcuts
+  useNavigationShortcuts(() => onNavigate("timer"));
 
   const buttonPrimaryClass =
     "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-black hover:text-white";
