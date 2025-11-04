@@ -4,9 +4,8 @@ import { useEndTimerMutation } from "@/hooks/queries";
 import { TimerDisplay } from "./TimerDisplay";
 import { TimerControls } from "./TimerControls";
 import { DurationPicker } from "./DurationPicker";
-import { ModeSelector } from "./ModeSelector";
 import { SessionResults } from "@/components/session/SessionResults";
-import type { TimerMode } from "@/types/timer";
+import type { SessionInfo, TimerMode } from "@/types/timer";
 
 interface TimerViewProps {
   onNavigate: (view: "timer" | "activities") => void;
@@ -20,7 +19,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     25 * 60 * 1000
   ); // Default 25 min
   const [selectedMode, setSelectedMode] = useState<TimerMode>("countdown");
-  const [completedSessionId, setCompletedSessionId] = useState<string | null>(
+  const [completedSession, setCompletedSession] = useState<SessionInfo | null>(
     null
   );
 
@@ -33,11 +32,12 @@ export function TimerView({ onNavigate }: TimerViewProps) {
   }
 
   // Show session results if we have a completed session
-  if (completedSessionId) {
+  if (completedSession) {
     return (
       <SessionResults
-        sessionId={completedSessionId}
-        onBack={() => setCompletedSessionId(null)}
+        sessionId={completedSession.id}
+        session={completedSession}
+        onBack={() => setCompletedSession(null)}
       />
     );
   }
@@ -53,7 +53,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     // Use mutation to end timer - automatically invalidates sessions cache
     const sessionInfo = await endTimerMutation.mutateAsync();
     if (sessionInfo) {
-      setCompletedSessionId(sessionInfo.id);
+      setCompletedSession(sessionInfo);
     }
   };
 

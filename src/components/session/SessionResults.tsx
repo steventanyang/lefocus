@@ -4,18 +4,41 @@ import { useSegments } from "@/hooks/queries";
 import { calculateSegmentStats } from "@/hooks/useSegments";
 import { SegmentStats } from "@/components/segments/SegmentStats";
 import { SegmentDetailsModal } from "@/components/segments/SegmentDetailsModal";
+import type { SessionStatus } from "@/types/timer";
+
+type SessionDescriptor = {
+  id: string;
+  startedAt: string;
+  stoppedAt: string | null;
+  status: SessionStatus;
+  targetMs: number;
+  activeMs: number;
+};
 
 interface SessionResultsProps {
   sessionId: string;
+  session?: SessionDescriptor | null;
   onBack: () => void;
   backButtonText?: string;
 }
 
-export function SessionResults({ sessionId, onBack, backButtonText = "Back to Timer" }: SessionResultsProps) {
+export function SessionResults({
+  sessionId,
+  session,
+  onBack,
+  backButtonText = "Back to Timer",
+}: SessionResultsProps) {
   const { data: segments = [], isLoading: loading, error } = useSegments(sessionId);
   const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
 
   const stats = calculateSegmentStats(segments);
+  const sessionDurationSecs =
+    typeof session?.activeMs === "number"
+      ? Math.max(0, Math.floor(session.activeMs / 1000))
+      : undefined;
+  const statsWithDurationOverride = sessionDurationSecs != null
+    ? { ...stats, totalDurationSecs: sessionDurationSecs }
+    : stats;
 
   const buttonPrimaryClass = "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-black hover:text-white";
 
@@ -56,7 +79,7 @@ export function SessionResults({ sessionId, onBack, backButtonText = "Back to Ti
       ) : (
         <div className="flex flex-col gap-8">
           <SegmentStats
-            stats={stats}
+            stats={statsWithDurationOverride}
             segments={segments}
             onSegmentClick={setSelectedSegment}
           />

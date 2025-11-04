@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useSessionsList, useSegmentsForSessions } from "@/hooks/queries";
 import { SessionCard } from "@/components/session/SessionCard";
 import { SessionResults } from "@/components/session/SessionResults";
+import type { SessionSummary } from "@/types/timer";
 
 interface ActivitiesViewProps {
   onNavigate: (view: "timer" | "activities") => void;
@@ -11,9 +12,7 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
   // Fetch sessions list with automatic caching
   const { data: sessions = [], isLoading: loading, error } = useSessionsList();
 
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
-    null
-  );
+  const [selectedSession, setSelectedSession] = useState<SessionSummary | null>(null);
 
   // Fetch segments for all sessions in parallel with automatic caching and deduplication
   const { segmentsBySession } = useSegmentsForSessions(sessions);
@@ -22,11 +21,12 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
     "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-black hover:text-white";
 
   // Show expanded session modal
-  if (selectedSessionId) {
+  if (selectedSession) {
     return (
       <SessionResults
-        sessionId={selectedSessionId}
-        onBack={() => setSelectedSessionId(null)}
+        sessionId={selectedSession.id}
+        session={selectedSession}
+        onBack={() => setSelectedSession(null)}
         backButtonText="Back to Activities"
       />
     );
@@ -83,7 +83,7 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
               key={session.id}
               session={session}
               segments={segmentsBySession[session.id]}
-              onClick={setSelectedSessionId}
+              onClick={setSelectedSession}
             />
           ))}
         </div>
