@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTimer } from "@/hooks/useTimer";
+import { useEndTimerMutation } from "@/hooks/queries";
 import { TimerDisplay } from "./TimerDisplay";
 import { TimerControls } from "./TimerControls";
 import { DurationPicker } from "./DurationPicker";
@@ -10,7 +11,9 @@ interface TimerViewProps {
 }
 
 export function TimerView({ onNavigate }: TimerViewProps) {
-  const { timerState, error, startTimer, endTimer, cancelTimer } = useTimer();
+  const { timerState, error, startTimer, cancelTimer } = useTimer();
+  const endTimerMutation = useEndTimerMutation();
+
   const [selectedDuration, setSelectedDuration] = useState<number>(
     25 * 60 * 1000
   ); // Default 25 min
@@ -44,7 +47,8 @@ export function TimerView({ onNavigate }: TimerViewProps) {
   };
 
   const handleEnd = async () => {
-    const sessionInfo = await endTimer();
+    // Use mutation to end timer - automatically invalidates sessions cache
+    const sessionInfo = await endTimerMutation.mutateAsync();
     if (sessionInfo) {
       setCompletedSessionId(sessionInfo.id);
     }

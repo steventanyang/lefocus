@@ -646,48 +646,61 @@ app.emit_all("timer-heartbeat", TimerHeartbeatEvent {
 
 ```
 src/
-├── App.tsx                     # Main app, routes to TimerView
+├── App.tsx                     # Main app, routes between views
+├── main.tsx                    # App entry, wraps with QueryProvider
+├── providers/
+│   └── QueryProvider.tsx       # TanStack Query setup
 ├── components/
-│   ├── TimerView.tsx           # NEW: Main timer UI (Phase 2)
-│   ├── TimerDisplay.tsx        # NEW: MM:SS countdown display
-│   ├── TimerControls.tsx       # NEW: Start/End buttons
-│   ├── DurationPicker.tsx      # NEW: Preset duration selector
-│   └── archived/               # OLD: Phase 1 components
-│       ├── AudioView.tsx       # Keep for reference
-│       └── TestView.tsx        # Keep for reference
-└── types/
-    └── timer.ts                # NEW: TypeScript interfaces
+│   ├── timer/                  # Timer UI components
+│   │   ├── TimerView.tsx       # Main timer component
+│   │   ├── TimerDisplay.tsx    # MM:SS countdown display
+│   │   ├── TimerControls.tsx   # Start/End/Cancel buttons
+│   │   └── DurationPicker.tsx  # Preset duration selector
+│   ├── activities/             # Activities/history view
+│   │   └── ActivitiesView.tsx  # Session list (Phase 5)
+│   ├── session/                # Session results
+│   │   ├── SessionResults.tsx  # Post-session summary (Phase 5)
+│   │   └── SessionCard.tsx     # Session card in list (Phase 5)
+│   ├── segments/               # Segment visualization (Phase 4+)
+│   │   ├── SegmentStats.tsx    # Timeline & stats
+│   │   ├── SegmentDetailsModal.tsx
+│   │   └── SegmentTimeline.tsx
+│   └── archived/               # Phase 1 test components
+│       ├── AudioView.tsx
+│       └── TestView.tsx
+├── hooks/
+│   ├── queries.ts              # TanStack Query hooks
+│   ├── useTimer.ts             # Timer state (real-time, not cached)
+│   ├── useTimerSnapshot.ts     # Timer event listener
+│   └── useSmoothCountdown.ts   # Animation hook
+├── types/
+│   ├── timer.ts                # Timer/session TypeScript types
+│   └── segment.ts              # Segment types (Phase 4)
+└── constants/
+    └── appColors.ts            # App color mapping (Phase 4)
 ```
 
 ### 7.2 Requirements & Behavior
 
 **TimerView Component:**
 
-- Fetch initial timer state on mount via `get_timer_state` command
-- Listen to `timer-state-changed` events and update React state
-- Listen to `timer-heartbeat` events (every 10s) to resync display
-- When status=Running: Run local 250ms interval to decrement `displayMs` smoothly
-- Show `DurationPicker` only when status=Idle
-- Show `TimerDisplay` always (displays MM:SS countdown)
-- Show `TimerControls` always (buttons enabled/disabled based on status)
-- Handle commands: `start_timer`, `end_timer`, `cancel_timer`
+- Uses `useTimer()` hook for real-time timer state (not cached - requires event listeners)
+- Uses `useEndTimerMutation()` from TanStack Query for session completion (auto-invalidates sessions cache)
+- Shows `DurationPicker` when status=Idle, `TimerDisplay` and `TimerControls` always
+- Renders `SessionResults` on completion (fetches segments via TanStack Query)
 
-**TimerDisplay Component:**
+**Data Fetching Strategy:**
 
-- Format `remainingMs` as MM:SS (zero-padded)
-
-**DurationPicker Component:**
-
-- Show three preset buttons: 15 min, 25 min, 45 min
-- Highlight selected duration
-- Call `onSelect` with milliseconds when clicked
+- **Timer state:** Real-time via Tauri events (`useTimerSnapshot` + `useTimer`), not cached
+- **Sessions list:** TanStack Query (`useSessionsList`) - cached 60s, auto-refetches on window focus
+- **Segments:** TanStack Query (`useSegments`) - cached 30s, parallel fetching with deduplication
+- **Mutations:** `useEndTimerMutation` auto-invalidates `['sessions']` query on success
 
 **Key Implementation Notes:**
 
-- Use `@tauri-apps/api/core` for `invoke()`
-- Use `@tauri-apps/api/event` for `listen()`
-- Clean up event listeners in useEffect return functions
-- Local animation interval only runs when status=Running
+- TanStack Query handles caching, background refetching, request deduplication
+- Timer mutations automatically invalidate relevant queries
+- Path aliases (`@/`) used throughout for clean imports
 
 ---
 

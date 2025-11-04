@@ -1,67 +1,22 @@
-import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { useSessionsList } from "@/hooks/useSessionsList";
+import { useState } from "react";
+import { useSessionsList, useSegmentsForSessions } from "@/hooks/queries";
 import { SessionCard } from "@/components/session/SessionCard";
 import { SessionResults } from "@/components/session/SessionResults";
-import { Segment } from "@/types/segment";
 
 interface ActivitiesViewProps {
   onNavigate: (view: "timer" | "activities") => void;
 }
 
 export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
-  const { sessions, loading, error } = useSessionsList();
+  // Fetch sessions list with automatic caching
+  const { data: sessions = [], isLoading: loading, error } = useSessionsList();
+
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     null
   );
-  const [segmentsBySession, setSegmentsBySession] = useState<
-    Record<string, Segment[]>
-  >({});
 
-  // Fetch segments for all sessions
-  useEffect(() => {
-    if (sessions.length === 0) {
-      setSegmentsBySession({});
-      return;
-    }
-
-    let cancelled = false;
-
-    const fetchAllSegments = async () => {
-      const segmentsMap: Record<string, Segment[]> = {};
-
-      // Fetch segments for all sessions in parallel
-      await Promise.all(
-        sessions.map(async (session) => {
-          try {
-            const segments = await invoke<Segment[]>(
-              "get_segments_for_session",
-              { sessionId: session.id }
-            );
-            if (!cancelled) {
-              segmentsMap[session.id] = segments || [];
-            }
-          } catch (err) {
-            // If segments fail to load, just leave empty array
-            if (!cancelled) {
-              console.error(`Failed to load segments for session ${session.id}:`, err);
-              segmentsMap[session.id] = [];
-            }
-          }
-        })
-      );
-
-      if (!cancelled) {
-        setSegmentsBySession(segmentsMap);
-      }
-    };
-
-    fetchAllSegments();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [sessions]);
+  // Fetch segments for all sessions in parallel with automatic caching and deduplication
+  const { segmentsBySession } = useSegmentsForSessions(sessions);
 
   const buttonPrimaryClass =
     "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-black hover:text-white";
@@ -100,7 +55,7 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
       {/* Error state */}
       {error && (
         <div className="text-sm font-normal text-center p-4 border border-black bg-transparent max-w-full">
-          {error}
+          {error instanceof Error ? error.message : "Failed to load sessions"}
         </div>
       )}
 

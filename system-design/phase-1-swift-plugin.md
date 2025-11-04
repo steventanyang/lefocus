@@ -927,89 +927,9 @@ cargo build
 ls -lh .swift-build/macos-sensing/release/libMacOSSensing.dylib
 ```
 
-### 8.2 Test UI (`src/App.tsx`)
+### 8.2 Test UI
 
-```typescript
-import { invoke } from '@tauri-apps/api/core';
-import { useState } from 'react';
-
-function App() {
-  const [windowData, setWindowData] = useState(null);
-  const [screenshotStatus, setScreenshotStatus] = useState('');
-  const [ocrResult, setOcrResult] = useState(null);
-
-  const testGetWindow = async () => {
-    try {
-      const result = await invoke('test_get_window');
-      setWindowData(result);
-      console.log('Window metadata:', result);
-    } catch (error) {
-      console.error('Error:', error);
-      alert('Error: ' + error);
-    }
-  };
-
-  const testCaptureScreenshot = async () => {
-    if (!windowData) {
-      alert('Get window metadata first');
-      return;
-    }
-    try {
-      const result = await invoke('test_capture_screenshot', {
-        windowId: windowData.window_id
-      });
-      setScreenshotStatus(result);
-      console.log(result);
-    } catch (error) {
-      console.error('Error:', error);
-      alert('Error: ' + error);
-    }
-  };
-
-  const testOCR = async () => {
-    try {
-      const result = await invoke('test_run_ocr', {
-        imagePath: '/tmp/lefocus_test_screenshot.png'
-      });
-      setOcrResult(result);
-      console.log('OCR result:', result);
-    } catch (error) {
-      console.error('Error:', error);
-      alert('Error: ' + error);
-    }
-  };
-
-  return (
-    <div className="container">
-      <h1>Phase 1: Swift Plugin Test (FFI)</h1>
-
-      <div className="test-section">
-        <h2>1. Get Active Window</h2>
-        <button onClick={testGetWindow}>Test Get Window</button>
-        {windowData && (
-          <pre>{JSON.stringify(windowData, null, 2)}</pre>
-        )}
-      </div>
-
-      <div className="test-section">
-        <h2>2. Capture Screenshot</h2>
-        <button onClick={testCaptureScreenshot}>Test Capture</button>
-        <p>{screenshotStatus}</p>
-      </div>
-
-      <div className="test-section">
-        <h2>3. Run OCR</h2>
-        <button onClick={testOCR}>Test OCR</button>
-        {ocrResult && (
-          <pre>{JSON.stringify(ocrResult, null, 2)}</pre>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export default App;
-```
+**Note:** Phase 1 test UI archived to `src/components/archived/TestView.tsx` after Phase 2 completion. Main app now uses production timer UI in `src/components/timer/TimerView.tsx`.
 
 ### 8.3 Manual Testing Workflow
 

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Segment } from "@/types/segment";
-import { useSegments, calculateSegmentStats } from "@/hooks/useSegments";
+import { useSegments } from "@/hooks/queries";
+import { calculateSegmentStats } from "@/hooks/useSegments";
 import { SegmentStats } from "@/components/segments/SegmentStats";
 import { SegmentDetailsModal } from "@/components/segments/SegmentDetailsModal";
 
@@ -11,7 +12,7 @@ interface SessionResultsProps {
 }
 
 export function SessionResults({ sessionId, onBack, backButtonText = "Back to Timer" }: SessionResultsProps) {
-  const { segments, loading, error } = useSegments(sessionId);
+  const { data: segments = [], isLoading: loading, error } = useSegments(sessionId);
   const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
 
   const stats = calculateSegmentStats(segments);
@@ -29,7 +30,9 @@ export function SessionResults({ sessionId, onBack, backButtonText = "Back to Ti
   if (error) {
     return (
       <div className="w-full max-w-3xl flex flex-col gap-8">
-        <div className="text-sm font-normal text-center p-4 border border-black bg-transparent max-w-full">{error}</div>
+        <div className="text-sm font-normal text-center p-4 border border-black bg-transparent max-w-full">
+          {error instanceof Error ? error.message : "Failed to load segments"}
+        </div>
         <button className={buttonPrimaryClass} onClick={onBack}>
           {backButtonText}
         </button>
