@@ -4,7 +4,9 @@ import { useEndTimerMutation } from "@/hooks/queries";
 import { TimerDisplay } from "./TimerDisplay";
 import { TimerControls } from "./TimerControls";
 import { DurationPicker } from "./DurationPicker";
+import { ModeSelector } from "./ModeSelector";
 import { SessionResults } from "@/components/session/SessionResults";
+import type { TimerMode } from "@/types/timer";
 
 interface TimerViewProps {
   onNavigate: (view: "timer" | "activities") => void;
@@ -17,6 +19,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
   const [selectedDuration, setSelectedDuration] = useState<number>(
     25 * 60 * 1000
   ); // Default 25 min
+  const [selectedMode, setSelectedMode] = useState<TimerMode>("countdown");
   const [completedSessionId, setCompletedSessionId] = useState<string | null>(
     null
   );
@@ -43,7 +46,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
   const isRunning = state.status === "running";
 
   const handleStart = () => {
-    startTimer(selectedDuration);
+    startTimer(selectedDuration, selectedMode);
   };
 
   const handleEnd = async () => {
@@ -58,17 +61,43 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     <div className="w-full max-w-md flex flex-col items-center gap-12">
       <div className="w-full flex items-center justify-between">
         <h1 className="text-2xl font-light tracking-wide">LeFocus</h1>
-        <button
-          className="text-sm font-light border border-black px-3 py-1 hover:bg-black hover:text-white transition-colors"
-          onClick={() => onNavigate("activities")}
-        >
-          Activities
-        </button>
+        <div className="flex gap-2">
+          {state.status === "idle" && (
+            <>
+              <button
+                onClick={() => setSelectedMode("countdown")}
+                className={
+                  selectedMode === "countdown"
+                    ? "text-sm font-semibold border border-black px-3 py-1 bg-black text-white transition-colors"
+                    : "text-sm font-light border border-black px-3 py-1 hover:bg-black hover:text-white transition-colors"
+                }
+              >
+                Timer
+              </button>
+              <button
+                onClick={() => setSelectedMode("stopwatch")}
+                className={
+                  selectedMode === "stopwatch"
+                    ? "text-sm font-semibold border border-black px-3 py-1 bg-black text-white transition-colors"
+                    : "text-sm font-light border border-black px-3 py-1 hover:bg-black hover:text-white transition-colors"
+                }
+              >
+                Stopwatch
+              </button>
+            </>
+          )}
+          <button
+            className="text-sm font-light border border-black px-3 py-1 hover:bg-black hover:text-white transition-colors"
+            onClick={() => onNavigate("activities")}
+          >
+            Activities
+          </button>
+        </div>
       </div>
 
-      <TimerDisplay remainingMs={remaining_ms} isRunning={isRunning} />
+      <TimerDisplay remainingMs={remaining_ms} isRunning={isRunning} mode={state.mode} />
 
-      {state.status === "idle" && (
+      {state.status === "idle" && selectedMode === "countdown" && (
         <div className="flex flex-col gap-4 items-center w-full">
           <label className="text-sm font-light tracking-wide uppercase">Duration</label>
           <DurationPicker
@@ -80,10 +109,11 @@ export function TimerView({ onNavigate }: TimerViewProps) {
 
       <TimerControls
         status={state.status}
+        mode={state.mode}
         onStart={handleStart}
         onEnd={handleEnd}
         onCancel={cancelTimer}
-        startDisabled={selectedDuration === null}
+        startDisabled={selectedMode === "countdown" && selectedDuration === null}
       />
 
       {error && (

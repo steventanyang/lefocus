@@ -1,7 +1,8 @@
-import type { TimerStatus } from "@/types/timer";
+import type { TimerStatus, TimerMode } from "@/types/timer";
 
 interface TimerControlsProps {
   status: TimerStatus;
+  mode: TimerMode;
   onStart: () => void;
   onEnd: () => void;
   onCancel: () => void;
@@ -10,6 +11,7 @@ interface TimerControlsProps {
 
 export function TimerControls({
   status,
+  mode,
   onStart,
   onEnd,
   onCancel,
@@ -30,6 +32,21 @@ export function TimerControls({
   }
 
   if (status === "running") {
+    // In stopwatch mode, show both End and Cancel buttons
+    if (mode === "stopwatch") {
+      return (
+        <div className="flex gap-4 justify-center">
+          <button onClick={onEnd} className={primaryClass}>
+            End
+          </button>
+          <button onClick={onCancel} className={secondaryClass}>
+            Cancel
+          </button>
+        </div>
+      );
+    }
+
+    // In countdown mode, only show Cancel
     return (
       <div className="flex gap-4 justify-center">
         <button onClick={onCancel} className={secondaryClass}>

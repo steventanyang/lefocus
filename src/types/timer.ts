@@ -2,10 +2,13 @@
 
 export type TimerStatus = "idle" | "running" | "stopped";
 
+export type TimerMode = "countdown" | "stopwatch";
+
 export type SessionStatus = "active" | "completed" | "interrupted";
 
 export interface TimerState {
   status: TimerStatus;
+  mode: TimerMode;
   session_id: string | null;
   target_ms: number;
   active_ms: number;

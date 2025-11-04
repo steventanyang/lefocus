@@ -15,7 +15,7 @@ use crate::{
     sensing::SensingController,
 };
 
-use super::{TimerState, TimerStatus};
+use super::{TimerMode, TimerState, TimerStatus};
 
 use tauri::{AppHandle, Emitter};
 
@@ -87,10 +87,20 @@ impl TimerController {
         }
     }
 
-    pub async fn start_timer(&self, target_ms: u64) -> Result<TimerState> {
-        if target_ms == 0 {
-            return Err(anyhow!("target_ms must be greater than zero"));
-        }
+    pub async fn start_timer(&self, target_ms: u64, mode: Option<TimerMode>) -> Result<TimerState> {
+        let mode = mode.unwrap_or(TimerMode::Countdown);
+
+        // For stopwatch mode, use i64::MAX as target (essentially unlimited, but SQLite-safe)
+        // SQLite INTEGER max is 2^63 - 1 = 9,223,372,036,854,775,807
+        let actual_target_ms = match mode {
+            TimerMode::Countdown => {
+                if target_ms == 0 {
+                    return Err(anyhow!("target_ms must be greater than zero for countdown mode"));
+                }
+                target_ms
+            }
+            TimerMode::Stopwatch => i64::MAX as u64,
+        };
 
         {
             let state = self.state.lock().await;
@@ -107,7 +117,7 @@ impl TimerController {
             started_at,
             stopped_at: None,
             status: SessionStatus::Running,
-            target_ms,
+            target_ms: actual_target_ms,
             active_ms: 0,
             created_at: started_at,
             updated_at: started_at,
@@ -115,9 +125,10 @@ impl TimerController {
 
         self.db.insert_session(&session).await?;
 
+        // Initialize state without the anchor yet
         {
             let mut state = self.state.lock().await;
-            state.begin_session(session_id.clone(), target_ms, started_at, Instant::now());
+            state.begin_session(session_id.clone(), actual_target_ms, mode, started_at, Instant::now());
         }
 
         self.sensing
@@ -127,6 +138,15 @@ impl TimerController {
             .await?;
 
         self.spawn_ticker().await;
+
+        // Reset the anchor NOW, right before emitting, to avoid accumulated time
+        {
+            let mut state = self.state.lock().await;
+            state.running_anchor = Some(Instant::now());
+            state.active_ms_baseline = 0;
+            state.active_ms = 0;
+        }
+
         self.emit_state_changed().await?;
 
         Ok(self.get_state().await)
@@ -286,7 +306,8 @@ impl TimerController {
                     (snapshot, remaining)
                 };
 
-                if remaining <= 0 {
+                // Only auto-stop in countdown mode when timer reaches 0
+                if remaining <= 0 && snapshot.mode == TimerMode::Countdown {
                     let final_snapshot = {
                         let mut guard = state.lock().await;
                         guard.sync_active_from_anchor();

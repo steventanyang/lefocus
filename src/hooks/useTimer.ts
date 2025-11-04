@@ -1,15 +1,15 @@
 import { useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTimerSnapshot } from "./useTimerSnapshot";
-import { SessionInfo } from "@/types/timer";
+import type { SessionInfo, TimerMode } from "@/types/timer";
 
 export function useTimer() {
   const { timerState, error, setError } = useTimerSnapshot();
 
-  const startTimer = useCallback(async (durationMs: number) => {
+  const startTimer = useCallback(async (durationMs: number, mode: TimerMode) => {
     try {
       setError("");
-      await invoke("start_timer", { targetMs: durationMs });
+      await invoke("start_timer", { targetMs: durationMs, mode });
     } catch (err) {
       setError(`Failed to start timer: ${err}`);
     }

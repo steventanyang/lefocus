@@ -1,12 +1,14 @@
 import { useSmoothCountdown } from "@/hooks/useSmoothCountdown";
+import type { TimerMode } from "@/types/timer";
 
 interface TimerDisplayProps {
   remainingMs: number;
   isRunning: boolean;
+  mode: TimerMode;
 }
 
-export function TimerDisplay({ remainingMs, isRunning }: TimerDisplayProps) {
-  const displayMs = useSmoothCountdown(remainingMs, isRunning);
+export function TimerDisplay({ remainingMs, isRunning, mode }: TimerDisplayProps) {
+  const displayMs = useSmoothCountdown(remainingMs, isRunning, mode === "stopwatch");
 
   const formatTime = (ms: number): string => {
     const totalSeconds = Math.max(0, Math.floor(ms / 1000));

@@ -17,6 +17,7 @@ function snapshotsEqual(a: TimerSnapshot | null, b: TimerSnapshot | null) {
   return (
     a.remaining_ms === b.remaining_ms &&
     stateA.status === stateB.status &&
+    stateA.mode === stateB.mode &&
     stateA.session_id === stateB.session_id &&
     stateA.target_ms === stateB.target_ms &&
     stateA.active_ms === stateB.active_ms &&
