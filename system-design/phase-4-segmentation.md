@@ -21,7 +21,7 @@ Phase 4 implements the **segmentation algorithm** that transforms raw `context_r
 - **Deterministic:** Same readings always produce same segments
 - **Fast:** Runs in <100ms for typical 25-min session (~300 readings)
 - **Simple:** No artificial segment type categories - confidence score indicates quality
-- **On-demand:** Computed when session ends (not live during session)
+- **On-demand:** Computed when session ends and awaited before the UI receives completion (summary must have data immediately)
 
 ---
 
@@ -69,6 +69,8 @@ Phase 4 implements the **segmentation algorithm** that transforms raw `context_r
 │              Vec<Segment>                                       │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+The three pipeline steps run synchronously inside `TimerController::end_timer`; completion waits for segments + interruptions to persist so the React summary view can render immediately after the end button returns.
 
 ### File Structure
 
