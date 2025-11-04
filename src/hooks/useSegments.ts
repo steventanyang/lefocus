@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Segment, Interruption, SegmentStats } from "../types/segment";
+import { Segment, Interruption, SegmentStats } from "@/types/segment";
 
 export function useSegments(sessionId: string | null) {
   const [segments, setSegments] = useState<Segment[]>([]);

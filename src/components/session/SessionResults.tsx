@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Segment } from "../types/segment";
-import { useSegments, calculateSegmentStats } from "../hooks/useSegments";
-import { SegmentStats } from "./SegmentStats";
-import { SegmentDetailsModal } from "./SegmentDetailsModal";
+import { Segment } from "@/types/segment";
+import { useSegments, calculateSegmentStats } from "@/hooks/useSegments";
+import { SegmentStats } from "@/components/segments/SegmentStats";
+import { SegmentDetailsModal } from "@/components/segments/SegmentDetailsModal";
 
 interface SessionResultsProps {
   sessionId: string;

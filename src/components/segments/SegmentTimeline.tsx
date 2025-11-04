@@ -1,5 +1,5 @@
-import { Segment } from "../types/segment";
-import { getAppColor, getConfidenceColor, getConfidenceLabel } from "../constants/appColors";
+import { Segment } from "@/types/segment";
+import { getAppColor, getConfidenceColor, getConfidenceLabel } from "@/constants/appColors";
 
 interface SegmentTimelineProps {
   segments: Segment[];

@@ -1,4 +1,4 @@
-import type { TimerStatus } from "../types/timer";
+import type { TimerStatus } from "@/types/timer";
 
 interface TimerControlsProps {
   status: TimerStatus;

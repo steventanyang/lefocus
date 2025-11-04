@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useSessionsList } from "../hooks/useSessionsList";
-import { SessionCard } from "./SessionCard";
-import { SessionResults } from "./SessionResults";
-import { Segment } from "../types/segment";
+import { useSessionsList } from "@/hooks/useSessionsList";
+import { SessionCard } from "@/components/session/SessionCard";
+import { SessionResults } from "@/components/session/SessionResults";
+import { Segment } from "@/types/segment";
 
 interface ActivitiesViewProps {
   onNavigate: (view: "timer" | "activities") => void;

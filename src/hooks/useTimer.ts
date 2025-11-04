@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTimerSnapshot } from "./useTimerSnapshot";
-import { SessionInfo } from "../types/timer";
+import { SessionInfo } from "@/types/timer";
 
 export function useTimer() {
   const { timerState, error, setError } = useTimerSnapshot();

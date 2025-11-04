@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { TimerSnapshot } from "../types/timer";
+import type { TimerSnapshot } from "@/types/timer";
 
 function snapshotsEqual(a: TimerSnapshot | null, b: TimerSnapshot | null) {
   if (a === b) {

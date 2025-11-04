@@ -1,6 +1,6 @@
-import { SessionSummary } from "../types/timer";
-import { Segment } from "../types/segment";
-import { getAppColor } from "../constants/appColors";
+import { SessionSummary } from "@/types/timer";
+import { Segment } from "@/types/segment";
+import { getAppColor } from "@/constants/appColors";
 
 interface SessionCardProps {
   session: SessionSummary;

@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useTimer } from "../hooks/useTimer";
+import { useTimer } from "@/hooks/useTimer";
 import { TimerDisplay } from "./TimerDisplay";
 import { TimerControls } from "./TimerControls";
 import { DurationPicker } from "./DurationPicker";
-import { SessionResults } from "./SessionResults";
+import { SessionResults } from "@/components/session/SessionResults";
 
 interface TimerViewProps {
   onNavigate: (view: "timer" | "activities") => void;

@@ -1,4 +1,4 @@
-import { useSmoothCountdown } from "../hooks/useSmoothCountdown";
+import { useSmoothCountdown } from "@/hooks/useSmoothCountdown";
 
 interface TimerDisplayProps {
   remainingMs: number;

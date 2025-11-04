@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { SessionSummary } from "../types/timer";
+import { SessionSummary } from "@/types/timer";
 
 interface UseSessionsListResult {
   sessions: SessionSummary[];
