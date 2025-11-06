@@ -3,6 +3,7 @@ import Cocoa
 final class IslandView: NSView {
     private var displayMs: Int64 = 0
     private var mode: IslandMode = .countdown
+    private var isIdle: Bool = true
     private var trackingArea: NSTrackingArea?
 
     override init(frame frameRect: NSRect) {
@@ -18,10 +19,13 @@ final class IslandView: NSView {
 
     // MARK: - Public API
 
-    func update(displayMs: Int64, mode: IslandMode?) {
+    func update(displayMs: Int64, mode: IslandMode?, idle: Bool? = nil) {
         self.displayMs = displayMs
         if let mode {
             self.mode = mode
+        }
+        if let idle {
+            self.isIdle = idle
         }
         needsDisplay = true
     }
@@ -36,12 +40,20 @@ final class IslandView: NSView {
         context.saveGState()
         defer { context.restoreGState() }
 
-        // Background pill
+        // Background pill with different appearance for idle vs active
         let path = NSBezierPath(roundedRect: bounds, xRadius: bounds.height / 2.0, yRadius: bounds.height / 2.0)
-        NSColor(white: 0.1, alpha: 0.95).setFill()
+
+        // Adjust opacity and color for idle state
+        let backgroundColor = isIdle
+            ? NSColor(white: 0.1, alpha: 0.7)   // Slightly more transparent when idle
+            : NSColor(white: 0.1, alpha: 0.95)  // More opaque when active
+        backgroundColor.setFill()
         path.fill()
 
-        NSColor(white: 0.2, alpha: 1.0).setStroke()
+        let borderColor = isIdle
+            ? NSColor(white: 0.2, alpha: 0.6)   // Dimmer border when idle
+            : NSColor(white: 0.2, alpha: 1.0)   // Normal border when active
+        borderColor.setStroke()
         path.lineWidth = 0.5
         path.stroke()
 
@@ -61,9 +73,15 @@ final class IslandView: NSView {
 
     private func drawTimerText() {
         let timeString = formatTime(ms: displayMs)
+
+        // Dimmer text color when idle
+        let textColor = isIdle
+            ? NSColor.white.withAlphaComponent(0.6)
+            : NSColor.white
+
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 16, weight: .medium),
-            .foregroundColor: NSColor.white,
+            .foregroundColor: textColor,
         ]
 
         let attributed = NSAttributedString(string: timeString, attributes: attributes)

@@ -164,6 +164,12 @@ pub fn run() {
                     timer: timer_controller,
                 });
 
+                // Initialize the island window on macOS to show "00:00" when idle
+                #[cfg(target_os = "macos")]
+                {
+                    macos_bridge::island_init();
+                }
+
                 Ok(())
             })();
 

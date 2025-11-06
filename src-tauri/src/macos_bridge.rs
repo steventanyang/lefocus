@@ -32,11 +32,12 @@ extern "C" {
     fn macos_sensing_free_screenshot_buffer(ptr: *mut u8);
     fn macos_sensing_free_ocr_result(ptr: *mut OCRResultFFI);
 
+    fn macos_sensing_island_init();
     fn macos_sensing_island_start(start_uptime_ms: i64, target_ms: i64, mode: *const c_char);
     fn macos_sensing_island_sync(value_ms: i64);
     fn macos_sensing_island_pause();
     fn macos_sensing_island_resume();
-    fn macos_sensing_island_hide();
+    fn macos_sensing_island_reset();
     fn macos_sensing_island_cleanup();
 }
 
@@ -135,6 +136,12 @@ pub fn clear_cache() {
     }
 }
 
+pub fn island_init() {
+    unsafe {
+        macos_sensing_island_init();
+    }
+}
+
 pub fn island_start(start_uptime_ms: i64, target_ms: i64, mode: &str) {
     unsafe {
         let c_mode = CString::new(mode).expect("island mode string contains interior null byte");
@@ -162,9 +169,9 @@ pub fn island_resume() {
     }
 }
 
-pub fn island_hide() {
+pub fn island_reset() {
     unsafe {
-        macos_sensing_island_hide();
+        macos_sensing_island_reset();
     }
 }
 

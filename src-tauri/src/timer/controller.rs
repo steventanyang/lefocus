@@ -16,7 +16,7 @@ use crate::{
 };
 
 #[cfg(target_os = "macos")]
-use crate::macos_bridge::{current_uptime_ms, island_hide, island_start, island_sync};
+use crate::macos_bridge::{current_uptime_ms, island_reset, island_start, island_sync};
 
 use super::{TimerMode, TimerState, TimerStatus};
 
@@ -212,7 +212,7 @@ impl TimerController {
 
         #[cfg(target_os = "macos")]
         {
-            island_hide();
+            island_reset();
         }
 
         self.db
@@ -276,7 +276,7 @@ impl TimerController {
             if state.status == TimerStatus::Idle {
                 #[cfg(target_os = "macos")]
                 {
-                    island_hide();
+                    island_reset();
                 }
                 return Ok(());
             }
@@ -295,7 +295,7 @@ impl TimerController {
 
         #[cfg(target_os = "macos")]
         {
-            island_hide();
+            island_reset();
         }
 
         self.db
@@ -358,7 +358,7 @@ impl TimerController {
 
                 #[cfg(target_os = "macos")]
                 {
-                    island_hide();
+                    island_reset();
                 }
 
                 // Stop sensing immediately

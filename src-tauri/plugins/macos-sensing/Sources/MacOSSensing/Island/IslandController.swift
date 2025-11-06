@@ -15,16 +15,31 @@ public final class IslandController {
     private var startUptimeMs: Int64 = 0
     private var targetMs: Int64?
     private var mode: IslandMode = .countdown
+    private var isIdle: Bool = true
 
     private init() {}
 
     // MARK: - Public API
+
+    /// Initialize the island window on app startup - shows "00:00" in idle state.
+    public func initialize() {
+        stateQueue.async { [weak self] in
+            guard let self else { return }
+            DispatchQueue.main.async {
+                self.ensureWindowHierarchy()
+                self.isIdle = true
+                self.islandView?.update(displayMs: 0, mode: .countdown, idle: true)
+                self.islandWindow?.orderFrontRegardless()
+            }
+        }
+    }
 
     /// Start (or restart) the island with the supplied payload.
     public func start(payload: IslandStartPayload) {
         stateQueue.async { [weak self] in
             guard let self else { return }
             DispatchQueue.main.async {
+                self.isIdle = false
                 self.ensureWindowHierarchy()
                 self.applyStartPayload(payload)
                 self.startRenderLoop()
@@ -61,15 +76,15 @@ public final class IslandController {
         }
     }
 
-    /// Hide the island window entirely.
-    public func hide() {
+    /// Reset the island to idle state (00:00) without hiding it.
+    public func reset() {
         stateQueue.async { [weak self] in
             guard let self else { return }
             DispatchQueue.main.async {
                 self.renderTimer?.invalidate()
                 self.renderTimer = nil
-                self.islandWindow?.orderOut(nil)
-                self.window?.orderOut(nil)
+                self.isIdle = true
+                self.islandView?.update(displayMs: 0, mode: .countdown, idle: true)
             }
         }
     }
@@ -214,7 +229,7 @@ public final class IslandController {
             }
         }()
 
-        islandView?.update(displayMs: initialDisplayMs, mode: payload.mode)
+        islandView?.update(displayMs: initialDisplayMs, mode: payload.mode, idle: false)
         islandWindow?.orderFrontRegardless()
     }
 

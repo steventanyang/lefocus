@@ -43,9 +43,9 @@ This document specifies the design and implementation of a **macOS Dynamic Islan
 
 A **floating window** positioned at the top-center of the screen that mimics the iPhone Dynamic Island aesthetic:
 
-- **Compact state** (default): Black pill showing timer countdown (e.g., "24:38")
-- **Expanded state** (on hover): Shows session mode, current app context, pause/resume controls
-- **Hidden state**: Not visible when timer is idle
+- **Idle state**: Black pill showing "00:00" when no timer is active (slightly transparent)
+- **Active state**: Black pill showing timer countdown/stopwatch (e.g., "24:38")
+- **Expanded state** (on hover - future): Shows session mode, current app context, pause/resume controls
 
 ### 1.2 Technical Approach
 
@@ -110,10 +110,11 @@ React UI (Tauri) ←→ Rust Commands ←→ Swift FFI ←→ NSPanel Controller
 │  - Creates/manages NSPanel                         │
 │  - Custom IslandView (draws pill UI)                │
 │  - NEW FFI exports:                                 │
+│    • island_init()                                  │
 │    • island_start(start_uptime_ms, target_ms, mode) │
 │    • island_sync(value_ms)                          │
 │    • island_pause() / island_resume()               │
-│    • island_hide()                                  │
+│    • island_reset()                                 │
 └─────────────────────────────────────────────────────┘
                   │
                   ↓
@@ -127,12 +128,17 @@ React UI (Tauri) ←→ Rust Commands ←→ Swift FFI ←→ NSPanel Controller
 
 ### 2.2 Data Flow
 
+**App Launch:**
+1. App initializes and calls `island_init()` via FFI.
+2. Swift creates the island window and displays "00:00" in idle state (slightly transparent).
+3. Island remains visible but dimmed until a timer starts.
+
 **Timer Start:**
 1. User clicks "Start" in the React UI.
 2. Tauri command `start_timer()` runs in Rust.
 3. Rust updates `TimerState` to running and records `start_uptime_ms` (from `mach_absolute_time`) plus `target_ms`.
 4. Rust calls `island_start(IslandStartPayload)` via FFI. The payload includes `start_uptime_ms`, `target_ms`, and `mode`.
-5. Swift creates the window, caches the payload, and starts its own one-second render timer.
+5. Swift transitions from idle to active state, caches the payload, and starts its one-second render timer.
 
 **Swift Render Loop (every 1s):**
 1. Swift computes a display value using the cached payload and `ProcessInfo.processInfo.systemUptime` (remaining time for countdown, elapsed time for stopwatch).
@@ -143,10 +149,15 @@ React UI (Tauri) ←→ Rust Commands ←→ Swift FFI ←→ NSPanel Controller
 2. The heartbeat calls `island_sync(value_ms)` via FFI with that measurement.
 3. Swift compares the authoritative value with its local estimate and corrects drift greater than a tolerance (for example 250 ms).
 
-**Timer End, Cancel, Pause, Resume:**
+**Timer End, Cancel:**
 1. User action triggers the relevant Tauri command.
-2. Rust updates `TimerState` and calls the matching island function (`island_pause`, `island_resume`, or `island_hide`).
-3. Swift stops or resumes its internal timer and updates the UI accordingly.
+2. Rust updates `TimerState` and calls `island_reset()`.
+3. Swift stops its internal timer and returns to idle state (shows "00:00", slightly transparent).
+
+**Pause, Resume:**
+1. User action triggers the relevant Tauri command.
+2. Rust updates `TimerState` and calls the matching island function (`island_pause` or `island_resume`).
+3. Swift stops or resumes its internal timer while maintaining active state appearance.
 
 ### 2.3 Window Positioning Logic
 
@@ -272,11 +283,24 @@ public final class IslandController {
 
     // MARK: - Public API
 
-    /// Start the island with initial state and begin the render loop.
+    /// Initialize the island window on app startup - shows "00:00" in idle state.
+    public func initialize() {
+        stateQueue.async { [weak self] in
+            DispatchQueue.main.async {
+                self?.ensureWindowHierarchy()
+                self?.isIdle = true
+                self?.islandView?.update(displayMs: 0, mode: .countdown, idle: true)
+                self?.islandWindow?.orderFrontRegardless()
+            }
+        }
+    }
+
+    /// Start (or restart) the island with the supplied payload.
     public func start(payload: IslandStartPayload) {
         stateQueue.async { [weak self] in
             DispatchQueue.main.async {
-                self?.createWindowIfNeeded()
+                self?.isIdle = false
+                self?.ensureWindowHierarchy()
                 self?.applyStartPayload(payload)
                 self?.startRenderLoop()
             }
@@ -309,14 +333,14 @@ public final class IslandController {
         }
     }
 
-    /// Hide the island entirely.
-    public func hide() {
+    /// Reset the island to idle state (00:00) without hiding it.
+    public func reset() {
         stateQueue.async { [weak self] in
             DispatchQueue.main.async {
                 self?.renderTimer?.invalidate()
                 self?.renderTimer = nil
-                self?.window?.orderOut(nil)
-                self?.window?.alphaValue = 0.0
+                self?.isIdle = true
+                self?.islandView?.update(displayMs: 0, mode: .countdown, idle: true)
             }
         }
     }
@@ -476,8 +500,7 @@ import Cocoa
 class IslandView: NSView {
     private var displayMs: Int64 = 0
     private var mode: IslandMode = .countdown
-    private var isHovered: Bool = false
-
+    private var isIdle: Bool = true
     private var trackingArea: NSTrackingArea?
 
     override init(frame frameRect: NSRect) {
@@ -491,10 +514,13 @@ class IslandView: NSView {
 
     // MARK: - Public API
 
-    func update(displayMs: Int64, mode: IslandMode?) {
+    func update(displayMs: Int64, mode: IslandMode?, idle: Bool? = nil) {
         self.displayMs = displayMs
         if let mode = mode {
             self.mode = mode
+        }
+        if let idle = idle {
+            self.isIdle = idle
         }
         self.needsDisplay = true
     }
@@ -506,23 +532,31 @@ class IslandView: NSView {
 
         guard let context = NSGraphicsContext.current?.cgContext else { return }
 
-        // Background pill shape
+        // Background pill with different appearance for idle vs active
         let path = NSBezierPath(roundedRect: bounds, xRadius: 18, yRadius: 18)
 
-        // Black background with slight transparency
-        NSColor(white: 0.1, alpha: 0.95).setFill()
+        // Adjust opacity for idle state
+        let backgroundColor = isIdle
+            ? NSColor(white: 0.1, alpha: 0.7)   // More transparent when idle
+            : NSColor(white: 0.1, alpha: 0.95)  // More opaque when active
+        backgroundColor.setFill()
         path.fill()
 
-        // Subtle border
-        NSColor(white: 0.2, alpha: 1.0).setStroke()
+        let borderColor = isIdle
+            ? NSColor(white: 0.2, alpha: 0.6)   // Dimmer border when idle
+            : NSColor(white: 0.2, alpha: 1.0)   // Normal border when active
+        borderColor.setStroke()
         path.lineWidth = 0.5
         path.stroke()
 
-        // Draw timer text
+        // Draw timer text with dimmer color when idle
         let timeString = formatTime(ms: displayMs)
+        let textColor = isIdle
+            ? NSColor.white.withAlphaComponent(0.6)
+            : NSColor.white
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.monospacedSystemFont(ofSize: 16, weight: .medium),
-            .foregroundColor: NSColor.white,
+            .foregroundColor: textColor,
         ]
 
         let attributedString = NSAttributedString(string: timeString, attributes: attributes)
@@ -613,6 +647,13 @@ public struct IslandStartPayload {
 
 // MARK: - Island Controls
 
+@_cdecl("macos_sensing_swift_island_init")
+public func islandInitFFI() {
+    DispatchQueue.main.async {
+        IslandController.shared.initialize()
+    }
+}
+
 @_cdecl("macos_sensing_swift_island_start")
 public func islandStartFFI(startUptimeMs: Int64, targetMs: Int64, modePtr: UnsafePointer<CChar>) {
     let modeString = String(cString: modePtr)
@@ -644,10 +685,10 @@ public func islandResumeFFI() {
     }
 }
 
-@_cdecl("macos_sensing_swift_island_hide")
-public func islandHideFFI() {
+@_cdecl("macos_sensing_swift_island_reset")
+public func islandResetFFI() {
     DispatchQueue.main.async {
-        IslandController.shared.hide()
+        IslandController.shared.reset()
     }
 }
 
@@ -667,11 +708,12 @@ Add to `src-tauri/plugins/macos-sensing/Sources/CMacOSSensing/include/MacOSSensi
 
 ```c
 // Island controls
+void macos_sensing_island_init(void);
 void macos_sensing_island_start(int64_t start_uptime_ms, int64_t target_ms, const char *mode);
 void macos_sensing_island_sync(int64_t value_ms); // remaining for countdown, elapsed for stopwatch
 void macos_sensing_island_pause(void);
 void macos_sensing_island_resume(void);
-void macos_sensing_island_hide(void);
+void macos_sensing_island_reset(void);
 void macos_sensing_island_cleanup(void);
 ```
 
@@ -681,12 +723,17 @@ Add to `src-tauri/plugins/macos-sensing/Sources/CMacOSSensing/MacOSSensingFFI.c`
 
 ```c
 // Swift entry points (Island)
+extern void macos_sensing_swift_island_init(void);
 extern void macos_sensing_swift_island_start(int64_t start_uptime_ms, int64_t target_ms, const char *mode);
 extern void macos_sensing_swift_island_sync(int64_t value_ms);
 extern void macos_sensing_swift_island_pause(void);
 extern void macos_sensing_swift_island_resume(void);
-extern void macos_sensing_swift_island_hide(void);
+extern void macos_sensing_swift_island_reset(void);
 extern void macos_sensing_swift_island_cleanup(void);
+
+void macos_sensing_island_init(void) {
+    macos_sensing_swift_island_init();
+}
 
 void macos_sensing_island_start(int64_t start_uptime_ms, int64_t target_ms, const char *mode) {
     macos_sensing_swift_island_start(start_uptime_ms, target_ms, mode);
@@ -704,8 +751,8 @@ void macos_sensing_island_resume(void) {
     macos_sensing_swift_island_resume();
 }
 
-void macos_sensing_island_hide(void) {
-    macos_sensing_swift_island_hide();
+void macos_sensing_island_reset(void) {
+    macos_sensing_swift_island_reset();
 }
 
 void macos_sensing_island_cleanup(void) {
@@ -721,12 +768,20 @@ Add to `src-tauri/src/macos_bridge.rs`:
 use std::ffi::CString;
 
 extern "C" {
+    fn macos_sensing_island_init();
     fn macos_sensing_island_start(start_uptime_ms: i64, target_ms: i64, mode: *const c_char);
     fn macos_sensing_island_sync(value_ms: i64);
     fn macos_sensing_island_pause();
     fn macos_sensing_island_resume();
-    fn macos_sensing_island_hide();
+    fn macos_sensing_island_reset();
     fn macos_sensing_island_cleanup();
+}
+
+/// Initialize the island window on app startup.
+pub fn island_init() {
+    unsafe {
+        macos_sensing_island_init();
+    }
 }
 
 /// Start the floating island timer.
@@ -756,10 +811,10 @@ pub fn island_resume() {
     }
 }
 
-/// Hide the island entirely.
-pub fn island_hide() {
+/// Reset the island to idle state (00:00) without hiding it.
+pub fn island_reset() {
     unsafe {
-        macos_sensing_island_hide();
+        macos_sensing_island_reset();
     }
 }
 
@@ -795,8 +850,14 @@ pub fn current_uptime_ms() -> i64 {
 Modify `src-tauri/src/lib.rs` to call island functions:
 
 ```rust
-use crate::macos_bridge::{current_uptime_ms, island_start, island_sync, island_pause, island_resume, island_hide};
+use crate::macos_bridge::{current_uptime_ms, island_init, island_start, island_sync, island_pause, island_resume, island_reset};
 use std::time::Duration;
+
+// In app setup/initialization:
+#[cfg(target_os = "macos")]
+fn initialize_app() {
+    macos_bridge::island_init();
+}
 
 // In start_timer command:
 #[tauri::command]
@@ -860,7 +921,7 @@ fn end_timer(state: State<AppState>) -> Result<SessionInfo, String> {
     // ... existing end logic ...
 
     #[cfg(target_os = "macos")]
-    island_hide();
+    island_reset();
 
     Ok(session_info)
 }
@@ -870,7 +931,7 @@ fn cancel_timer(state: State<AppState>) -> Result<(), String> {
     // ... existing cancel logic ...
 
     #[cfg(target_os = "macos")]
-    island_hide();
+    island_reset();
 
     Ok(())
 }
@@ -880,10 +941,12 @@ fn cancel_timer(state: State<AppState>) -> Result<(), String> {
 
 ### 5.2 Island State Sync
 
-- Swift renders every second using the start payload.
-- Rust remains authoritative through the same heartbeat used by the React UI (for example one second or faster if already implemented).
+- Island is initialized on app startup and shows "00:00" in idle state (slightly transparent).
+- Swift renders every second using the start payload when a timer is active.
+- Rust remains authoritative through the same heartbeat used by the React UI.
 - Each heartbeat calls `island_sync(value_ms)` where `value_ms` equals remaining time for countdowns or elapsed time for stopwatches. Swift ignores tiny differences, but reseeds when the drift threshold is exceeded.
-- Pause, resume, and hide are pushed immediately so the island reflects the current session state without waiting for the next heartbeat.
+- Pause, resume, and reset are pushed immediately so the island reflects the current session state without waiting for the next heartbeat.
+- Reset returns the island to idle state (00:00, slightly transparent) instead of hiding it.
 
 ---
 
@@ -1059,9 +1122,10 @@ nm -g .swift-build/macos-sensing/release/libMacOSSensing.dylib | grep island
 2. ✅ Island shows decremented time (e.g., "24:50")
 3. ✅ Updates are smooth (no flickering)
 
-**Test 3: Island Disappears on End**
+**Test 3: Island Resets on End**
 1. End timer
-2. ✅ Island disappears immediately
+2. ✅ Island returns to idle state showing "00:00" (slightly transparent)
+3. ✅ Island remains visible
 
 **Test 4: Stopwatch Mode**
 1. Start stopwatch
@@ -1147,10 +1211,12 @@ cargo build --release
 | Criterion | Pass Condition |
 |-----------|---------------|
 | **Build Success** | Swift compiles, new symbols exported |
-| **Island Appears** | Shows on timer start, correct position |
+| **Island Appears** | Shows on app launch with "00:00" in idle state |
+| **Idle State** | Slightly transparent, dimmed appearance when showing "00:00" |
+| **Active State** | Full opacity, normal appearance when timer is running |
 | **Time Display** | Shows accurate MM:SS format |
 | **Updates** | Swift render loop ticks every 1s with ≤250ms drift |
-| **Hide on End** | Disappears when timer ends/cancels |
+| **Reset on End** | Returns to idle state (00:00) when timer ends/cancels, stays visible |
 | **Multi-Display** | Works correctly on main screen with external monitors |
 | **Performance** | ≤2% CPU, ≤10MB memory |
 | **No Crashes** | Stable during 25+ minute sessions |

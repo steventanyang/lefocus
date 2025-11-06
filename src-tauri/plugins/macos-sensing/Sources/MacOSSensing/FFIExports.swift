@@ -131,6 +131,13 @@ public func macos_sensing_swift_free_ocr_result(_ pointer: UnsafeMutablePointer<
 
 // MARK: - Island bridge
 
+@_cdecl("macos_sensing_swift_island_init")
+public func macos_sensing_swift_island_init() {
+    DispatchQueue.main.async {
+        IslandController.shared.initialize()
+    }
+}
+
 @_cdecl("macos_sensing_swift_island_start")
 public func macos_sensing_swift_island_start(
     _ startUptimeMs: Int64,
@@ -167,10 +174,10 @@ public func macos_sensing_swift_island_resume() {
     }
 }
 
-@_cdecl("macos_sensing_swift_island_hide")
-public func macos_sensing_swift_island_hide() {
+@_cdecl("macos_sensing_swift_island_reset")
+public func macos_sensing_swift_island_reset() {
     DispatchQueue.main.async {
-        IslandController.shared.hide()
+        IslandController.shared.reset()
     }
 }
 
