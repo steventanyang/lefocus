@@ -1,3 +1,4 @@
+
 import Foundation
 
 @_cdecl("macos_sensing_swift_get_window")
@@ -126,4 +127,54 @@ public func macos_sensing_swift_free_ocr_result(_ pointer: UnsafeMutablePointer<
         free(text)
     }
     pointer.deallocate()
+}
+
+// MARK: - Island bridge
+
+@_cdecl("macos_sensing_swift_island_start")
+public func macos_sensing_swift_island_start(
+    _ startUptimeMs: Int64,
+    _ targetMs: Int64,
+    _ modePtr: UnsafePointer<CChar>
+) {
+    let modeString = String(cString: modePtr)
+    let islandMode = IslandMode(rawValue: modeString) ?? .countdown
+    let payload = IslandStartPayload(startUptimeMs: startUptimeMs, targetMs: targetMs, mode: islandMode)
+
+    DispatchQueue.main.async {
+        IslandController.shared.start(payload: payload)
+    }
+}
+
+@_cdecl("macos_sensing_swift_island_sync")
+public func macos_sensing_swift_island_sync(_ valueMs: Int64) {
+    DispatchQueue.main.async {
+        IslandController.shared.sync(authoritativeMs: valueMs)
+    }
+}
+
+@_cdecl("macos_sensing_swift_island_pause")
+public func macos_sensing_swift_island_pause() {
+    DispatchQueue.main.async {
+        IslandController.shared.pause()
+    }
+}
+
+@_cdecl("macos_sensing_swift_island_resume")
+public func macos_sensing_swift_island_resume() {
+    DispatchQueue.main.async {
+        IslandController.shared.resume()
+    }
+}
+
+@_cdecl("macos_sensing_swift_island_hide")
+public func macos_sensing_swift_island_hide() {
+    DispatchQueue.main.async {
+        IslandController.shared.hide()
+    }
+}
+
+@_cdecl("macos_sensing_swift_island_cleanup")
+public func macos_sensing_swift_island_cleanup() {
+    IslandController.shared.cleanup()
 }
