@@ -28,14 +28,17 @@ fn compile_macos_sensing() {
         .parent()
         .expect("workspace root should exist");
     let swift_build_dir = workspace_root.join(".swift-build/macos-sensing");
+    let module_cache_dir = swift_build_dir.join("ModuleCache");
 
     println!("cargo:warning=[SWIFT] Building Swift plugin...");
     println!("cargo:warning=[SWIFT]   Package path: {}", plugin_dir.display());
     println!("cargo:warning=[SWIFT]   Build dir: {}", swift_build_dir.display());
+    let _ = fs::create_dir_all(&module_cache_dir);
     
     let status = Command::new("swift")
         .args([
             "build",
+            "--disable-sandbox",
             "-c",
             "release",
             "--package-path",
@@ -45,6 +48,15 @@ fn compile_macos_sensing() {
             "--scratch-path",
             swift_build_dir.to_str().expect("scratch path invalid UTF-8"),
         ])
+        .env(
+            "SWIFT_MODULECACHE_PATH",
+            module_cache_dir.to_str().expect("module cache path invalid UTF-8"),
+        )
+        .env(
+            "CLANG_MODULE_CACHE_PATH",
+            module_cache_dir.to_str().expect("module cache path invalid UTF-8"),
+        )
+        .env("SWIFTPM_DISABLE_SANDBOX", "1")
         .status()
         .expect("Failed to spawn swift build");
 
