@@ -1,11 +1,11 @@
-import { SessionSummary } from "../types/timer";
-import { Segment } from "../types/segment";
-import { getAppColor } from "../constants/appColors";
+import { SessionSummary } from "@/types/timer";
+import { Segment } from "@/types/segment";
+import { getAppColor } from "@/constants/appColors";
 
 interface SessionCardProps {
   session: SessionSummary;
   segments?: Segment[];
-  onClick: (sessionId: string) => void;
+  onClick: (session: SessionSummary) => void;
 }
 
 function formatDuration(seconds: number): string {
@@ -66,7 +66,7 @@ export function SessionCard({ session, segments, onClick }: SessionCardProps) {
 
   return (
     <button
-      onClick={() => onClick(session.id)}
+      onClick={() => onClick(session)}
       className="w-full border border-black p-4 flex flex-col gap-4 hover:bg-gray-50 cursor-pointer transition-colors text-left relative"
     >
       {/* Duration on top left */}
@@ -173,4 +173,3 @@ export function SessionCard({ session, segments, onClick }: SessionCardProps) {
     </button>
   );
 }
-

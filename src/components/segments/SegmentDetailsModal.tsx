@@ -1,6 +1,6 @@
-import { Segment } from "../types/segment";
-import { useInterruptions } from "../hooks/useSegments";
-import { getAppColor } from "../constants/appColors";
+import { Segment } from "@/types/segment";
+import { useInterruptions } from "@/hooks/queries";
+import { getAppColor } from "@/constants/appColors";
 
 interface SegmentDetailsModalProps {
   segment: Segment;
@@ -29,7 +29,7 @@ export function SegmentDetailsModal({
   segment,
   onClose,
 }: SegmentDetailsModalProps) {
-  const { interruptions, loading: interruptionsLoading } = useInterruptions(
+  const { data: interruptions = [], isLoading: interruptionsLoading } = useInterruptions(
     segment.id
   );
 

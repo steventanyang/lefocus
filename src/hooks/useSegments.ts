@@ -1,121 +1,16 @@
-import { useState, useEffect, useCallback } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { Segment, Interruption, SegmentStats } from "../types/segment";
+/**
+ * Utility functions for segment data processing
+ *
+ * Note: Data fetching hooks have been moved to @/hooks/queries.ts (TanStack Query)
+ * This file now only contains pure utility functions.
+ */
 
-export function useSegments(sessionId: string | null) {
-  const [segments, setSegments] = useState<Segment[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string>("");
+import { Segment, SegmentStats } from "@/types/segment";
 
-  useEffect(() => {
-    if (!sessionId) {
-      setSegments([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadSegments = async () => {
-      try {
-        setLoading(true);
-        setError("");
-        const result = await invoke<Segment[]>("get_segments_for_session", {
-          sessionId,
-        });
-        if (!cancelled) {
-          setSegments(result);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(`Failed to load segments: ${err}`);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    loadSegments();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionId]);
-
-  const reload = useCallback(async () => {
-    if (!sessionId) {
-      setSegments([]);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError("");
-      const result = await invoke<Segment[]>("get_segments_for_session", {
-        sessionId,
-      });
-      setSegments(result);
-    } catch (err) {
-      setError(`Failed to load segments: ${err}`);
-    } finally {
-      setLoading(false);
-    }
-  }, [sessionId]);
-
-  return {
-    segments,
-    loading,
-    error,
-    reload,
-  };
-}
-
-export function useInterruptions(segmentId: string | null) {
-  const [interruptions, setInterruptions] = useState<Interruption[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string>("");
-
-  useEffect(() => {
-    if (!segmentId) {
-      setInterruptions([]);
-      return;
-    }
-
-    let cancelled = false;
-
-    const loadInterruptions = async () => {
-      try {
-        setLoading(true);
-        setError("");
-        const result = await invoke<Interruption[]>(
-          "get_interruptions_for_segment",
-          { segmentId }
-        );
-        if (!cancelled) {
-          setInterruptions(result);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(`Failed to load interruptions: ${err}`);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    loadInterruptions();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [segmentId]);
-
-  return { interruptions, loading, error };
-}
-
+/**
+ * Calculate aggregate statistics from an array of segments
+ * Used by SessionResults component to display session summary
+ */
 export function calculateSegmentStats(segments: Segment[]): SegmentStats {
   if (segments.length === 0) {
     return {

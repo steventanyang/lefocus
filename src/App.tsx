@@ -1,7 +1,7 @@
 import { useState } from "react";
 import "./App.css";
-import { TimerView } from "./components/TimerView";
-import { ActivitiesView } from "./components/ActivitiesView";
+import { TimerView } from "@/components/timer/TimerView";
+import { ActivitiesView } from "@/components/activities/ActivitiesView";
 
 type View = "timer" | "activities";
 

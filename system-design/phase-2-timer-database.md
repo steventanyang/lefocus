@@ -210,15 +210,22 @@ WHERE id = ?3;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TimerStatus {
     Idle,        // No active session
-    Running,     // Timer ticking down
-    Stopped,     // Timer reached 0, awaiting finalization
+    Running,     // Timer ticking down (or up in stopwatch mode)
+    Stopped,     // Timer reached 0, awaiting finalization (countdown only)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum TimerMode {
+    Countdown,   // Count down from target_ms to 0
+    Stopwatch,   // Count up from 0 indefinitely
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TimerState {
     pub status: TimerStatus,
+    pub mode: TimerMode,             // NEW: Countdown or Stopwatch
     pub session_id: Option<String>,  // UUID as string
-    pub target_ms: u64,              // Planned duration (e.g., 1500000 = 25min)
+    pub target_ms: u64,              // Planned duration (or i64::MAX for stopwatch)
     pub active_ms: u64,              // Completed running time
 
     // Wall-clock timestamp for persistence
@@ -232,24 +239,40 @@ pub struct TimerState {
 }
 ```
 
-### 3.2 State Transitions
+### 3.2 Timer Modes
+
+**Countdown Mode (default):**
+- Counts down from `target_ms` to 0
+- Auto-transitions to `Stopped` when timer reaches 0
+- User clicks "End" to finalize
+- Only "Cancel" button shown while running
+
+**Stopwatch Mode:**
+- Counts up from 0 indefinitely
+- `target_ms` set to `i64::MAX` (SQLite-safe unlimited duration)
+- No auto-stop (user controls when to end)
+- Both "End" and "Cancel" buttons shown while running
+- `remaining_ms()` returns elapsed time (active_ms) instead of countdown
+
+### 3.3 State Transitions
 
 ```
-         start_timer
+         start_timer(mode)
     ┌──────────────────────┐
     │                      ▼
   ┌──────┐            ┌─────────┐
   │ Idle │            │ Running │
   └──────┘            └────┬────┘
                            │
-                           │ (Timer reaches 0)
+                           │ (Countdown: Timer reaches 0)
+                           │ (Stopwatch: User clicks End)
                            ▼
                        ┌─────────┐
-                       │ Stopped │
+                       │ Stopped │ (Countdown only)
                        └─────────┘
 
     (User clicks "End")
-         Stopped ──────────► Idle
+         Stopped/Running ──────────► Idle
             (finalizes session)
 
     (User clicks "Cancel")
@@ -258,17 +281,17 @@ pub struct TimerState {
 
 **Valid Transitions:**
 
-- `Idle → Running`: `start_timer(duration_ms)`
-- `Running → Stopped`: Auto-trigger when `remaining_ms ≤ 0`
-- `Stopped → Idle`: `end_timer()` (user finalizes)
-- `Running → Idle`: `cancel_timer()` (abort session, mark as Cancelled)
+- `Idle → Running`: `start_timer(duration_ms, mode)`
+- `Running → Stopped`: Auto-trigger when `remaining_ms ≤ 0` (Countdown only)
+- `Running → Idle`: `end_timer()` (Stopwatch) or `cancel_timer()` (any mode)
+- `Stopped → Idle`: `end_timer()` (Countdown - user finalizes)
 
 **Invalid Transitions:**
 
 - `Idle → Stopped`: Timer must run first
 - `Stopped → Running`: Requires explicit restart (start a new session)
 
-### 3.3 Time Calculations
+### 3.4 Time Calculations
 
 **Monotonic Time Anchoring (prevents drift):**
 
@@ -297,16 +320,19 @@ pub struct TimerState {
 
 ```rust
 fn get_remaining_ms(state: &TimerState) -> i64 {
-    match state.status {
-        TimerStatus::Idle | TimerStatus::Stopped => 0,
-        TimerStatus::Running => {
-            // active_ms + current running period (from anchor)
+    match (state.status, state.mode) {
+        (TimerStatus::Idle | TimerStatus::Stopped, _) => 0,
+        (TimerStatus::Running, TimerMode::Countdown) => {
+            // Countdown: target_ms - active_ms (remaining time)
             let elapsed_this_period = state.running_anchor
                 .map(|anchor| anchor.elapsed().as_millis() as u64)
                 .unwrap_or(0);
-
             let total_active = state.active_ms + elapsed_this_period;
-            (state.target_ms as i64) - (total_active as i64)
+            cmp::max((state.target_ms as i64) - (total_active as i64), 0)
+        }
+        (TimerStatus::Running, TimerMode::Stopwatch) => {
+            // Stopwatch: return elapsed time (active_ms) as positive value
+            state.current_active_ms() as i64
         }
     }
 }
@@ -403,10 +429,12 @@ impl From<Session> for SessionInfo {
 ```typescript
 // src/types/timer.ts
 
-export type TimerStatus = "Idle" | "Running" | "Stopped";
+export type TimerStatus = "idle" | "running" | "stopped";
+export type TimerMode = "countdown" | "stopwatch";
 
 export interface TimerState {
   status: TimerStatus;
+  mode: TimerMode;
   sessionId: string | null;
   targetMs: number;
   activeMs: number;
@@ -565,8 +593,14 @@ impl Database {
 pub async fn start_timer(
     state: State<'_, AppState>,
     target_ms: u64,
+    mode: Option<String>,  // "countdown" or "stopwatch"
 ) -> Result<TimerState, String> {
-    state.timer_controller.start_timer(target_ms)
+    let timer_mode = match mode.as_deref() {
+        Some("stopwatch") => Some(TimerMode::Stopwatch),
+        Some("countdown") => Some(TimerMode::Countdown),
+        _ => None,
+    };
+    state.timer_controller.start_timer(target_ms, timer_mode)
         .await
         .map_err(|e| e.to_string())
 }
@@ -646,48 +680,64 @@ app.emit_all("timer-heartbeat", TimerHeartbeatEvent {
 
 ```
 src/
-├── App.tsx                     # Main app, routes to TimerView
+├── App.tsx                     # Main app, routes between views
+├── main.tsx                    # App entry, wraps with QueryProvider
+├── providers/
+│   └── QueryProvider.tsx       # TanStack Query setup
 ├── components/
-│   ├── TimerView.tsx           # NEW: Main timer UI (Phase 2)
-│   ├── TimerDisplay.tsx        # NEW: MM:SS countdown display
-│   ├── TimerControls.tsx       # NEW: Start/End buttons
-│   ├── DurationPicker.tsx      # NEW: Preset duration selector
-│   └── archived/               # OLD: Phase 1 components
-│       ├── AudioView.tsx       # Keep for reference
-│       └── TestView.tsx        # Keep for reference
-└── types/
-    └── timer.ts                # NEW: TypeScript interfaces
+│   ├── timer/                  # Timer UI components
+│   │   ├── TimerView.tsx       # Main timer component
+│   │   ├── TimerDisplay.tsx    # MM:SS display (countdown/stopwatch)
+│   │   ├── TimerControls.tsx   # Start/End/Cancel buttons (mode-aware)
+│   │   ├── ModeSelector.tsx    # Timer/Stopwatch toggle
+│   │   └── DurationPicker.tsx  # Preset duration selector (countdown only)
+│   ├── activities/             # Activities/history view
+│   │   └── ActivitiesView.tsx  # Session list (Phase 5)
+│   ├── session/                # Session results
+│   │   ├── SessionResults.tsx  # Post-session summary (Phase 5)
+│   │   └── SessionCard.tsx     # Session card in list (Phase 5)
+│   ├── segments/               # Segment visualization (Phase 4+)
+│   │   ├── SegmentStats.tsx    # Timeline & stats
+│   │   ├── SegmentDetailsModal.tsx
+│   │   └── SegmentTimeline.tsx
+│   └── archived/               # Phase 1 test components
+│       ├── AudioView.tsx
+│       └── TestView.tsx
+├── hooks/
+│   ├── queries.ts              # TanStack Query hooks
+│   ├── useTimer.ts             # Timer state (real-time, not cached)
+│   ├── useTimerSnapshot.ts     # Timer event listener
+│   └── useSmoothCountdown.ts   # Animation hook
+├── types/
+│   ├── timer.ts                # Timer/session TypeScript types
+│   └── segment.ts              # Segment types (Phase 4)
+└── constants/
+    └── appColors.ts            # App color mapping (Phase 4)
 ```
 
 ### 7.2 Requirements & Behavior
 
 **TimerView Component:**
 
-- Fetch initial timer state on mount via `get_timer_state` command
-- Listen to `timer-state-changed` events and update React state
-- Listen to `timer-heartbeat` events (every 10s) to resync display
-- When status=Running: Run local 250ms interval to decrement `displayMs` smoothly
-- Show `DurationPicker` only when status=Idle
-- Show `TimerDisplay` always (displays MM:SS countdown)
-- Show `TimerControls` always (buttons enabled/disabled based on status)
-- Handle commands: `start_timer`, `end_timer`, `cancel_timer`
+- Uses `useTimer()` hook for real-time timer state (not cached - requires event listeners)
+- Uses `useEndTimerMutation()` from TanStack Query for session completion (auto-invalidates sessions cache)
+- Shows `ModeSelector` when status=Idle (Timer/Stopwatch toggle)
+- Shows `DurationPicker` when status=Idle AND mode=Countdown
+- `TimerDisplay` and `TimerControls` always visible (mode-aware rendering)
+- Renders `SessionResults` on completion (fetches segments via TanStack Query)
 
-**TimerDisplay Component:**
+**Data Fetching Strategy:**
 
-- Format `remainingMs` as MM:SS (zero-padded)
-
-**DurationPicker Component:**
-
-- Show three preset buttons: 15 min, 25 min, 45 min
-- Highlight selected duration
-- Call `onSelect` with milliseconds when clicked
+- **Timer state:** Real-time via Tauri events (`useTimerSnapshot` + `useTimer`), not cached
+- **Sessions list:** TanStack Query (`useSessionsList`) - cached 60s, auto-refetches on window focus
+- **Segments:** TanStack Query (`useSegments`) - cached 30s, parallel fetching with deduplication
+- **Mutations:** `useEndTimerMutation` auto-invalidates `['sessions']` query on success
 
 **Key Implementation Notes:**
 
-- Use `@tauri-apps/api/core` for `invoke()`
-- Use `@tauri-apps/api/event` for `listen()`
-- Clean up event listeners in useEffect return functions
-- Local animation interval only runs when status=Running
+- TanStack Query handles caching, background refetching, request deduplication
+- Timer mutations automatically invalidate relevant queries
+- Path aliases (`@/`) used throughout for clean imports
 
 ---
 
@@ -896,7 +946,61 @@ No new frontend dependencies needed (React + Tauri API already available).
 
 ---
 
-## 12. File Checklist
+## 12. Stopwatch Mode Extension
+
+### 12.1 Overview
+
+Added dual-mode timer support: **Countdown** (original Pomodoro) and **Stopwatch** (count-up).
+
+### 12.2 Implementation Changes
+
+**Backend (Rust):**
+- Added `TimerMode` enum: `Countdown | Stopwatch`
+- Modified `start_timer()` to accept optional `mode` parameter
+- Stopwatch sessions use `target_ms = i64::MAX` (SQLite-safe unlimited duration)
+- Modified `remaining_ms()` calculation:
+  - Countdown: Returns `target_ms - active_ms` (time remaining)
+  - Stopwatch: Returns `active_ms` (elapsed time)
+- Ticker only auto-stops in Countdown mode when `remaining_ms ≤ 0`
+
+**Frontend (React):**
+- Added `ModeSelector` component (Timer/Stopwatch toggle)
+- Updated `TimerControls`:
+  - Countdown running: Only "Cancel" button
+  - Stopwatch running: Both "End" and "Cancel" buttons
+- Updated `DurationPicker`: Only visible in Countdown mode
+- Modified `useSmoothCountdown` hook:
+  - Added `countUp` parameter for stopwatch animation
+  - Counts up (`remainingMs + elapsed`) when `countUp=true`
+  - Counts down (`remainingMs - elapsed`) when `countUp=false`
+- Updated `TimerDisplay` to pass `mode` for correct animation direction
+
+### 12.3 User Experience
+
+**Countdown Mode (Default):**
+1. Select duration (30s, 1min, 15min, 25min, 45min)
+2. Click "Start" → Timer counts down
+3. Auto-stops at 0:00 → Shows "End" button
+4. "Cancel" available while running
+
+**Stopwatch Mode:**
+1. Toggle to "Stopwatch" mode
+2. Click "Start" → Timer counts up from 0:00
+3. No auto-stop (runs indefinitely)
+4. Both "End" and "Cancel" available while running
+5. User decides when to stop
+
+### 12.4 Technical Details
+
+**SQLite Constraint:** Used `i64::MAX` instead of `u64::MAX` for stopwatch `target_ms` to avoid exceeding SQLite INTEGER range (max: 2^63 - 1).
+
+**Animation:** `requestAnimationFrame` provides smooth 60fps display for both count-up and count-down modes.
+
+**State Reset:** Three coordinated effects in `useSmoothCountdown` ensure proper reset on cancel/stop and fresh start on new sessions.
+
+---
+
+## 13. File Checklist
 
 **New Files to Create:**
 

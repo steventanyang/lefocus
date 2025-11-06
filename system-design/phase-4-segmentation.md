@@ -405,128 +405,27 @@ pub async fn end_session(&mut self) -> Result<()> {
 
 ## UI Components
 
-### 1. Timeline Block (SessionSummaryTimeline.tsx)
+**Implemented in:** `src/components/segments/` and `src/components/session/`
 
-```tsx
-interface TimelineProps {
-  segments: Segment[];
-  sessionDuration: number;
-}
+### Component Structure
 
-function SessionSummaryTimeline({ segments, sessionDuration }: TimelineProps) {
-  return (
-    <div className="timeline">
-      {segments.map((segment) => (
-        <TimelineBlock
-          key={segment.id}
-          segment={segment}
-          color={getSegmentColor(segment)}
-          width={`${(segment.duration_secs / sessionDuration) * 100}%`}
-          onClick={() => showSegmentDetails(segment)}
-        />
-      ))}
-      <TimeAxis duration={sessionDuration} />
-    </div>
-  );
-}
+- **SegmentStats** (`src/components/segments/SegmentStats.tsx`): Embedded timeline + top apps breakdown
+- **SegmentDetailsModal** (`src/components/segments/SegmentDetailsModal.tsx`): Full segment details with confidence breakdown and interruptions
+- **SessionResults** (`src/components/session/SessionResults.tsx`): Container component that fetches segments via `useSegments()` query hook
 
-function getSegmentColor(segment: Segment): string {
-  // Color based on confidence score
-  if (segment.confidence >= 0.7) {
-    return "#10B981"; // Green - focused
-  } else if (segment.confidence >= 0.4) {
-    return "#FBBF24"; // Yellow - mixed
-  } else {
-    return "#EF4444"; // Red - unclear
-  }
-}
-```
+### Data Fetching
 
-### 2. Segment Details Modal
+- Uses TanStack Query `useSegments(sessionId)` for automatic caching and background refetching
+- Uses `useInterruptions(segmentId)` for interruption details (cached 5min)
+- Color mapping via `@/constants/appColors.ts` (deterministic hashing of bundle IDs)
 
-```tsx
-function SegmentDetailsModal({ segment }: { segment: Segment }) {
-  return (
-    <div>
-      <h3>{segment.app_name}</h3>
-      <p>Duration: {formatDuration(segment.duration_secs)}</p>
-      <p>Confidence: {(segment.confidence * 100).toFixed(0)}%</p>
+### Confidence-Based Colors
 
-      {/* Confidence breakdown */}
-      <div className="confidence-scores">
-        <div>Duration: {(segment.duration_score * 100).toFixed(0)}%</div>
-        <div>Stability: {(segment.stability_score * 100).toFixed(0)}%</div>
-        <div>Visual: {(segment.visual_clarity_score * 100).toFixed(0)}%</div>
-        <div>OCR: {(segment.ocr_quality_score * 100).toFixed(0)}%</div>
-      </div>
-
-      {/* Show interruptions for any segment */}
-      {segment.interruptions.length > 0 && (
-        <div className="interruptions">
-          <h4>Interruptions:</h4>
-          {segment.interruptions.map((int) => (
-            <div key={int.id}>
-              {int.app_name} - {int.duration_secs}s at {formatTime(int.timestamp)}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-```
-
-### 3. Horizontal Bar Chart (AppTimeBreakdown.tsx)
-
-```tsx
-interface BarChartProps {
-  segments: Segment[];
-}
-
-function AppTimeBreakdown({ segments }: BarChartProps) {
-  const appStats = aggregateAppStats(segments);
-  const totalTime = segments.reduce((sum, s) => sum + s.duration_secs, 0);
-
-  return (
-    <div className="bar-chart">
-      {appStats.map((app) => (
-        <div key={app.bundle_id} className="bar-row">
-          <div className="app-label">{app.app_name}</div>
-          <div className="bar-container">
-            <div
-              className="bar-fill"
-              style={{
-                width: `${(app.total_time / totalTime) * 100}%`,
-                backgroundColor: getSegmentColor(app.bundle_id),
-              }}
-            />
-          </div>
-          <div className="percentage">
-            {((app.total_time / totalTime) * 100).toFixed(0)}%
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function aggregateAppStats(segments: Segment[]): AppStat[] {
-  const stats = new Map<string, AppStat>();
-
-  for (const segment of segments) {
-    const stat = stats.get(segment.bundle_id) ?? {
-      bundle_id: segment.bundle_id,
-      app_name: segment.app_name,
-      total_time: 0,
-    };
-    stat.total_time += segment.duration_secs;
-    stats.set(segment.bundle_id, stat);
-  }
-
-  return Array.from(stats.values())
-    .sort((a, b) => b.total_time - a.total_time)
-    .slice(0, 5); // Top 5 apps
-}
+```typescript
+// src/constants/appColors.ts - getConfidenceColor()
+if (confidence >= 0.7) return "#10B981"; // Green - Focused
+if (confidence >= 0.4) return "#FBBF24"; // Yellow - Mixed
+return "#EF4444"; // Red - Unclear
 ```
 
 ---

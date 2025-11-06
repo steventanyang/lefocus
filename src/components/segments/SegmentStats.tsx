@@ -1,5 +1,5 @@
-import { SegmentStats as Stats, Segment } from "../types/segment";
-import { getAppColor } from "../constants/appColors";
+import { SegmentStats as Stats, Segment } from "@/types/segment";
+import { getAppColor } from "@/constants/appColors";
 
 interface SegmentStatsProps {
   stats: Stats;
