@@ -277,7 +277,7 @@ public final class IslandController {
         }
     }
 
-    private static let compactSize = NSSize(width: 180.0, height: 36.0)
+    private static let compactSize = NSSize(width: 320.0, height: 36.0)
 
     private func currentUptimeMs() -> Int64 {
         Int64(ProcessInfo.processInfo.systemUptime * 1000.0)
@@ -285,28 +285,25 @@ public final class IslandController {
 
     private func islandFrame(for screen: NSScreen) -> NSRect {
         let size = Self.compactSize
+        // Center horizontally on screen
+        let originX = screen.frame.midX - size.width / 2.0
+        
         if let notch = screen.lf_notchRect {
-            // Position timer so it overlaps slightly with the left edge of the notch
-            // This creates a "small clock" effect where the timer sits just inside the notch area
-            let overlap: CGFloat = 20.0  // Overlap into the notch area
-            var originX = notch.minX - size.width + overlap
-            // Ensure the island doesn't go off the left edge of the screen
-            originX = max(screen.frame.minX + 8.0, originX)
-            let centerY = notch.midY
-            let originY = centerY - size.height / 2.0 + islandVerticalInset(for: screen)
+            // Align with top of notch, accounting for vertical inset
+            let originY = notch.maxY - size.height + islandVerticalInset(for: screen)
             return NSRect(x: originX, y: originY, width: size.width, height: size.height)
         }
 
-        let originX = screen.frame.midX - size.width / 2.0
+        // No notch: center horizontally, position near top
         let originY = screen.frame.maxY - size.height - 8.0
         return NSRect(x: originX, y: originY, width: size.width, height: size.height)
     }
 
     private func islandVerticalInset(for screen: NSScreen) -> CGFloat {
         if #available(macOS 13.0, *), screen.safeAreaInsets.top > 0 {
-            return -2.0
+            return 2.0  // Move up to align with notch top
         }
-        return -4.0
+        return 0.0
     }
 }
 

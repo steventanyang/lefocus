@@ -43,16 +43,12 @@ final class IslandView: NSView {
         // Background pill with different appearance for idle vs active
         let path = NSBezierPath(roundedRect: bounds, xRadius: bounds.height / 2.0, yRadius: bounds.height / 2.0)
 
-        // Adjust opacity and color for idle state
-        let backgroundColor = isIdle
-            ? NSColor(white: 0.1, alpha: 0.7)   // Slightly more transparent when idle
-            : NSColor(white: 0.1, alpha: 0.95)  // More opaque when active
+        // Fully opaque black background
+        let backgroundColor = NSColor.black
         backgroundColor.setFill()
         path.fill()
 
-        let borderColor = isIdle
-            ? NSColor(white: 0.2, alpha: 0.6)   // Dimmer border when idle
-            : NSColor(white: 0.2, alpha: 1.0)   // Normal border when active
+        let borderColor = NSColor.black
         borderColor.setStroke()
         path.lineWidth = 0.5
         path.stroke()
@@ -80,7 +76,7 @@ final class IslandView: NSView {
             : NSColor.white
 
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 16, weight: .medium),
+            .font: NSFont.monospacedSystemFont(ofSize: 14, weight: .medium),
             .foregroundColor: textColor,
         ]
 
@@ -107,7 +103,7 @@ final class IslandView: NSView {
         // Position indicator to the right of the timer text
         let timeString = formatTime(ms: displayMs)
         let timeAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 16, weight: .medium),
+            .font: NSFont.monospacedSystemFont(ofSize: 14, weight: .medium),
         ]
         let timeTextSize = NSAttributedString(string: timeString, attributes: timeAttrs).size()
         let padding: CGFloat = 12.0
