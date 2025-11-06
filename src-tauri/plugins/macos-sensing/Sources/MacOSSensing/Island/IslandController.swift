@@ -57,25 +57,6 @@ public final class IslandController {
         }
     }
 
-    public func pause() {
-        stateQueue.async { [weak self] in
-            guard let self else { return }
-            DispatchQueue.main.async {
-                self.renderTimer?.invalidate()
-                self.renderTimer = nil
-            }
-        }
-    }
-
-    public func resume() {
-        stateQueue.async { [weak self] in
-            guard let self else { return }
-            DispatchQueue.main.async {
-                self.startRenderLoop()
-            }
-        }
-    }
-
     /// Reset the island to idle state (00:00) without hiding it.
     public func reset() {
         stateQueue.async { [weak self] in

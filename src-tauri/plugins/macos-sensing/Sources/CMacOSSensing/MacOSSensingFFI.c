@@ -13,8 +13,6 @@ extern void macos_sensing_swift_free_ocr_result(CMacOSSensing_OCRResultFFI *ptr)
 extern void macos_sensing_swift_island_init(void);
 extern void macos_sensing_swift_island_start(int64_t start_uptime_ms, int64_t target_ms, const char *mode);
 extern void macos_sensing_swift_island_sync(int64_t value_ms);
-extern void macos_sensing_swift_island_pause(void);
-extern void macos_sensing_swift_island_resume(void);
 extern void macos_sensing_swift_island_reset(void);
 extern void macos_sensing_swift_island_cleanup(void);
 
@@ -56,14 +54,6 @@ void macos_sensing_island_start(int64_t start_uptime_ms, int64_t target_ms, cons
 
 void macos_sensing_island_sync(int64_t value_ms) {
     macos_sensing_swift_island_sync(value_ms);
-}
-
-void macos_sensing_island_pause(void) {
-    macos_sensing_swift_island_pause();
-}
-
-void macos_sensing_island_resume(void) {
-    macos_sensing_swift_island_resume();
 }
 
 void macos_sensing_island_reset(void) {

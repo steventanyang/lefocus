@@ -35,8 +35,6 @@ extern "C" {
     fn macos_sensing_island_init();
     fn macos_sensing_island_start(start_uptime_ms: i64, target_ms: i64, mode: *const c_char);
     fn macos_sensing_island_sync(value_ms: i64);
-    fn macos_sensing_island_pause();
-    fn macos_sensing_island_resume();
     fn macos_sensing_island_reset();
     fn macos_sensing_island_cleanup();
 }
@@ -152,20 +150,6 @@ pub fn island_start(start_uptime_ms: i64, target_ms: i64, mode: &str) {
 pub fn island_sync(value_ms: i64) {
     unsafe {
         macos_sensing_island_sync(value_ms);
-    }
-}
-
-#[allow(dead_code)]
-pub fn island_pause() {
-    unsafe {
-        macos_sensing_island_pause();
-    }
-}
-
-#[allow(dead_code)]
-pub fn island_resume() {
-    unsafe {
-        macos_sensing_island_resume();
     }
 }
 

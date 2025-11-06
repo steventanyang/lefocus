@@ -160,20 +160,6 @@ public func macos_sensing_swift_island_sync(_ valueMs: Int64) {
     }
 }
 
-@_cdecl("macos_sensing_swift_island_pause")
-public func macos_sensing_swift_island_pause() {
-    DispatchQueue.main.async {
-        IslandController.shared.pause()
-    }
-}
-
-@_cdecl("macos_sensing_swift_island_resume")
-public func macos_sensing_swift_island_resume() {
-    DispatchQueue.main.async {
-        IslandController.shared.resume()
-    }
-}
-
 @_cdecl("macos_sensing_swift_island_reset")
 public func macos_sensing_swift_island_reset() {
     DispatchQueue.main.async {
