@@ -40,8 +40,8 @@ final class IslandView: NSView {
         context.saveGState()
         defer { context.restoreGState() }
 
-        // Background pill with different appearance for idle vs active
-        let path = NSBezierPath(roundedRect: bounds, xRadius: bounds.height / 2.0, yRadius: bounds.height / 2.0)
+        // Notch-shaped path: bottom corners curve inward, top corners curve outward
+        let path = createNotchPath()
 
         // Fully opaque black background
         let backgroundColor = NSColor.black
@@ -67,6 +67,58 @@ final class IslandView: NSView {
 
     // MARK: - Private helpers
 
+    private func createNotchPath() -> NSBezierPath {
+        let rect = bounds
+        let radius = rect.height / 2.0
+        let path = NSBezierPath()
+        
+        // Start from bottom-left, after the curve
+        path.move(to: NSPoint(x: rect.minX + radius, y: rect.minY))
+        
+        // Bottom edge to bottom-right curve
+        path.line(to: NSPoint(x: rect.maxX - radius, y: rect.minY))
+        
+        // Bottom-right arc (inward curve)
+        path.appendArc(withCenter: NSPoint(x: rect.maxX - radius, y: rect.minY + radius),
+                      radius: radius,
+                      startAngle: 270,
+                      endAngle: 0,
+                      clockwise: false)
+        
+        // Right edge
+        path.line(to: NSPoint(x: rect.maxX, y: rect.maxY - radius))
+        
+        // Top-right arc (outward curve) - use negative radius to curve outward
+        path.appendArc(withCenter: NSPoint(x: rect.maxX - radius, y: rect.maxY + radius),
+                      radius: radius,
+                      startAngle: 0,
+                      endAngle: 90,
+                      clockwise: false)
+        
+        // Top edge
+        path.line(to: NSPoint(x: rect.minX + radius, y: rect.maxY))
+        
+        // Top-left arc (outward curve) - use negative radius to curve outward
+        path.appendArc(withCenter: NSPoint(x: rect.minX + radius, y: rect.maxY + radius),
+                      radius: radius,
+                      startAngle: 90,
+                      endAngle: 180,
+                      clockwise: false)
+        
+        // Left edge
+        path.line(to: NSPoint(x: rect.minX, y: rect.minY + radius))
+        
+        // Bottom-left arc (inward curve)
+        path.appendArc(withCenter: NSPoint(x: rect.minX + radius, y: rect.minY + radius),
+                      radius: radius,
+                      startAngle: 180,
+                      endAngle: 270,
+                      clockwise: false)
+        
+        path.close()
+        return path
+    }
+
     private func drawTimerText() {
         let timeString = formatTime(ms: displayMs)
 
@@ -76,7 +128,7 @@ final class IslandView: NSView {
             : NSColor.white
 
         let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 14, weight: .medium),
+            .font: NSFont.monospacedSystemFont(ofSize: 13, weight: .medium),
             .foregroundColor: textColor,
         ]
 
@@ -103,7 +155,7 @@ final class IslandView: NSView {
         // Position indicator to the right of the timer text
         let timeString = formatTime(ms: displayMs)
         let timeAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 14, weight: .medium),
+            .font: NSFont.monospacedSystemFont(ofSize: 13, weight: .medium),
         ]
         let timeTextSize = NSAttributedString(string: timeString, attributes: timeAttrs).size()
         let padding: CGFloat = 12.0

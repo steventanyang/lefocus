@@ -277,7 +277,7 @@ public final class IslandController {
         }
     }
 
-    private static let compactSize = NSSize(width: 320.0, height: 36.0)
+    private static let compactSize = NSSize(width: 300.0, height: 36.0)
 
     private func currentUptimeMs() -> Int64 {
         Int64(ProcessInfo.processInfo.systemUptime * 1000.0)
