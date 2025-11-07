@@ -171,3 +171,33 @@ public func macos_sensing_swift_island_reset() {
 public func macos_sensing_swift_island_cleanup() {
     IslandController.shared.cleanup()
 }
+
+// MARK: - Audio controls bridge
+
+@_cdecl("macos_sensing_swift_audio_start_monitoring")
+public func macos_sensing_swift_audio_start_monitoring() {
+    DispatchQueue.main.async {
+        MediaMonitor.shared.startMonitoring()
+    }
+}
+
+@_cdecl("macos_sensing_swift_audio_toggle_playback")
+public func macos_sensing_swift_audio_toggle_playback() {
+    DispatchQueue.main.async {
+        MediaMonitor.shared.togglePlayback()
+    }
+}
+
+@_cdecl("macos_sensing_swift_audio_next_track")
+public func macos_sensing_swift_audio_next_track() {
+    DispatchQueue.main.async {
+        MediaMonitor.shared.skipToNext()
+    }
+}
+
+@_cdecl("macos_sensing_swift_audio_previous_track")
+public func macos_sensing_swift_audio_previous_track() {
+    DispatchQueue.main.async {
+        MediaMonitor.shared.skipToPrevious()
+    }
+}

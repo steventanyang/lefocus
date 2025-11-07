@@ -1,5 +1,6 @@
 import Cocoa
 import Foundation
+import QuartzCore
 
 /// Controls the floating island window that mirrors the timer state.
 public final class IslandController {
@@ -16,8 +17,23 @@ public final class IslandController {
     private var targetMs: Int64?
     private var mode: IslandMode = .countdown
     private var isIdle: Bool = true
+    private let mediaMonitor = MediaMonitor.shared
+    private let waveformAnimator = WaveformAnimator.shared
+    private var currentTrack: TrackInfo?
+    private var waveformBars: [CGFloat] = []
+    private var mediaMonitoringStarted = false
+    private var isExpanded: Bool = false
+    private var isHovering: Bool = false
+    private var collapseWorkItem: DispatchWorkItem?
 
-    private init() {}
+    private init() {
+        mediaMonitor.onTrackChange = { [weak self] track in
+            self?.handleTrackChange(track)
+        }
+        waveformAnimator.onFrame = { [weak self] bars in
+            self?.handleWaveformFrame(bars)
+        }
+    }
 
     // MARK: - Public API
 
@@ -81,6 +97,8 @@ public final class IslandController {
                 if let child = self.islandWindow {
                     IslandSpaceManager.shared.detach(window: child)
                 }
+                self.mediaMonitor.stopMonitoring()
+                self.waveformAnimator.stop()
                 IslandSpaceManager.shared.teardown()
                 if let observer = self.screenObserver {
                     NotificationCenter.default.removeObserver(observer)
@@ -148,7 +166,7 @@ public final class IslandController {
         }
 
         if islandWindow == nil {
-            let targetFrame = islandFrame(for: screen)
+            let targetFrame = islandFrame(for: screen, size: currentIslandSize())
             let islandPanel = NSPanel(
                 contentRect: targetFrame,
                 styleMask: [.borderless, .nonactivatingPanel],
@@ -164,6 +182,7 @@ public final class IslandController {
             islandPanel.isMovable = false
             islandPanel.isMovableByWindowBackground = false
             islandPanel.isReleasedWhenClosed = false
+            islandPanel.acceptsMouseMovedEvents = true
             islandPanel.collectionBehavior = [
                 .canJoinAllSpaces,
                 .stationary,
@@ -172,8 +191,11 @@ public final class IslandController {
             ]
 
             let view = IslandView(frame: NSRect(origin: .zero, size: targetFrame.size))
+            view.interactionDelegate = self
             islandPanel.contentView = view
             islandPanel.orderFrontRegardless()
+            configureIslandView(view)
+            updateViewInteractionState()
 
             window?.addChildWindow(islandPanel, ordered: .above)
 
@@ -186,10 +208,12 @@ public final class IslandController {
         IslandSpaceManager.shared.attach(window: window)
 
         if let islandPanel = islandWindow {
-            islandPanel.setFrame(islandFrame(for: screen), display: true)
+            islandPanel.setFrame(islandFrame(for: screen, size: currentIslandSize()), display: true)
             islandPanel.orderFrontRegardless()
             IslandSpaceManager.shared.attach(window: islandPanel)
         }
+
+        startMediaMonitoringIfNeeded()
     }
 
     private func repositionForCurrentScreen() {
@@ -199,7 +223,7 @@ public final class IslandController {
         }
         panel.setFrame(screen.frame, display: true)
         if let islandPanel = islandWindow {
-            islandPanel.setFrame(islandFrame(for: screen), display: true)
+            islandPanel.setFrame(islandFrame(for: screen, size: currentIslandSize()), display: true)
         }
         panel.orderFrontRegardless()
         islandWindow?.orderFrontRegardless()
@@ -268,25 +292,36 @@ public final class IslandController {
     }
 
     private static let compactSize = NSSize(width: 300.0, height: 36.0)
+    private static let expandedSize = NSSize(width: 600.0, height: 80.0)
+    private static let hoverSizeDelta = NSSize(width: 20.0, height: 4.0)
 
     private func currentUptimeMs() -> Int64 {
         Int64(ProcessInfo.processInfo.systemUptime * 1000.0)
     }
 
-    private func islandFrame(for screen: NSScreen) -> NSRect {
-        let size = Self.compactSize
-        // Center horizontally on screen
+    private func islandFrame(for screen: NSScreen, size: NSSize) -> NSRect {
         let originX = screen.frame.midX - size.width / 2.0
-        
+
         if let notch = screen.lf_notchRect {
-            // Align with top of notch, accounting for vertical inset
             let originY = notch.maxY - size.height + islandVerticalInset(for: screen)
             return NSRect(x: originX, y: originY, width: size.width, height: size.height)
         }
 
-        // No notch: center horizontally, position near top
         let originY = screen.frame.maxY - size.height - 8.0
         return NSRect(x: originX, y: originY, width: size.width, height: size.height)
+    }
+
+    private func currentIslandSize() -> NSSize {
+        if isExpanded {
+            return Self.expandedSize
+        }
+        if isHovering {
+            return NSSize(
+                width: Self.compactSize.width + Self.hoverSizeDelta.width,
+                height: Self.compactSize.height + Self.hoverSizeDelta.height
+            )
+        }
+        return Self.compactSize
     }
 
     private func islandVerticalInset(for screen: NSScreen) -> CGFloat {
@@ -294,6 +329,151 @@ public final class IslandController {
             return 2.0  // Move up to align with notch top
         }
         return 0.0
+    }
+
+    private func updateIslandWindowSize(animated: Bool, duration: TimeInterval = 0.2) {
+        guard let islandPanel = islandWindow else { return }
+        guard let screen = islandPanel.screen ?? window?.screen ?? NSScreen.lf_preferredIslandDisplay ?? NSScreen.main else {
+            return
+        }
+        let targetFrame = islandFrame(for: screen, size: currentIslandSize())
+        if animated {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = duration
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                islandPanel.animator().setFrame(targetFrame, display: true)
+            }
+        } else {
+            islandPanel.setFrame(targetFrame, display: true)
+        }
+    }
+
+    private func configureIslandView(_ view: IslandView) {
+        view.interactionDelegate = self
+        view.update(displayMs: currentDisplayMs(), mode: mode, idle: isIdle)
+        if currentTrack != nil {
+            view.updateAudio(track: currentTrack, waveformBars: waveformBars)
+        } else {
+            view.updateAudio(track: nil, waveformBars: nil)
+        }
+    }
+
+    private func startMediaMonitoringIfNeeded() {
+        guard !mediaMonitoringStarted else { return }
+        mediaMonitoringStarted = true
+        mediaMonitor.startMonitoring()
+    }
+
+    private func updateViewInteractionState() {
+        islandView?.updateInteractionState(isExpanded: isExpanded, isHovered: isHovering)
+    }
+
+    private func setExpanded(_ expanded: Bool, animated: Bool = true) {
+        guard isExpanded != expanded else { return }
+        if expanded && currentTrack == nil {
+            return
+        }
+
+        isExpanded = expanded
+        if expanded {
+            cancelCollapseWorkItem()
+        }
+        updateViewInteractionState()
+        let duration: TimeInterval = expanded ? 0.25 : 0.2
+        updateIslandWindowSize(animated: animated, duration: duration)
+    }
+
+    private func scheduleCollapse(after delay: TimeInterval) {
+        guard isExpanded else { return }
+        collapseWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.setExpanded(false)
+        }
+        collapseWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    private func cancelCollapseWorkItem() {
+        collapseWorkItem?.cancel()
+        collapseWorkItem = nil
+    }
+
+    private func handleTrackChange(_ track: TrackInfo?) {
+        currentTrack = track
+
+        if let track {
+            if track.isPlaying {
+                waveformAnimator.state = .playing
+            } else {
+                waveformAnimator.state = .paused
+            }
+            waveformAnimator.start()
+        } else {
+            waveformAnimator.state = .stopped
+            waveformAnimator.stop()
+            waveformBars = []
+            setExpanded(false)
+        }
+
+        updateAudioUI()
+    }
+
+    private func handleWaveformFrame(_ bars: [CGFloat]) {
+        guard currentTrack != nil else { return }
+        waveformBars = bars
+        updateAudioUI(waveformBars: bars)
+    }
+
+    private func updateAudioUI(waveformBars: [CGFloat]? = nil) {
+        guard let view = islandView else { return }
+        if let currentTrack {
+            view.updateAudio(track: currentTrack, waveformBars: waveformBars ?? self.waveformBars)
+        } else {
+            view.updateAudio(track: nil, waveformBars: nil)
+        }
+    }
+}
+
+// MARK: - Interaction Delegate
+
+extension IslandController: IslandViewInteractionDelegate {
+    func islandViewDidRequestToggleExpansion(_ view: IslandView) {
+        if isExpanded {
+            setExpanded(false)
+        } else {
+            setExpanded(true)
+        }
+    }
+
+    func islandView(_ view: IslandView, hoverChanged isHovered: Bool) {
+        isHovering = isHovered
+        updateViewInteractionState()
+        if !isExpanded {
+            updateIslandWindowSize(animated: true, duration: 0.15)
+        }
+        if isHovered {
+            cancelCollapseWorkItem()
+        }
+    }
+
+    func islandViewDidRequestCollapse(_ view: IslandView, delay: TimeInterval) {
+        scheduleCollapse(after: delay)
+    }
+
+    func islandViewDidCancelCollapseRequest(_ view: IslandView) {
+        cancelCollapseWorkItem()
+    }
+
+    func islandViewDidRequestPlayPause(_ view: IslandView) {
+        mediaMonitor.togglePlayback()
+    }
+
+    func islandViewDidRequestNext(_ view: IslandView) {
+        mediaMonitor.skipToNext()
+    }
+
+    func islandViewDidRequestPrevious(_ view: IslandView) {
+        mediaMonitor.skipToPrevious()
     }
 }
 
