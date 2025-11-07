@@ -168,6 +168,7 @@ pub fn run() {
                 #[cfg(target_os = "macos")]
                 {
                     macos_bridge::island_init();
+                    macos_bridge::audio_start_monitoring();
                 }
 
                 Ok(())

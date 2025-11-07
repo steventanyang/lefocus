@@ -34,9 +34,13 @@ extern "C" {
 
     fn macos_sensing_island_init();
     fn macos_sensing_island_start(start_uptime_ms: i64, target_ms: i64, mode: *const c_char);
-    fn macos_sensing_island_sync(value_ms: i64);
+   fn macos_sensing_island_sync(value_ms: i64);
     fn macos_sensing_island_reset();
     fn macos_sensing_island_cleanup();
+    fn macos_sensing_audio_start_monitoring();
+    fn macos_sensing_audio_toggle_playback();
+    fn macos_sensing_audio_next_track();
+    fn macos_sensing_audio_previous_track();
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -163,6 +167,30 @@ pub fn island_reset() {
 pub fn island_cleanup() {
     unsafe {
         macos_sensing_island_cleanup();
+    }
+}
+
+pub fn audio_start_monitoring() {
+    unsafe {
+        macos_sensing_audio_start_monitoring();
+    }
+}
+
+pub fn audio_toggle_playback() {
+    unsafe {
+        macos_sensing_audio_toggle_playback();
+    }
+}
+
+pub fn audio_next_track() {
+    unsafe {
+        macos_sensing_audio_next_track();
+    }
+}
+
+pub fn audio_previous_track() {
+    unsafe {
+        macos_sensing_audio_previous_track();
     }
 }
 
