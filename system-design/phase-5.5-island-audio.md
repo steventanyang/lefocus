@@ -1,10 +1,42 @@
 # LeFocus: Dynamic Island Audio Controls
 
-**Version:** 1.0
+**Version:** 2.0
 **Date:** January 2025
 **Phase:** 5.5 (Audio Enhancement)
-**Status:** Design Ready
-**Approach:** Swift MediaPlayer + Synthetic Waveform Animation
+**Status:** ✅ Implemented
+**Approach:** AppleScript Probes + CVDisplayLink Waveform + CGS Space Management
+
+---
+
+## ⚠️ IMPORTANT: Implementation vs Original Design
+
+This document has been **updated to reflect the actual implementation**. Key differences from the original design:
+
+### Architectural Changes
+1. **File Organization**: Audio components live in `Island/Audio/` subfolder
+2. **New Components**: `IslandWindowManager`, `IslandAudioController`, `IslandSpaceManager`, `IslandTimerPresenter`
+3. **Media Detection**: AppleScript probes (not ScriptingBridge) with MPNowPlayingInfoCenter fallback
+4. **Animation**: CVDisplayLink (not CADisplayLink) for display-synced waveform rendering
+5. **Space Management**: Private CGS APIs to persist island across Mission Control transitions
+6. **Delegation Pattern**: Extensive use of protocols for clean separation of concerns
+
+### Component Hierarchy
+```
+IslandController (top-level coordinator)
+├── IslandWindowManager (frame & sizing)
+├── IslandTimerPresenter (timer logic)
+├── IslandAudioController (audio bridge)
+│   ├── MediaMonitor (detection)
+│   │   └── MediaControlCoordinator (playback control)
+│   └── WaveformAnimator (CVDisplayLink-driven animation)
+└── IslandSpaceManager (CGS space persistence)
+```
+
+### Why These Changes?
+- **Simpler**: AppleScript is lighter than ScriptingBridge, no framework imports needed
+- **More Performant**: CVDisplayLink provides better display synchronization
+- **Better Architecture**: Clear separation of concerns with dedicated managers
+- **Persistent**: CGS space manager keeps island visible across Mission Control gestures
 
 ---
 
@@ -118,138 +150,171 @@ This builds on **Phase 5: Island Timer** (phase-5-island-timer.md):
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                   IslandView (Enhanced)                      │
+│                        IslandView                            │
 │                                                              │
 │  ┌──────────────┐  ┌─────────────────┐  ┌────────────────┐ │
 │  │ Timer Display│  │ Audio Controls  │  │   Waveform     │ │
-│  │  (Phase 5)   │  │  (NEW)          │  │   Visualizer   │ │
+│  │              │  │                 │  │   Visualizer   │ │
 │  └──────────────┘  └─────────────────┘  └────────────────┘ │
 │                                                              │
-└────────────────────────┬────────────────────────────────────┘
+└────────────────────────┬───────────────────────────────────┘
                          │
                          ↓
 ┌─────────────────────────────────────────────────────────────┐
-│           IslandController (Enhanced)                        │
+│                     IslandController                         │
 │                                                              │
-│  - Timer state (existing)                                    │
-│  - Audio state (NEW)                                         │
-│  - Expansion state (NEW)                                     │
-│  - Interaction handling (NEW)                                │
-└────────────────────┬────────────────────────────────────────┘
-                     │
-        ┌────────────┴────────────┐
-        │                         │
-        ↓                         ↓
-┌──────────────────┐    ┌──────────────────────┐
-│  MediaMonitor    │    │  WaveformAnimator    │
-│                  │    │                      │
-│  - Track changes │    │  - Procedural bars  │
-│  - Hybrid control│    │  - Playback states  │
-│  - App fallbacks │    │  - DisplayLink loop │
-└──────────────────┘    └──────────────────────┘
+│  - Coordinates all island components                         │
+│  - Delegates to specialized managers                         │
+│  - Handles expansion/collapse state                          │
+└───┬────────────┬─────────────┬──────────────────┬──────────┘
+    │            │             │                  │
+    ↓            ↓             ↓                  ↓
+┌────────┐ ┌──────────┐ ┌──────────────┐ ┌──────────────────┐
+│ Island │ │ Island   │ │ IslandAudio  │ │ IslandSpace      │
+│ Window │ │ Timer    │ │ Controller   │ │ Manager          │
+│ Manager│ │ Presenter│ │              │ │                  │
+│        │ │          │ │              │ │ - CGS space      │
+│ - Size │ │ - Clock  │ │ - Waveform   │ │ - Mission Ctrl   │
+│ - Frame│ │ - Render │ │ - Media      │ │   persistence    │
+└────────┘ └──────────┘ └──────┬───────┘ └──────────────────┘
+                                │
+                    ┌───────────┴───────────┐
+                    │                       │
+                    ↓                       ↓
+           ┌──────────────────┐    ┌──────────────────────┐
+           │  MediaMonitor    │    │  WaveformAnimator    │
+           │                  │    │                      │
+           │  - Track changes │    │  - CVDisplayLink    │
+           │  - AppleScript   │    │  - Procedural bars  │
+           │  - MPNowPlaying  │    │  - Playback states  │
+           └──────────────────┘    └──────────────────────┘
+                    │
+                    ↓
+           ┌──────────────────────┐
+           │ MediaControl         │
+           │ Coordinator          │
+           │                      │
+           │  - AppleScript cmds  │
+           │  - Media key fallbck │
+           └──────────────────────┘
 ```
 
 ### 2.2 Data Flow
 
 **Media Detection:**
-1. `MediaMonitor` listens to `MPNowPlayingInfoCenter` for fast metadata hints
-2. A 1s poll queries Spotify/Music via AppleScript for authoritative state & bundle ID
-3. `MediaMonitor` forwards consolidated track info to `IslandController`
-4. View shows audio indicator in compact state
+1. `MediaMonitor` polls every 1 second on background queue
+2. Probes Spotify via AppleScript (highest priority)
+3. Falls back to Apple Music via AppleScript
+4. Falls back to `MPNowPlayingInfoCenter` for generic apps
+5. Snapshot captured on background queue, applied on main queue
+6. `IslandAudioController` receives track updates via delegate
+7. Controller forwards to `IslandController` which updates view
 
 **User Interaction:**
-1. User hovers over island → `IslandView` mouseEntered handler fires
-2. View grows slightly (visual feedback), cursor changes to pointer
-3. User clicks → `IslandController.toggleExpansion()` called
-4. View animates to expanded state, showing full controls + waveform
-5. `WaveformAnimator` starts the DisplayLink-driven animation loop
-6. User moves mouse away → `IslandView` mouseExited handler fires
-7. View collapses back to compact state after 300ms delay
+1. User hovers over island → `IslandView` mouseEntered fires
+2. View notifies `IslandController` via `IslandViewInteractionDelegate`
+3. Controller updates hover state, triggers `IslandWindowManager` to animate size
+4. User clicks → `islandViewDidRequestToggleExpansion` delegate method called
+5. Controller toggles expansion state, animates window via `IslandWindowManager`
+6. Waveform starts animating when expanded
+7. User moves mouse away → `mouseExited` fires
+8. View requests collapse with 0.3s delay via delegate
+9. Controller schedules collapse work item, auto-collapses after delay
 
 **Audio Control:**
-1. User clicks play/pause button in expanded view
-2. `IslandView` calls `MediaMonitor.togglePlayback()`
-3. `MediaMonitor` instructs `MediaControlCoordinator` to perform hybrid control
-4. Coordinator targets active player via AppleScript (Spotify/Music) when possible
-5. If no app-specific control succeeds, fall back to CGEvent media key injection
-6. On success, coordinator notifies `MediaMonitor` to refresh state
-7. `MediaMonitor` refreshes metadata (MPNowPlayingInfoCenter or cached info)
+1. User clicks play/pause button in expanded IslandView
+2. View detects hit test on button rect, calls `islandViewDidRequestPlayPause` delegate
+3. Controller forwards to `IslandAudioController.togglePlayback()`
+4. Audio controller calls `MediaMonitor.togglePlayback()`
+5. Monitor calls `MediaControlCoordinator` with current bundle ID
+6. Coordinator tries AppleScript command for Spotify/Music
+7. Falls back to media key simulation if AppleScript fails
+8. Monitor refreshes metadata on next 1-second poll cycle
 
 **Waveform Rendering:**
-1. `WaveformAnimator.start()` spins up `CADisplayLink`
-2. Each frame, animator updates target amplitudes based on playback state
-3. Procedural noise + easing produce smooth bar motion
-4. Animator emits new bar heights via callback
-5. `IslandView` renders bars in waveform area (right side) at 30-60 FPS
+1. `IslandAudioController` starts `WaveformAnimator` when track detected
+2. Animator creates `CVDisplayLink` (not CADisplayLink) for display-synced updates
+3. Display link callback dispatches to main queue for each frame
+4. Animator updates procedural bar values with noise + sine waves
+5. Animator calls `onFrame` callback with new bar array
+6. `IslandAudioController` receives bars, forwards to `IslandController`
+7. Controller updates `IslandView` which renders bars on next draw cycle
 
 ### 2.3 State Management
 
-**IslandController maintains:**
+**IslandController coordinates state across components:**
+
 ```swift
-struct IslandState {
-    // Timer state (existing from Phase 5)
-    var timerDisplayMs: Int64
-    var timerMode: IslandMode
-    var isTimerActive: Bool
-    var isTimerIdle: Bool
+// IslandController holds references to:
+private let windowManager: IslandWindowManager
+private let timerPresenter: IslandTimerPresenter
+private let audioController: IslandAudioController
 
-    // Audio state (NEW)
-    var hasAudio: Bool
-    var isAudioPlaying: Bool
-    var trackTitle: String?
-    var trackArtist: String?
-    var trackArtwork: NSImage?
+// And maintains local state:
+private var latestTimerUpdate: IslandTimerPresenter.DisplayUpdate?
+private var currentTrack: TrackInfo?
+private var waveformBars: [CGFloat] = []
+private var isExpanded: Bool = false
+private var isHovering: Bool = false
+private var collapseWorkItem: DispatchWorkItem?
+```
 
-    // Interaction state (NEW)
-    var isExpanded: Bool
-    var isHovered: Bool
+**IslandView maintains:**
+```swift
+private var displayMs: Int64 = 0
+private var mode: IslandMode = .countdown
+private var isIdle: Bool = true
+private var trackInfo: TrackInfo?
+private var isAudioPlaying: Bool = false
+private var waveformBars: [CGFloat] = []
+private var isExpanded: Bool = false
+private var isHovered: Bool = false
+```
+
+**TrackInfo model:**
+```swift
+public struct TrackInfo: Equatable {
+    public let title: String
+    public let artist: String
+    public let artwork: NSImage?
+    public let isPlaying: Bool
+    public let timestamp: Date
+    public let sourceBundleID: String?
 }
 ```
 
 ### 2.4 Priority System for Multiple Audio Sources
 
-When multiple apps are playing audio simultaneously:
+The implementation uses a **simple priority waterfall** in `MediaMonitor.captureSnapshot()`:
 
 **Priority order:**
-1. **Most recently started** source (if started within last 5 seconds)
-2. **Spotify** (if multiple sources have been playing for a while)
-3. **Apple Music** (fallback if no Spotify)
-4. **First detected source** (any other app)
+1. **Spotify** (checked first via AppleScript probe)
+2. **Apple Music** (checked second via AppleScript probe)
+3. **Generic sources** (MPNowPlayingInfoCenter fallback)
 
 **Implementation:**
 ```swift
-class MediaMonitor {
-    private var audioSources: [AudioSource] = []
-
-    func selectPrimarySource() -> AudioSource? {
-        let now = Date()
-
-        // Check for recently started (within 5 seconds)
-        if let recent = audioSources.first(where: {
-            now.timeIntervalSince($0.startedAt) < 5.0
-        }) {
-            return recent
-        }
-
-        // Prefer Spotify
-        if let spotify = audioSources.first(where: {
-            $0.bundleID == "com.spotify.client"
-        }) {
-            return spotify
-        }
-
-        // Fallback to Apple Music
-        if let appleMusic = audioSources.first(where: {
-            $0.bundleID == "com.apple.Music"
-        }) {
-            return appleMusic
-        }
-
-        // Any other source
-        return audioSources.first
+private func captureSnapshot() -> MediaSnapshot? {
+    // Priority 1: Spotify
+    if let spotify = spotifyProbe.snapshot() {
+        return MediaSnapshot(track: spotify, bundleID: spotify.sourceBundleID)
     }
+
+    // Priority 2: Apple Music
+    if let music = musicProbe.snapshot() {
+        return MediaSnapshot(track: music, bundleID: music.sourceBundleID)
+    }
+
+    // Priority 3: Generic (Chrome, Safari, etc.)
+    if let generic = nowPlayingSnapshot() {
+        return MediaSnapshot(track: generic, bundleID: generic.sourceBundleID)
+    }
+
+    return nil
 }
 ```
+
+**Note:** The system always prefers Spotify over Apple Music, regardless of which started more recently. This is intentional for consistent UX.
 
 ---
 
@@ -257,79 +322,113 @@ class MediaMonitor {
 
 ### 3.1 System-Wide Media Detection
 
-`MPNowPlayingInfoCenter` is still the lowest-friction way to learn about track metadata, but it only updates reliably for certain players. We combine it with lightweight app-specific probes:
+The implementation uses **AppleScript-based probes** for Spotify and Apple Music, with MPNowPlayingInfoCenter as a fallback for other apps. This approach is simpler than ScriptingBridge and doesn't require additional frameworks.
 
-1. Observe `MPNowPlayingInfoCenter` for quick updates (title, artist, artwork). When info appears we treat the publishing process as the active bundle if we can infer it.
-2. Poll Spotify and Apple Music via `ScriptingBridge` every 1s while audio is active to confirm metadata and capture playback state/bundle IDs.
-3. If neither path provides data, fall back to heuristics (`NSWorkspace.runningApplications`, browser tab sniffing) and surface a generic audio indicator.
+**Architecture:**
+1. Poll every 1 second via `Timer` scheduled on main run loop
+2. Execute snapshot capture on background queue (`pollingQueue`)
+3. Probe Spotify → Apple Music → MPNowPlayingInfoCenter in priority order
+4. Apply snapshot on main queue to update UI
 
+**Key implementation details:**
 ```swift
-final class MediaMonitor {
+public final class MediaMonitor {
+    public static let shared = MediaMonitor()
+
     private let nowPlayingCenter = MPNowPlayingInfoCenter.default()
-    private let spotify = SpotifyMonitor()
-    private let music = MusicMonitor()
+    private let controlCoordinator = MediaControlCoordinator()
+    private let spotifyProbe = SpotifyMetadataProbe()
+    private let musicProbe = MusicMetadataProbe()
+    private let pollingQueue = DispatchQueue(label: "MacOSSensing.MediaMonitor.polling", qos: .userInitiated)
+
     private var metadataTimer: Timer?
+    private var currentTrack: TrackInfo?
+    public private(set) var activeBundleID: String?
+    public var onTrackChange: ((TrackInfo?) -> Void)?
 
-    private(set) var activeBundleID: String?
-    var onTrackChange: ((TrackInfo?) -> Void)?
-
-    func startMonitoring() {
-        NotificationCenter.default.addObserver(self,
-            selector: #selector(handleNowPlayingChange),
-            name: .MPMusicPlayerControllerNowPlayingItemDidChange,
-            object: nil)
-
-        spotify.connect()
-        music.connect()
-        startMetadataPolling()
-        handleNowPlayingChange()
+    public func startMonitoring() {
+        guard metadataTimer == nil else { return }
+        startMetadataTimer()
+        refreshMetadata()
     }
 
-    @objc private func handleNowPlayingChange() {
-        guard let info = nowPlayingCenter.nowPlayingInfo else {
-            activeBundleID = nil
-            onTrackChange?(nil)
-            return
+    private func startMetadataTimer() {
+        let timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.refreshMetadata()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        metadataTimer = timer
+    }
+
+    private func refreshMetadata() {
+        pollingQueue.async { [weak self] in
+            guard let self else { return }
+            let snapshot = self.captureSnapshot()
+            DispatchQueue.main.async {
+                self.apply(snapshot: snapshot)
+            }
+        }
+    }
+
+    private func apply(snapshot: MediaSnapshot?) {
+        activeBundleID = snapshot?.bundleID
+        guard snapshot?.track != currentTrack else { return }
+        currentTrack = snapshot?.track
+        onTrackChange?(currentTrack)
+    }
+}
+```
+
+**AppleScript Probes:**
+```swift
+private struct SpotifyMetadataProbe: MediaAppProbe {
+    private static let separator = "||LEFOCUS_SPOTIFY||"
+
+    func snapshot() -> TrackInfo? {
+        guard let response = AppleScriptRunner.evaluateString(Self.script) else { return nil }
+        guard !response.isEmpty else { return nil }
+        let components = response.components(separatedBy: Self.separator)
+        guard components.count >= 3 else { return nil }
+
+        let isPlaying = components[2].lowercased() == "playing"
+        guard components[0].isEmpty == false || components[1].isEmpty == false else {
+            return nil
         }
 
-        let track = TrackInfo(
-            title: info[MPMediaItemPropertyTitle] as? String ?? "Unknown",
-            artist: info[MPMediaItemPropertyArtist] as? String ?? "Unknown",
-            artwork: (info[MPMediaItemPropertyArtwork] as? MPMediaItemArtwork)?.image(at: CGSize(width: 64, height: 64)),
-            isPlaying: info[MPNowPlayingInfoPropertyPlaybackRate] as? Double == 1.0
+        return TrackInfo(
+            title: components[0].isEmpty ? "Unknown" : components[0],
+            artist: components[1].isEmpty ? "Unknown" : components[1],
+            artwork: nil,
+            isPlaying: isPlaying,
+            sourceBundleID: "com.spotify.client"
         )
-        onTrackChange?(track)
     }
 
-    private func startMetadataPolling() {
-        metadataTimer?.invalidate()
-        metadataTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.refreshAppSpecificMetadata()
-        }
-    }
-
-    private func refreshAppSpecificMetadata() {
-        if let spotifyTrack = spotify.currentTrack() {
-            activeBundleID = "com.spotify.client"
-            onTrackChange?(spotifyTrack)
-            return
-        }
-
-        if let musicTrack = music.currentTrack() {
-            activeBundleID = "com.apple.Music"
-            onTrackChange?(musicTrack)
-            return
-        }
-    }
+    private static let script = """
+    set separator to "\(SpotifyMetadataProbe.separator)"
+    if application "Spotify" is not running then
+        return ""
+    end if
+    tell application "Spotify"
+        if player state is stopped then
+            return ""
+        end if
+        set trackName to name of current track
+        set trackArtist to artist of current track
+        set trackState to player state as string
+        return trackName & separator & trackArtist & separator & trackState
+    end tell
+    """
 }
 ```
 
 ### 3.2 Hybrid Media Control
 
-`MPRemoteCommandCenter` cannot control third-party apps from outside their sandbox. Instead we use a two-tier strategy:
+The implementation uses **system-defined media key events** as the fallback instead of CGEvent key injection. This approach is more reliable and doesn't require accessibility permissions.
 
-1. **AppleScript for supported apps** (Spotify, Apple Music) – direct commands
-2. **CGEvent media key injection** – universal fallback
+**Two-tier strategy:**
+1. **AppleScript for Spotify/Music** – direct app control with `playpause`, `next track`, `previous track`
+2. **NSEvent.systemDefined media keys** – universal fallback for all other apps
 
 ```swift
 final class MediaControlCoordinator {
@@ -341,144 +440,122 @@ final class MediaControlCoordinator {
         mediaKeyController.playPause()
     }
 
-    func nextTrack(for bundleID: String?) {
+    func skipToNext(for bundleID: String?) {
         if appleScriptController.perform(.next, bundleID: bundleID) { return }
         mediaKeyController.nextTrack()
     }
 
-    func previousTrack(for bundleID: String?) {
+    func skipToPrevious(for bundleID: String?) {
         if appleScriptController.perform(.previous, bundleID: bundleID) { return }
         mediaKeyController.previousTrack()
     }
 }
-
-enum MediaCommand { case toggle, next, previous }
 ```
 
+**AppleScript Controller:**
 ```swift
-final class AppleScriptMediaController {
+private final class AppleScriptMediaController {
     func perform(_ command: MediaCommand, bundleID: String?) -> Bool {
-        guard let bundleID else { return false }
+        guard let bundleID, let source = script(for: command, bundleID: bundleID) else {
+            return false
+        }
+        return AppleScriptRunner.execute(source)
+    }
 
-        let script: String
+    private func script(for command: MediaCommand, bundleID: String) -> String? {
         switch (bundleID, command) {
         case ("com.spotify.client", .toggle):
-            script = "tell application \"Spotify\" to playpause"
+            return #"tell application "Spotify" to playpause"#
         case ("com.spotify.client", .next):
-            script = "tell application \"Spotify\" to next track"
+            return #"tell application "Spotify" to next track"#
         case ("com.spotify.client", .previous):
-            script = "tell application \"Spotify\" to previous track"
+            return #"tell application "Spotify" to previous track"#
         case ("com.apple.Music", .toggle):
-            script = "tell application \"Music\" to playpause"
+            return #"tell application "Music" to playpause"#
         case ("com.apple.Music", .next):
-            script = "tell application \"Music\" to next track"
+            return #"tell application "Music" to next track"#
         case ("com.apple.Music", .previous):
-            script = "tell application \"Music\" to previous track"
+            return #"tell application "Music" to previous track"#
         default:
-            return false
+            return nil
         }
-
-        guard let appleScript = NSAppleScript(source: script) else {
-            return false
-        }
-
-        var error: NSDictionary?
-        appleScript.executeAndReturnError(&error)
-        return error == nil
     }
 }
+```
 
-final class MediaKeyController {
-    private enum MediaKeyCode: CGKeyCode {
-        case playPause = 0x7E
-        case next = 0x7F
-        case previous = 0x80
+**Media Key Controller (NSEvent-based):**
+```swift
+private final class MediaKeyController {
+    private enum MediaKey: Int32 {
+        case playPause = 16   // NX_KEYTYPE_PLAY
+        case next = 17        // NX_KEYTYPE_NEXT
+        case previous = 18    // NX_KEYTYPE_PREVIOUS
     }
 
     func playPause() { send(.playPause) }
     func nextTrack() { send(.next) }
     func previousTrack() { send(.previous) }
 
-    private func send(_ keyCode: MediaKeyCode) {
-        let source = CGEventSource(stateID: .hidSystemState)
-        let down = CGEvent(keyboardEventSource: source, virtualKey: keyCode.rawValue, keyDown: true)
-        let up = CGEvent(keyboardEventSource: source, virtualKey: keyCode.rawValue, keyDown: false)
-        down?.flags = .maskNonCoalesced
-        up?.flags = .maskNonCoalesced
-        down?.post(tap: .cghidEventTap)
-        up?.post(tap: .cghidEventTap)
+    private func send(_ key: MediaKey) {
+        let flags = NSEvent.ModifierFlags(rawValue: 0xA00)
+        let dataDown = Int((key.rawValue << 16) | (0xA << 8))
+        let dataUp = Int((key.rawValue << 16) | (0xB << 8))
+
+        guard let downEvent = NSEvent.otherEvent(
+            with: .systemDefined,
+            location: .zero,
+            modifierFlags: flags,
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            subtype: 8,
+            data1: dataDown,
+            data2: -1
+        ), let upEvent = NSEvent.otherEvent(
+            with: .systemDefined,
+            location: .zero,
+            modifierFlags: flags,
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            subtype: 8,
+            data1: dataUp,
+            data2: -1
+        ) else {
+            return
+        }
+
+        downEvent.cgEvent?.post(tap: .cghidEventTap)
+        upEvent.cgEvent?.post(tap: .cghidEventTap)
     }
 }
 ```
 
-### 3.3 Detecting Spotify & Apple Music
-
-For richer metadata and precise control we rely on ScriptingBridge/AppleScript:
-
+**AppleScript Helper:**
 ```swift
-import ScriptingBridge
-
-final class SpotifyMonitor {
-    private var spotifyApp: SpotifyApplication?
-
-    func connect() {
-        spotifyApp = SBApplication(bundleIdentifier: "com.spotify.client")
+enum AppleScriptRunner {
+    static func execute(_ source: String) -> Bool {
+        guard let script = NSAppleScript(source: source) else {
+            return false
+        }
+        var error: NSDictionary?
+        script.executeAndReturnError(&error)
+        return error == nil
     }
 
-    func currentTrack() -> TrackInfo? {
-        guard let spotify = spotifyApp,
-              spotify.isRunning,
-              let track = spotify.currentTrack else {
+    static func evaluateString(_ source: String) -> String? {
+        guard let script = NSAppleScript(source: source) else {
             return nil
         }
-
-        return TrackInfo(
-            title: track.name ?? "Unknown",
-            artist: track.artist ?? "Unknown",
-            artwork: track.artwork,
-            isPlaying: spotify.playerState == .playing
-        )
+        var error: NSDictionary?
+        let descriptor = script.executeAndReturnError(&error)
+        guard error == nil else { return nil }
+        return descriptor.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
-
-final class MusicMonitor {
-    private var musicApp: MusicApplication?
-
-    func connect() {
-        musicApp = SBApplication(bundleIdentifier: "com.apple.Music")
-    }
-
-    func currentTrack() -> TrackInfo? {
-        guard let music = musicApp,
-              music.isRunning,
-              let track = music.currentTrack else {
-            return nil
-        }
-
-        return TrackInfo(
-            title: track.name ?? "Unknown",
-            artist: track.artist ?? "Unknown",
-            artwork: track.artwork,
-            isPlaying: music.playerState == .playing
-        )
-    }
-}
-
 ```
 
-**Permissions:** Add `NSAppleEventsUsageDescription` to Info.plist and instruct the user to enable Automation access for LeFocus → Spotify/Music on first use.
-```
-
-**Note:** Requires entitlement for app scripting.
-
-### 3.4 Fallback Detection Strategy
-
-If `MPNowPlayingInfoCenter` doesn't provide info (some apps don't report properly):
-
-1. Poll Spotify and Apple Music via ScriptingBridge (fast path)
-2. Inspect `NSWorkspace.shared.runningApplications` for other media players
-3. For browsers, optionally inspect tab titles via Accessibility APIs (opt-in)
-4. When no metadata can be resolved, fall back to generic waveform + CGEvent controls only
+**Permissions:** Add `NSAppleEventsUsageDescription` to Info.plist. Users will be prompted to grant automation permission on first use.
 
 ---
 
@@ -963,24 +1040,187 @@ class IslandView: NSView {
 
 ---
 
+## 7.5. Island Space Manager (CGS Persistence)
+
+### 7.5.1 Problem Statement
+
+macOS Mission Control and full-screen transitions can hide or displace floating windows. The Dynamic Island needs to remain visible across:
+- Mission Control gestures (swipe up with 3/4 fingers)
+- Desktop switching (swipe left/right)
+- Full-screen app transitions
+- Dock/menu bar auto-hide
+
+### 7.5.2 Solution: Private CGS API
+
+The implementation uses **private Core Graphics Services (CGS) APIs** to create a dedicated "space" with maximum absolute level. This ensures the island windows persist across all system transitions.
+
+**Key concepts:**
+- Create a persistent CGS space with `CGSSpaceCreate()`
+- Set space to maximum level with `CGSSpaceSetAbsoluteLevel()`
+- Add island windows to this space
+- Space persists even when user switches desktops or enters Mission Control
+
+### 7.5.3 Implementation
+
+```swift
+final class IslandSpaceManager {
+    static let shared = IslandSpaceManager()
+
+    private var spaceIdentifier: CGSSpaceID?
+    private let registeredWindows = NSHashTable<NSWindow>.weakObjects()
+
+    func attach(window: NSWindow?) {
+        guard let window else { return }
+        // Retry logic handles window number not yet assigned
+        attach(window: window, retriesRemaining: 5)
+    }
+
+    private func attach(window: NSWindow?, retriesRemaining: Int) {
+        guard let window else { return }
+        assertMainThread()
+
+        if window.windowNumber == -1 {
+            guard retriesRemaining > 0 else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self, weak window] in
+                self?.attach(window: window, retriesRemaining: retriesRemaining - 1)
+            }
+            return
+        }
+
+        registeredWindows.add(window)
+        guard let space = ensureSpace(),
+              let windowID = windowID(for: window) else { return }
+        addWindows([windowID], to: space)
+    }
+
+    private func ensureSpace() -> CGSSpaceID? {
+        if let existing = spaceIdentifier {
+            return existing
+        }
+
+        let connection = _CGSDefaultConnection()
+        let space = CGSSpaceCreate(connection, 1, nil)
+        guard space != 0 else {
+            NSLog("IslandSpaceManager: failed to create CGS space")
+            return nil
+        }
+
+        logIfCGSError(
+            CGSSpaceSetAbsoluteLevel(connection, space, Int32.max),
+            context: "CGSSpaceSetAbsoluteLevel"
+        )
+        logIfCGSError(
+            CGSShowSpaces(connection, [NSNumber(value: space)] as CFArray),
+            context: "CGSShowSpaces"
+        )
+        spaceIdentifier = space
+        return space
+    }
+
+    func teardown() {
+        guard let space = spaceIdentifier else { return }
+        let windows = registeredWindows.allObjects.compactMap { windowID(for: $0) }
+        if !windows.isEmpty {
+            removeWindows(windows, from: space)
+        }
+        registeredWindows.removeAllObjects()
+        logIfCGSError(
+            CGSHideSpaces(_CGSDefaultConnection(), [NSNumber(value: space)] as CFArray),
+            context: "CGSHideSpaces"
+        )
+        logIfCGSError(
+            CGSSpaceDestroy(_CGSDefaultConnection(), space),
+            context: "CGSSpaceDestroy"
+        )
+        spaceIdentifier = nil
+    }
+}
+```
+
+**Private API declarations:**
+```swift
+private typealias CGSConnectionID = UInt32
+private typealias CGSSpaceID = UInt64
+private typealias CGSWindowID = UInt32
+
+@_silgen_name("_CGSDefaultConnection")
+private func _CGSDefaultConnection() -> CGSConnectionID
+
+@_silgen_name("CGSSpaceCreate")
+private func CGSSpaceCreate(_ connection: CGSConnectionID, _ options: Int32, _ attributes: CFDictionary?) -> CGSSpaceID
+
+@_silgen_name("CGSSpaceDestroy")
+private func CGSSpaceDestroy(_ connection: CGSConnectionID, _ space: CGSSpaceID) -> Int32
+
+@_silgen_name("CGSSpaceSetAbsoluteLevel")
+private func CGSSpaceSetAbsoluteLevel(_ connection: CGSConnectionID, _ space: CGSSpaceID, _ level: Int32) -> Int32
+
+@_silgen_name("CGSAddWindowsToSpaces")
+private func CGSAddWindowsToSpaces(_ connection: CGSConnectionID, _ windows: CFArray, _ spaces: CFArray) -> Int32
+
+@_silgen_name("CGSRemoveWindowsFromSpaces")
+private func CGSRemoveWindowsFromSpaces(_ connection: CGSConnectionID, _ windows: CFArray, _ spaces: CFArray) -> Int32
+```
+
+### 7.5.4 Usage Pattern
+
+```swift
+// In IslandWindowManager.ensureWindowHierarchy()
+if let parentWindow {
+    parentWindow.setFrame(screen.frame, display: true)
+    parentWindow.orderFrontRegardless()
+    IslandSpaceManager.shared.attach(window: parentWindow)
+}
+
+if let islandPanel = islandWindow {
+    islandPanel.setFrame(islandFrame(for: screen, size: currentIslandSize()), display: true)
+    islandPanel.orderFrontRegardless()
+    IslandSpaceManager.shared.attach(window: islandPanel)
+}
+```
+
+### 7.5.5 Risks & Considerations
+
+**⚠️ Warning: These are private APIs**
+- Not documented by Apple
+- May break in future macOS versions
+- App Store rejection risk (if submitted)
+- Use `@_silgen_name` declarations to avoid binary dependencies
+
+**Mitigation:**
+- Graceful degradation if APIs fail (island still works, just might hide during transitions)
+- Error logging for debugging
+- Retry logic for window attachment timing issues
+
+---
+
 ## 8. Swift Implementation
 
-### 8.1 New Files to Create
+### 8.1 Actual File Structure
+
+The implementation organizes audio components in a dedicated subfolder for better modularity:
 
 ```
-src-tauri/plugins/macos-sensing/Sources/MacOSSensing/
-├── Island/
-│   ├── IslandController.swift        # Enhanced from Phase 5
-│   ├── IslandView.swift               # Enhanced from Phase 5
-│   ├── MediaMonitor.swift             # NEW: Audio detection & state sync
-│   ├── MediaControlCoordinator.swift  # NEW: Hybrid AppleScript + media keys
-│   ├── AppleScriptMediaController.swift
-│   ├── MediaKeyController.swift
-│   ├── SpotifyMonitor.swift           # NEW: ScriptingBridge helpers
-│   ├── MusicMonitor.swift             # NEW: ScriptingBridge helpers
-│   ├── WaveformAnimator.swift         # NEW: Synthetic waveform animation
-│   └── IslandTypes.swift              # NEW: Audio-related types
+src-tauri/plugins/macos-sensing/Sources/MacOSSensing/Island/
+├── IslandController.swift                # Top-level coordinator
+├── IslandView.swift                      # UI rendering + interaction
+├── IslandWindowManager.swift             # NSPanel hierarchy + sizing
+├── IslandTimerPresenter.swift            # Timer logic + 1s render loop
+├── IslandSpaceManager.swift              # CGS space persistence
+├── IslandFFITypes.swift                  # FFI data structures
+└── Audio/                                # Audio subsystem
+    ├── IslandAudioController.swift       # Bridges MediaMonitor + WaveformAnimator
+    ├── MediaMonitor.swift                # Detection polling + priority waterfall
+    ├── MediaControlCoordinator.swift     # AppleScript + media key control
+    ├── WaveformAnimator.swift            # CVDisplayLink animation
+    └── AudioModels.swift                 # TrackInfo model
 ```
+
+**Key organizational principles:**
+- Audio components isolated in `Audio/` subfolder
+- Window/space management separated from business logic
+- Timer and audio controllers are independent, coordinated by `IslandController`
+- FFI types defined separately for clarity
 
 ### 8.2 MediaMonitor.swift
 
@@ -1632,52 +1872,84 @@ Detect and control AirPlay devices:
 
 ## Implementation Checklist
 
-### Phase 5.5.1: Media Detection
-- [ ] Create `MediaMonitor.swift`
-- [ ] Implement `MPNowPlayingInfoCenter` integration (metadata only)
-- [ ] Generate ScriptingBridge headers for Spotify & Music
-- [ ] Poll Spotify/Music for track state + bundle IDs
-- [ ] Handle Automation permission prompt copy + Info.plist entry
-- [ ] Implement playback state detection fallback heuristics
-- [ ] Test with Spotify, Apple Music, Chrome, Safari
+### ✅ Phase 5.5.1: Media Detection (COMPLETE)
+- [x] Create `MediaMonitor.swift` in `Island/Audio/`
+- [x] Implement AppleScript probes for Spotify & Apple Music
+- [x] Implement `MPNowPlayingInfoCenter` fallback for generic apps
+- [x] 1-second polling loop with background queue snapshot capture
+- [x] Priority waterfall: Spotify → Apple Music → MPNowPlayingInfoCenter
+- [x] `MediaControlCoordinator` with AppleScript + media key fallback
+- [x] Tested with Spotify, Apple Music, Chrome, Safari
 
-### Phase 5.5.2: Waveform Visualization
-- [ ] Create `WaveformAnimator.swift`
-- [ ] Implement DisplayLink-based bar animation
-- [ ] Expose playback-state-driven targets (playing/paused/stopped)
-- [ ] Wire animator callbacks into `IslandController` / `IslandView`
-- [ ] Ensure 30-60 FPS without exceeding 2% CPU
+**Notes:** No ScriptingBridge used—pure AppleScript with string parsing. Simpler and lighter.
 
-### Phase 5.5.3: Interaction System
-- [ ] Add click-to-expand logic to `IslandView`
-- [ ] Implement hover state with scale animation
-- [ ] Add button hit testing in expanded state
-- [ ] Implement auto-collapse with delay timer
-- [ ] Add mouse tracking areas
-- [ ] Test interaction flow
+### ✅ Phase 5.5.2: Waveform Visualization (COMPLETE)
+- [x] Create `WaveformAnimator.swift` in `Island/Audio/`
+- [x] Implement **CVDisplayLink**-based animation (not CADisplayLink)
+- [x] Playback state-driven targets (playing/paused/stopped)
+- [x] Wire callbacks: Animator → IslandAudioController → IslandController → IslandView
+- [x] 20 bars with procedural noise + sine wave motion
+- [x] Display-synced updates for smooth 60 FPS
 
-### Phase 5.5.4: Combined View Layout
-- [ ] Design compact timer+audio layout
-- [ ] Design expanded combined layout
-- [ ] Implement dynamic sizing based on active state
-- [ ] Add smooth transitions between layouts
-- [ ] Test with timer-only, audio-only, and combined states
+**Notes:** CVDisplayLink provides better performance and display sync than CADisplayLink.
 
-### Phase 5.5.5: FFI Integration
-- [ ] Add audio FFI exports to `FFIExports.swift`
-- [ ] Update C header with audio functions
-- [ ] Add Rust bindings in `macos_bridge.rs`
-- [ ] Wire up Swift → Rust callbacks for track changes / active bundle updates
-- [ ] Test FFI calls from Rust
+### ✅ Phase 5.5.3: Interaction System (COMPLETE)
+- [x] Click-to-expand via `IslandViewInteractionDelegate` protocol
+- [x] Hover state with `IslandWindowManager` size animation
+- [x] Button hit testing with hover feedback in expanded state
+- [x] Auto-collapse with 0.3s delay via `DispatchWorkItem`
+- [x] Mouse tracking areas with `mouseEntered`/`mouseExited`/`mouseMoved`
+- [x] Smooth expansion/collapse animations (0.25s / 0.15s)
 
-### Phase 5.5.6: Polish & Testing
-- [ ] Add album art caching
-- [ ] Optimize waveform rendering
-- [ ] Test CPU usage (target ≤2% expanded)
-- [ ] Test memory usage (target ≤10MB overhead)
-- [ ] Test all manual scenarios
-- [ ] Fix any visual glitches
-- [ ] Document any known limitations
+### ✅ Phase 5.5.4: Combined View Layout (COMPLETE)
+- [x] Compact timer+audio layout (timer left, 🎵 indicator right)
+- [x] Expanded combined layout (buttons center, waveform right, timer corner)
+- [x] Dynamic sizing: 300px compact → 620px expanded
+- [x] `IslandWindowManager` handles all frame calculations
+- [x] Tested with timer-only, audio-only, and combined states
+
+### ✅ Phase 5.5.5: Architecture Components (COMPLETE)
+- [x] `IslandController` - top-level coordinator with delegation
+- [x] `IslandWindowManager` - NSPanel hierarchy + sizing
+- [x] `IslandTimerPresenter` - timer clock + render loop
+- [x] `IslandAudioController` - bridges audio subsystem
+- [x] `IslandSpaceManager` - **CGS space persistence** (not in original design)
+- [x] Clean separation of concerns with protocol-based delegation
+
+### ✅ Phase 5.5.6: FFI Integration (COMPLETE)
+- [x] Audio detection automatically starts with island initialization
+- [x] No explicit FFI calls needed (monitors run automatically)
+- [x] Island lifecycle managed via existing FFI: `island_init`, `island_start`, `island_cleanup`
+- [x] Audio state updates flow through callbacks, not FFI polling
+
+**Notes:** Simpler than originally designed—audio monitoring is automatic, no Rust → Swift FFI calls needed.
+
+### 🚧 Phase 5.5.7: Polish & Testing (IN PROGRESS)
+- [x] Waveform rendering optimized (20 bars, simple rendering)
+- [x] Hover/expansion/collapse animations smooth
+- [ ] Album art caching (currently not loaded from AppleScript)
+- [ ] Formal CPU/memory profiling
+- [ ] Comprehensive manual test suite execution
+- [ ] Performance optimization if needed
+- [ ] Edge case handling (rapid track changes, etc.)
+
+---
+
+## Known Limitations & Future Improvements
+
+### Current Limitations
+1. **No album artwork**: AppleScript probes don't fetch artwork (could add MPMediaItemArtwork extraction from MPNowPlayingInfoCenter)
+2. **1-second polling latency**: Track changes detected within 1s max (acceptable tradeoff for CPU efficiency)
+3. **Private CGS APIs**: IslandSpaceManager uses undocumented APIs (may break in future macOS)
+4. **Spotify priority always wins**: No recency-based multi-source logic (intentional for consistency)
+5. **No playlist/queue view**: Only current track displayed
+
+### Potential Improvements
+- Add artwork from MPNowPlayingInfoCenter when available
+- Reduce polling interval to 500ms for faster track change detection
+- Add haptic feedback on button clicks (if supported)
+- Cache last N track artworks for faster switching
+- Add "now playing" notification integration
 
 ---
 
