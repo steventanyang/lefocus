@@ -15,6 +15,9 @@ use crate::{
     sensing::SensingController,
 };
 
+#[cfg(target_os = "macos")]
+use crate::macos_bridge::{current_uptime_ms, island_reset, island_start, island_sync};
+
 use super::{TimerMode, TimerState, TimerStatus};
 
 use tauri::{AppHandle, Emitter};
@@ -147,6 +150,24 @@ impl TimerController {
             state.active_ms = 0;
         }
 
+        #[cfg(target_os = "macos")]
+        {
+            let start_uptime_ms = current_uptime_ms();
+            let island_target_ms = match mode {
+                TimerMode::Countdown => {
+                    let clamped = actual_target_ms.min(i64::MAX as u64);
+                    clamped as i64
+                }
+                TimerMode::Stopwatch => 0,
+            };
+            let mode_str = match mode {
+                TimerMode::Countdown => "countdown",
+                TimerMode::Stopwatch => "stopwatch",
+            };
+
+            island_start(start_uptime_ms, island_target_ms, mode_str);
+        }
+
         self.emit_state_changed().await?;
 
         Ok(self.get_state().await)
@@ -188,6 +209,11 @@ impl TimerController {
 
         self.sensing.lock().await.stop_sensing().await?;
         self.cancel_ticker().await;
+
+        #[cfg(target_os = "macos")]
+        {
+            island_reset();
+        }
 
         self.db
             .mark_session_status(
@@ -248,6 +274,10 @@ impl TimerController {
         let (session_id, active_ms) = {
             let mut state = self.state.lock().await;
             if state.status == TimerStatus::Idle {
+                #[cfg(target_os = "macos")]
+                {
+                    island_reset();
+                }
                 return Ok(());
             }
             state.sync_active_from_anchor();
@@ -262,6 +292,11 @@ impl TimerController {
 
         self.sensing.lock().await.stop_sensing().await?;
         self.cancel_ticker().await;
+
+        #[cfg(target_os = "macos")]
+        {
+            island_reset();
+        }
 
         self.db
             .mark_session_status(
@@ -306,20 +341,30 @@ impl TimerController {
                     (snapshot, remaining)
                 };
 
+                #[cfg(target_os = "macos")]
+                {
+                    island_sync(snapshot.remaining_ms());
+                }
+
                 // Only auto-stop in countdown mode when timer reaches 0
                 if remaining <= 0 && snapshot.mode == TimerMode::Countdown {
                     let final_snapshot = {
                         let mut guard = state.lock().await;
                         guard.sync_active_from_anchor();
-                        guard.stop();
-                        guard.active_ms = guard.active_ms.min(guard.target_ms);
-                        guard.clone()
-                    };
+                    guard.stop();
+                    guard.active_ms = guard.active_ms.min(guard.target_ms);
+                    guard.clone()
+                };
 
-                    // Stop sensing immediately
-                    if let Err(e) = sensing.lock().await.stop_sensing().await {
-                        error!("Failed to stop sensing on timer completion: {}", e);
-                    }
+                #[cfg(target_os = "macos")]
+                {
+                    island_reset();
+                }
+
+                // Stop sensing immediately
+                if let Err(e) = sensing.lock().await.stop_sensing().await {
+                    error!("Failed to stop sensing on timer completion: {}", e);
+                }
 
                     emit_timer_state(&app_handle, final_snapshot.clone());
 

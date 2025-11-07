@@ -1,6 +1,6 @@
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use std::ffi::{c_char, CStr};
+use std::ffi::{c_char, CStr, CString};
 
 #[repr(C)]
 struct WindowMetadataFFI {
@@ -21,6 +21,7 @@ struct OCRResultFFI {
     word_count: u64,
 }
 
+#[allow(dead_code)]
 extern "C" {
     fn macos_sensing_get_active_window_metadata() -> *mut WindowMetadataFFI;
     fn macos_sensing_capture_screenshot(window_id: u32, out_length: *mut usize) -> *mut u8;
@@ -30,6 +31,12 @@ extern "C" {
     fn macos_sensing_free_window_metadata(ptr: *mut WindowMetadataFFI);
     fn macos_sensing_free_screenshot_buffer(ptr: *mut u8);
     fn macos_sensing_free_ocr_result(ptr: *mut OCRResultFFI);
+
+    fn macos_sensing_island_init();
+    fn macos_sensing_island_start(start_uptime_ms: i64, target_ms: i64, mode: *const c_char);
+    fn macos_sensing_island_sync(value_ms: i64);
+    fn macos_sensing_island_reset();
+    fn macos_sensing_island_cleanup();
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -124,6 +131,52 @@ pub fn run_ocr(image_data: &[u8]) -> Result<OCRResult> {
 pub fn clear_cache() {
     unsafe {
         macos_sensing_clear_cache();
+    }
+}
+
+pub fn island_init() {
+    unsafe {
+        macos_sensing_island_init();
+    }
+}
+
+pub fn island_start(start_uptime_ms: i64, target_ms: i64, mode: &str) {
+    unsafe {
+        let c_mode = CString::new(mode).expect("island mode string contains interior null byte");
+        macos_sensing_island_start(start_uptime_ms, target_ms, c_mode.as_ptr());
+    }
+}
+
+pub fn island_sync(value_ms: i64) {
+    unsafe {
+        macos_sensing_island_sync(value_ms);
+    }
+}
+
+pub fn island_reset() {
+    unsafe {
+        macos_sensing_island_reset();
+    }
+}
+
+#[allow(dead_code)]
+pub fn island_cleanup() {
+    unsafe {
+        macos_sensing_island_cleanup();
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub fn current_uptime_ms() -> i64 {
+    use mach::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
+    use std::mem::MaybeUninit;
+
+    unsafe {
+        let now = mach_absolute_time();
+        let mut info = MaybeUninit::<mach_timebase_info_data_t>::uninit();
+        mach_timebase_info(info.as_mut_ptr());
+        let info = info.assume_init();
+        ((now as u128 * info.numer as u128) / info.denom as u128 / 1_000_000) as i64
     }
 }
 

@@ -10,6 +10,12 @@ extern void macos_sensing_swift_free_window_metadata(CMacOSSensing_WindowMetadat
 extern void macos_sensing_swift_free_screenshot_buffer(uint8_t *ptr);
 extern void macos_sensing_swift_free_ocr_result(CMacOSSensing_OCRResultFFI *ptr);
 
+extern void macos_sensing_swift_island_init(void);
+extern void macos_sensing_swift_island_start(int64_t start_uptime_ms, int64_t target_ms, const char *mode);
+extern void macos_sensing_swift_island_sync(int64_t value_ms);
+extern void macos_sensing_swift_island_reset(void);
+extern void macos_sensing_swift_island_cleanup(void);
+
 CMacOSSensing_WindowMetadataFFI *macos_sensing_get_active_window_metadata(void) {
     return macos_sensing_swift_get_window();
 }
@@ -36,4 +42,24 @@ void macos_sensing_free_screenshot_buffer(uint8_t *ptr) {
 
 void macos_sensing_free_ocr_result(CMacOSSensing_OCRResultFFI *ptr) {
     macos_sensing_swift_free_ocr_result(ptr);
+}
+
+void macos_sensing_island_init(void) {
+    macos_sensing_swift_island_init();
+}
+
+void macos_sensing_island_start(int64_t start_uptime_ms, int64_t target_ms, const char *mode) {
+    macos_sensing_swift_island_start(start_uptime_ms, target_ms, mode);
+}
+
+void macos_sensing_island_sync(int64_t value_ms) {
+    macos_sensing_swift_island_sync(value_ms);
+}
+
+void macos_sensing_island_reset(void) {
+    macos_sensing_swift_island_reset();
+}
+
+void macos_sensing_island_cleanup(void) {
+    macos_sensing_swift_island_cleanup();
 }
