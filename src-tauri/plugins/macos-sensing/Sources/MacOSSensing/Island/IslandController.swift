@@ -75,6 +75,13 @@ public final class IslandController {
         stateQueue.sync { [weak self] in
             let cleanupWork = { [weak self] in
                 guard let self else { return }
+                if let parent = self.window {
+                    IslandSpaceManager.shared.detach(window: parent)
+                }
+                if let child = self.islandWindow {
+                    IslandSpaceManager.shared.detach(window: child)
+                }
+                IslandSpaceManager.shared.teardown()
                 if let observer = self.screenObserver {
                     NotificationCenter.default.removeObserver(observer)
                     self.screenObserver = nil
@@ -176,10 +183,12 @@ public final class IslandController {
 
         window?.setFrame(screen.frame, display: true)
         window?.orderFrontRegardless()
+        IslandSpaceManager.shared.attach(window: window)
 
         if let islandPanel = islandWindow {
             islandPanel.setFrame(islandFrame(for: screen), display: true)
             islandPanel.orderFrontRegardless()
+            IslandSpaceManager.shared.attach(window: islandPanel)
         }
     }
 

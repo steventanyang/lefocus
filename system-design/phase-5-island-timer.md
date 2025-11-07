@@ -268,6 +268,17 @@ FFI functions are exported in `FFIExports.swift`:
 - `macos_sensing_swift_island_reset()`
 - `macos_sensing_swift_island_cleanup()`
 
+### 3.6 IslandSpaceManager.swift (Persistent CGS Space)
+
+Mission Control transitions were briefly hiding the island even with `.canJoinAllSpaces` because macOS treated the panels as part of the active desktop animation. To keep the island visible we mirror MewNotch’s approach and move both NSPanels into a dedicated Core Graphics Services (CGS) space:
+
+- `IslandSpaceManager` lazily creates a CGS space with the **desktop-render flag (`options = 0x1`)** so Finder does not attempt to draw desktop contents in it. The space is set to the max absolute level (`Int32.max`) and shown immediately.
+- `attach(window:)` waits until the panel has a valid `windowNumber` (panel ordered on screen) before calling `CGSAddWindowsToSpaces`, ensuring every panel actually lands in the persistent space. Attach calls are always marshalled to the main thread.
+- Cleanup removes windows with `CGSRemoveWindowsFromSpaces`, calls `CGSHideSpaces` to keep Finder bookkeeping consistent, and finally destroys the CGS space. This prevents Mission Control from listing ghost spaces or logging `space still visible` errors.
+- `IslandController` simply calls `IslandSpaceManager.shared.attach/detach` when windows are created/teardown. This isolates all private CGS usage in a single helper and keeps the window code readable.
+
+The result is a truly persistent island that stays visible above Mission Control, stage manager, and space swipes while still honoring fullscreen and display changes.
+
 ---
 
 ## 4. FFI Bridge Layer
