@@ -1,7 +1,6 @@
 import CoreGraphics
 import CoreVideo
 import Foundation
-import QuartzCore
 
 public enum PlaybackVisualState {
     case playing
@@ -9,31 +8,22 @@ public enum PlaybackVisualState {
     case stopped
 }
 
-/// Procedural waveform animation that drives the audio visualization.
+/// Simple waveform animation with 4 random bars.
 public final class WaveformAnimator {
     public static let shared = WaveformAnimator()
 
-    private let barCount = 20
     private var displayLink: CVDisplayLink?
-
-    private var currentBars: [CGFloat]
-    private var targetBars: [CGFloat]
-    private var phase: CGFloat = 0
+    private var currentBars: [CGFloat] = [0.1, 0.1, 0.1, 0.1]
+    private var targetBars: [CGFloat] = [0.1, 0.1, 0.1, 0.1]
+    private var targetUpdateCounter: Int = 0
 
     public var onFrame: (([CGFloat]) -> Void)?
-
-    public var state: PlaybackVisualState = .stopped {
-        didSet { updateTargetsForState() }
-    }
-
-    private init() {
-        currentBars = Array(repeating: 0.05, count: barCount)
-        targetBars = Array(repeating: 0.05, count: barCount)
-    }
+    public var state: PlaybackVisualState = .stopped
+    
+    private init() {}
 
     public func start() {
         guard displayLink == nil else { return }
-        updateTargetsForState()
         var linkRef: CVDisplayLink?
         CVDisplayLinkCreateWithActiveCGDisplays(&linkRef)
         guard let link = linkRef else { return }
@@ -41,7 +31,7 @@ public final class WaveformAnimator {
         let callback: CVDisplayLinkOutputCallback = { _, _, _, _, _, userInfo in
             guard let userInfo else { return kCVReturnSuccess }
             let animator = Unmanaged<WaveformAnimator>.fromOpaque(userInfo).takeUnretainedValue()
-            animator.stepOnDisplayLink()
+            DispatchQueue.main.async { animator.step() }
             return kCVReturnSuccess
         }
         CVDisplayLinkSetOutputCallback(link, callback, unmanagedSelf)
@@ -50,42 +40,27 @@ public final class WaveformAnimator {
     }
 
     public func stop() {
-        if let link = displayLink {
-            CVDisplayLinkStop(link)
-        }
+        displayLink.map { CVDisplayLinkStop($0) }
         displayLink = nil
     }
 
-    private func stepOnDisplayLink() {
-        DispatchQueue.main.async { [weak self] in
-            self?.step()
+    private func step() {
+        // Update targets less frequently (every ~8 frames) for smoother animation
+        targetUpdateCounter += 1
+        if targetUpdateCounter >= 8 {
+            targetUpdateCounter = 0
+            // Bigger range: base values allow bars to go much higher
+            let base: CGFloat = state == .playing ? 0.2 : state == .paused ? 0.15 : 0.1
+            // Random range up to 1.0 (full height) for playing, less for paused/stopped
+            let maxRandom: CGFloat = state == .playing ? 0.8 : state == .paused ? 0.4 : 0.2
+            targetBars = (0..<4).map { _ in base + CGFloat.random(in: 0...maxRandom) }
         }
-    }
-
-    @objc private func step() {
-        phase += 0.12
-
-        for index in 0..<barCount {
-            let noise = CGFloat.random(in: -0.15...0.15)
-            let wave = sin(phase + CGFloat(index) * 0.4)
-            let base = targetBars[index]
-            let next = base + wave * 0.1 + noise
-            currentBars[index] = currentBars[index] * 0.7 + max(0.05, next) * 0.3
+        
+        // Smooth interpolation towards targets
+        currentBars = zip(currentBars, targetBars).map { current, target in
+            current * 0.85 + target * 0.15
         }
-
         onFrame?(currentBars)
     }
-
-    private func updateTargetsForState() {
-        switch state {
-        case .playing:
-            targetBars = (0..<barCount).map { index in
-                0.4 + 0.25 * sin(CGFloat(index) * 0.3)
-            }
-        case .paused:
-            targetBars = Array(repeating: 0.15, count: barCount)
-        case .stopped:
-            targetBars = Array(repeating: 0.05, count: barCount)
-        }
-    }
 }
+

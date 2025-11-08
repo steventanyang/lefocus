@@ -66,6 +66,9 @@ final class IslandView: NSView {
     }
 
     func updateAudio(track: TrackInfo?, waveformBars: [CGFloat]?) {
+        let hadArtwork = self.trackInfo?.artwork != nil
+        let hasArtwork = track?.artwork != nil
+        
         self.trackInfo = track
         self.isAudioPlaying = track?.isPlaying ?? false
         if let bars = waveformBars, track != nil {
@@ -73,6 +76,11 @@ final class IslandView: NSView {
         } else if track == nil {
             self.waveformBars = []
         }
+        
+        if hasArtwork != hadArtwork {
+            NSLog("IslandView: Artwork state changed - had: \(hadArtwork), has: \(hasArtwork), track: \(track?.title ?? "nil")")
+        }
+        
         needsDisplay = true
     }
 
@@ -89,15 +97,10 @@ final class IslandView: NSView {
         // Notch-shaped path: bottom corners curve inward, top corners curve outward
         let path = createNotchPath()
 
-        // Fully opaque background (slightly lighter when hovered)
-        let backgroundColor: NSColor
-        if isExpanded {
-            backgroundColor = NSColor.black
-        } else if isHovered {
-            backgroundColor = NSColor(calibratedWhite: 0.1, alpha: 1.0)
-        } else {
-            backgroundColor = NSColor.black
-        }
+        // Background - translucent when expanded, opaque when compact
+        let backgroundColor = isExpanded 
+            ? NSColor.black.withAlphaComponent(0.85)
+            : NSColor.black
         backgroundColor.setFill()
         path.fill()
 
@@ -106,11 +109,19 @@ final class IslandView: NSView {
         path.lineWidth = 0.5
         path.stroke()
 
-        drawTimerText()
-        drawModeIndicatorIfNeeded()
-        drawAudioMetadataIfNeeded()
-        drawWaveformIfNeeded()
-        drawPlaybackButtonsIfNeeded()
+        if isExpanded && trackInfo != nil {
+            // Left side: audio controls (title, artist, buttons)
+            // Right side: timer (top) and waveform (below)
+            drawAudioMetadataIfNeeded()
+            drawPlaybackButtonsIfNeeded()
+            drawTimerTextCompact()
+            drawWaveformIfNeeded()
+        } else {
+            // Compact layout: timer and audio indicator
+            drawTimerText()
+            drawModeIndicatorIfNeeded()
+            drawAudioMetadataIfNeeded()
+        }
     }
 
     override func updateTrackingAreas() {
@@ -178,63 +189,75 @@ final class IslandView: NSView {
 
     private func createNotchPath() -> NSBezierPath {
         let rect = bounds
-        let radius = rect.height / 2.0
-        let path = NSBezierPath()
+        // Fixed bottom corner radius (based on compact height of 36px)
+        let bottomRadius: CGFloat = 18.0
+        // Top corners scale with height for the bulge effect
+        let topRadius = rect.height / 2.0
+        
+        // Use Core Graphics path for more control over bezier curves
+        let cgPath = CGMutablePath()
         
         // Start from bottom-left, after the curve
-        path.move(to: NSPoint(x: rect.minX + radius, y: rect.minY))
+        cgPath.move(to: CGPoint(x: rect.minX + bottomRadius, y: rect.minY))
         
         // Bottom edge to bottom-right curve
-        path.line(to: NSPoint(x: rect.maxX - radius, y: rect.minY))
+        cgPath.addLine(to: CGPoint(x: rect.maxX - bottomRadius, y: rect.minY))
         
-        // Bottom-right arc (inward curve)
-        path.appendArc(withCenter: NSPoint(x: rect.maxX - radius, y: rect.minY + radius),
-                      radius: radius,
-                      startAngle: 270,
-                      endAngle: 0,
-                      clockwise: false)
+        // Bottom-right arc (inward curve) - using fixed radius
+        cgPath.addArc(center: CGPoint(x: rect.maxX - bottomRadius, y: rect.minY + bottomRadius),
+                     radius: bottomRadius,
+                     startAngle: .pi * 1.5,  // 270 degrees
+                     endAngle: 0,
+                     clockwise: false)
         
-        // Right edge
-        path.line(to: NSPoint(x: rect.maxX, y: rect.maxY - radius))
+        // Right edge - go up to where we want the bulge to start
+        cgPath.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - topRadius * 0.7))
         
-        // Top-right arc (outward curve) - use negative radius to curve outward
-        path.appendArc(withCenter: NSPoint(x: rect.maxX - radius, y: rect.maxY + radius),
-                      radius: radius,
-                      startAngle: 0,
-                      endAngle: 90,
-                      clockwise: false)
+        // Top-right corner: create outward bulge using quadratic bezier
+        // Control point positioned well outside to create visible outward curve
+        let bulgeAmount: CGFloat = topRadius * 4.0  // Very pronounced bulge
+        let topRightControl = CGPoint(x: rect.maxX + bulgeAmount, y: rect.maxY + bulgeAmount * 0.7)
+        let topRightEnd = CGPoint(x: rect.maxX - topRadius * 0.7, y: rect.maxY)
+        cgPath.addQuadCurve(to: topRightEnd, control: topRightControl)
         
         // Top edge
-        path.line(to: NSPoint(x: rect.minX + radius, y: rect.maxY))
+        cgPath.addLine(to: CGPoint(x: rect.minX + topRadius * 0.7, y: rect.maxY))
         
-        // Top-left arc (outward curve) - use negative radius to curve outward
-        path.appendArc(withCenter: NSPoint(x: rect.minX + radius, y: rect.maxY + radius),
-                      radius: radius,
-                      startAngle: 90,
-                      endAngle: 180,
-                      clockwise: false)
+        // Top-left corner: create outward bulge using quadratic bezier
+        let topLeftControl = CGPoint(x: rect.minX - bulgeAmount, y: rect.maxY + bulgeAmount * 0.7)
+        let topLeftEnd = CGPoint(x: rect.minX, y: rect.maxY - topRadius * 0.7)
+        cgPath.addQuadCurve(to: topLeftEnd, control: topLeftControl)
         
         // Left edge
-        path.line(to: NSPoint(x: rect.minX, y: rect.minY + radius))
+        cgPath.addLine(to: CGPoint(x: rect.minX, y: rect.minY + bottomRadius))
         
-        // Bottom-left arc (inward curve)
-        path.appendArc(withCenter: NSPoint(x: rect.minX + radius, y: rect.minY + radius),
-                      radius: radius,
-                      startAngle: 180,
-                      endAngle: 270,
-                      clockwise: false)
+        // Bottom-left arc (inward curve) - using fixed radius
+        cgPath.addArc(center: CGPoint(x: rect.minX + bottomRadius, y: rect.minY + bottomRadius),
+                     radius: bottomRadius,
+                     startAngle: .pi,  // 180 degrees
+                     endAngle: .pi * 1.5,  // 270 degrees
+                     clockwise: false)
         
-        path.close()
-        return path
+        cgPath.closeSubpath()
+        
+        // Convert CGPath to NSBezierPath using the cgPath property
+        return NSBezierPath(cgPath: cgPath)
     }
 
     private func drawTimerText() {
         let timeString = formatTime(ms: displayMs)
 
-        // Dimmer text color when idle
-        let textColor = isIdle
-            ? NSColor.white.withAlphaComponent(0.6)
-            : NSColor.white
+        // Darker when not hovered, white when hovered
+        let textColor: NSColor
+        if isIdle {
+            textColor = isHovered 
+                ? NSColor.white.withAlphaComponent(0.6)
+                : NSColor.white.withAlphaComponent(0.3)
+        } else {
+            textColor = isHovered
+                ? NSColor.white
+                : NSColor.white.withAlphaComponent(0.4)
+        }
 
         guard let timerFont = IslandView.monospacedFont(size: 13, weight: .medium) else {
             return
@@ -247,11 +270,35 @@ final class IslandView: NSView {
 
         let attributed = NSAttributedString(string: timeString, attributes: attributes)
         let textSize = attributed.size()
-        // Left-align the text with some padding from the left edge
+        // Right-align the text with some padding from the right edge
         let padding: CGFloat = 12.0
         let origin = NSPoint(
-            x: padding,
+            x: bounds.maxX - textSize.width - padding,
             y: (bounds.height - textSize.height) / 2.0
+        )
+        attributed.draw(at: origin)
+    }
+
+    private func drawTimerTextCompact() {
+        guard !isIdle else { return }
+        let timeString = formatTime(ms: displayMs)
+
+        // Larger font, moved up to align with top of song name
+        guard let timerFont = IslandView.monospacedFont(size: 18, weight: .semibold) else {
+            return
+        }
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: timerFont,
+            .foregroundColor: NSColor.white.withAlphaComponent(0.9)
+        ]
+
+        let attributed = NSAttributedString(string: timeString, attributes: attributes)
+        let textSize = attributed.size()
+        // Right side, aligned with top of track title (moved up)
+        let origin = NSPoint(
+            x: bounds.maxX - textSize.width - 16.0,
+            y: bounds.height - textSize.height - 46.0  // Moved up to align with title top
         )
         attributed.draw(at: origin)
     }
@@ -265,7 +312,7 @@ final class IslandView: NSView {
             .foregroundColor: NSColor.white.withAlphaComponent(0.65),
         ]
         let attributed = NSAttributedString(string: indicator, attributes: attributes)
-        // Position indicator to the right of the timer text
+        // Position indicator to the left of the timer text (since timer is now on right)
         let timeString = formatTime(ms: displayMs)
         let timeAttrs: [NSAttributedString.Key: Any]
         if let font = IslandView.monospacedFont(size: 13, weight: .medium) {
@@ -275,7 +322,7 @@ final class IslandView: NSView {
         }
         let timeTextSize = NSAttributedString(string: timeString, attributes: timeAttrs).size()
         let padding: CGFloat = 12.0
-        let origin = NSPoint(x: padding + timeTextSize.width + 6.0, y: bounds.height / 2.0 - 5.0)
+        let origin = NSPoint(x: bounds.maxX - timeTextSize.width - padding - attributed.size().width - 6.0, y: bounds.height / 2.0 - 5.0)
         attributed.draw(at: origin)
     }
 
@@ -283,67 +330,108 @@ final class IslandView: NSView {
         guard let track = trackInfo else { return }
 
         if !isExpanded {
-            let indicator = "🎵"
-            let attrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 11, weight: .regular),
-                .foregroundColor: NSColor.white.withAlphaComponent(0.8)
-            ]
-            let string = NSAttributedString(string: indicator, attributes: attrs)
-            let origin = NSPoint(
-                x: bounds.maxX - string.size().width - 12.0,
-                y: bounds.midY - string.size().height / 2.0
-            )
-            string.draw(at: origin)
+            // Draw 4 thicker waveform pills instead of music note emoji
+            drawCompactWaveform()
             return
         }
 
-        let paddingLeft: CGFloat = 120.0
-        let waveformWidth: CGFloat = waveformBars.isEmpty ? 0.0 : 80.0
-        let textWidth = max(0, bounds.width - paddingLeft - waveformWidth - 24.0)
-        guard textWidth > 0 else { return }
-
+        // Left-aligned layout: title and artist stacked on left side
         let title = track.title.isEmpty ? "Unknown" : track.title
         let artist = track.artist.isEmpty ? "Unknown" : track.artist
-        let combined = "\(title) — \(artist)"
-
-        let bodyFont = NSFont.systemFont(ofSize: 12, weight: .medium)
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: bodyFont,
-            .foregroundColor: NSColor.white.withAlphaComponent(isAudioPlaying ? 0.95 : 0.6)
+        
+        // Title: left side, with more space below waveform
+        let titleFont = NSFont.systemFont(ofSize: 14, weight: .semibold)
+        let titleAttrs: [NSAttributedString.Key: Any] = [
+            .font: titleFont,
+            .foregroundColor: NSColor.white.withAlphaComponent(isAudioPlaying ? 0.95 : 0.9)
         ]
-        let rect = NSRect(
-            x: paddingLeft,
-            y: bounds.midY - 8.0,
-            width: textWidth,
+        // Calculate timer width to position title correctly (leave space for timer on right)
+        let timeString = formatTime(ms: displayMs)
+        let timerFont = IslandView.monospacedFont(size: 18, weight: .semibold)
+        let timerAttrs: [NSAttributedString.Key: Any] = timerFont.map { [.font: $0] } ?? [:]
+        let timerWidth = NSAttributedString(string: timeString, attributes: timerAttrs).size().width
+        let titleRect = NSRect(
+            x: 16.0,
+            y: bounds.height - 56.0,  // Moved down to create more space below waveform
+            width: bounds.width - timerWidth - 32.0, // Leave space for timer on right
+            height: 18.0
+        )
+        NSString(string: title).draw(with: titleRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: titleAttrs)
+        
+        // Artist: below title
+        let artistFont = NSFont.systemFont(ofSize: 12, weight: .regular)
+        let artistAttrs: [NSAttributedString.Key: Any] = [
+            .font: artistFont,
+            .foregroundColor: NSColor.white.withAlphaComponent(0.7)
+        ]
+        let artistRect = NSRect(
+            x: 16.0,
+            y: bounds.height - 76.0,  // Adjusted to maintain spacing
+            width: bounds.width - timerWidth - 32.0,
             height: 16.0
         )
-        NSString(string: combined).draw(with: rect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: attributes)
+        NSString(string: artist).draw(with: artistRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: artistAttrs)
+    }
+
+    private func drawCompactWaveform() {
+        guard !waveformBars.isEmpty, waveformBars.count == 4 else { return }
+        
+        // Match the width of the music note emoji (size 11 font)
+        let emojiString = NSAttributedString(string: "🎵", attributes: [
+            .font: NSFont.systemFont(ofSize: 11, weight: .regular)
+        ])
+        let emojiWidth = emojiString.size().width
+        let totalWidth = emojiWidth
+        let spacing: CGFloat = 3.0
+        let pillWidth = (totalWidth - spacing * 3.0) / 4.0
+        let pillHeight: CGFloat = 12.0
+        let startX = 12.0 // Left side padding
+        let centerY = bounds.midY
+        
+        for (index, value) in waveformBars.enumerated() {
+            // Allow full range: 0.0 to 1.0 (removed min clamp to allow bars to go higher)
+            let normalized = min(1.0, value)
+            let height = normalized * pillHeight
+            let rect = NSRect(
+                x: startX + CGFloat(index) * (pillWidth + spacing),
+                y: centerY - height / 2.0,
+                width: pillWidth,
+                height: height
+            )
+            let path = NSBezierPath(roundedRect: rect, xRadius: pillWidth / 2.0, yRadius: pillWidth / 2.0)
+            let alpha: CGFloat = isAudioPlaying ? 0.8 : 0.5
+            NSColor.white.withAlphaComponent(alpha).setFill()
+            path.fill()
+        }
     }
 
     private func drawWaveformIfNeeded() {
-        guard isExpanded, trackInfo != nil, !waveformBars.isEmpty else { return }
+        guard isExpanded, trackInfo != nil, !waveformBars.isEmpty, waveformBars.count == 4 else { return }
 
-        let waveformWidth: CGFloat = 80.0
-        let waveformHeight = bounds.height - 12.0
-        let startX = bounds.maxX - waveformWidth - 12.0
-        let baseY = bounds.midY
-        let spacing: CGFloat = 2.0
-        let barCount = waveformBars.count
-        guard barCount > 0 else { return }
-
-        let barWidth = max(1.0, (waveformWidth - CGFloat(barCount - 1) * spacing) / CGFloat(barCount))
+        // Waveform in top-left corner when expanded
+        let emojiString = NSAttributedString(string: "🎵", attributes: [
+            .font: NSFont.systemFont(ofSize: 11, weight: .regular)
+        ])
+        let emojiWidth = emojiString.size().width
+        let totalWidth = emojiWidth
+        let spacing: CGFloat = 3.0
+        let pillWidth = (totalWidth - spacing * 3.0) / 4.0
+        let pillHeight: CGFloat = 12.0
+        let startX = 16.0 // Left padding
+        let baseY: CGFloat = bounds.height - 20.0 // Top-left corner, near the top
 
         for (index, value) in waveformBars.enumerated() {
-            let normalized = max(0.05, min(0.9, value))
-            let barHeight = normalized * waveformHeight
+            // Allow full range: 0.0 to 1.0 (removed min clamp to allow bars to go higher)
+            let normalized = min(1.0, value)
+            let height = normalized * pillHeight
             let rect = NSRect(
-                x: startX + CGFloat(index) * (barWidth + spacing),
-                y: baseY - barHeight / 2.0,
-                width: barWidth,
-                height: barHeight
+                x: startX + CGFloat(index) * (pillWidth + spacing),
+                y: baseY - height / 2.0,
+                width: pillWidth,
+                height: height
             )
-            let path = NSBezierPath(roundedRect: rect, xRadius: barWidth / 2.0, yRadius: barWidth / 2.0)
-            let alpha: CGFloat = isAudioPlaying ? 0.85 : 0.45
+            let path = NSBezierPath(roundedRect: rect, xRadius: pillWidth / 2.0, yRadius: pillWidth / 2.0)
+            let alpha: CGFloat = isAudioPlaying ? 0.7 : 0.35
             NSColor.white.withAlphaComponent(alpha).setFill()
             path.fill()
         }
@@ -365,14 +453,12 @@ final class IslandView: NSView {
 
     private func drawButton(_ button: ButtonArea, symbol: String, filled: Bool, emphasized: Bool = false) {
         guard button.rect != .zero else { return }
-        let path = NSBezierPath(roundedRect: button.rect, xRadius: button.rect.height / 2.0, yRadius: button.rect.height / 2.0)
-        let backgroundColor: NSColor = filled
-            ? NSColor.white.withAlphaComponent(0.25)
-            : NSColor.white.withAlphaComponent(0.08)
-        backgroundColor.setFill()
-        path.fill()
-
-        let fontSize: CGFloat = emphasized ? 14.0 : 12.0
+        
+        // No circle background, just icon
+        // Scale icon larger when hovered
+        let baseFontSize: CGFloat = emphasized ? 20.0 : 18.0
+        let fontSize = button.isHovered ? baseFontSize * 1.2 : baseFontSize
+        
         let attributes: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: fontSize, weight: .semibold),
             .foregroundColor: NSColor.white
@@ -390,27 +476,27 @@ final class IslandView: NSView {
             resetButtonAreas()
             return
         }
-        let buttonSize = CGSize(width: 32.0, height: 32.0)
-        let spacing: CGFloat = 16.0
-        let centerY = bounds.midY
-        let totalWidth = buttonSize.width * 3 + spacing * 2
-        let startX = bounds.midX - totalWidth / 2.0
+        // Buttons on left side, below track info
+        let buttonSize = CGSize(width: 36.0, height: 36.0)
+        let spacing: CGFloat = 12.0
+        let bottomY: CGFloat = 20.0 // Position from bottom
+        let startX: CGFloat = 16.0 // Left padding, aligned with track info
 
         previousButton.rect = NSRect(
             x: startX,
-            y: centerY - buttonSize.height / 2.0,
+            y: bottomY,
             width: buttonSize.width,
             height: buttonSize.height
         )
         playPauseButton.rect = NSRect(
             x: startX + buttonSize.width + spacing,
-            y: centerY - buttonSize.height / 2.0,
+            y: bottomY,
             width: buttonSize.width,
             height: buttonSize.height
         )
         nextButton.rect = NSRect(
             x: startX + (buttonSize.width + spacing) * 2.0,
-            y: centerY - buttonSize.height / 2.0,
+            y: bottomY,
             width: buttonSize.width,
             height: buttonSize.height
         )

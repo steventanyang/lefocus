@@ -95,15 +95,15 @@ Based on the provided screenshots:
 **Compact state with audio:**
 ```
 ┌────────────────────────────────────┐
-│  🎵  24:38                         │  ← Timer on left, audio icon
+│  ▓▒░▓  24:38                       │  ← Waveform on left, timer on right
 └────────────────────────────────────┘
 ```
 
 **Expanded state:**
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  🖼️  One Dance                    ⏮  ⏸  ⏭       ▓▒░▓▒░▓   24:38 │
-│     Drake                                         ░▓▒▓▒░▓        │
+│  ▓▒░▓  One Dance                  ⏮  ⏸  ⏭                   24:38 │
+│       Drake                                                      │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
@@ -731,14 +731,14 @@ The island has 4 primary states:
 **Audio Only:**
 ```
 ┌──────────────────────────┐
-│ 🖼️ One Dance - Drake  🎵 │
+│ ▓▒░▓                     │  ← Waveform pills on left
 └──────────────────────────┘
 ```
 
 **Timer + Audio:**
 ```
 ┌───────────────────────────────┐
-│  24:38            🎵          │
+│  ▓▒░▓           24:38          │  ← Waveform on left, timer on right
 └───────────────────────────────┘
 ```
 
@@ -746,22 +746,22 @@ The island has 4 primary states:
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
-│  🖼️  One Dance                       ⏮  ⏸  ⏭         ║▌│▌║    24:38      │
-│     Drake                                              ▌║▌│║              │
+│  ▓▒░▓  One Dance                ⏮  ⏸  ⏭                           24:38  │
+│       Drake                                                               │
 └────────────────────────────────────────────────────────────────────────────┘
-│←60→│←────200────→│←─────120──→│←────100───→│←─60→│
-  ^        ^              ^             ^          ^
-  Art   Track Info    Controls      Waveform    Timer
+│←20→│←───────Title──────────→│←─────120──→│←───────────────→│←─60→│
+  ^            ^                    ^                              ^
+Waveform   Track Info          Controls                        Timer
+(top-left)  (left side)        (center)                      (top-right)
 ```
 
 **Dimensions:**
 - Expanded width: 600px
 - Expanded height: 80px
-- Album art: 44x44px (8px padding)
-- Track info area: 200px
-- Controls area: 120px (3 buttons @ 36px each)
-- Waveform area: 100px
-- Timer area: 60px (only if timer active)
+- Waveform: 4 pills, top-left corner (aligned with title line)
+- Track info: Left side, below waveform
+- Controls area: 120px (3 buttons @ 36px each, center)
+- Timer: Large (size 16), top-right, aligned with track title
 
 ### 5.3 Hover State Visual Feedback
 
@@ -950,22 +950,23 @@ override func mouseExited(with event: NSEvent) {
 When both timer and audio are active:
 
 **Compact state:**
-- Timer on left (primary focus)
-- Audio icon on right (indicates audio is available)
+- Waveform on left (4 animated pills)
+- Timer on right (primary focus)
 - Click expands to show both
 
 **Expanded state:**
-- Timer in top-right corner (compact display)
-- Audio controls dominate center (main content)
-- Waveform on right side
+- Waveform in top-left corner (4 pills, small)
+- Timer in top-right corner (large, size 16, aligned with track title)
+- Track title and artist on left side, below waveform
+- Audio controls in center (play/pause, previous, next buttons)
 - All elements visible simultaneously
 
 ### 7.2 Visual Hierarchy
 
 Priority in combined view:
 1. **Primary**: Audio controls (user expanded to see these)
-2. **Secondary**: Waveform (visual interest, passive)
-3. **Tertiary**: Timer (still visible but less prominent)
+2. **Secondary**: Timer (large, prominent, top-right)
+3. **Tertiary**: Waveform (visual interest, passive, top-left)
 
 ### 7.3 Implementation
 
@@ -985,15 +986,14 @@ class IslandView: NSView {
         // Background
         drawNotchPath()
 
-        // Left: Album artwork (if audio active)
+        // Top-left: Waveform (if audio active)
         if hasAudio {
-            drawAlbumArt(in: albumArtRect)
+            drawWaveform(in: waveformRect)
             drawTrackInfo(in: trackInfoRect)
             drawMediaControls(in: controlsRect)
-            drawWaveform(in: waveformRect)
         }
 
-        // Top-right: Timer (if timer active)
+        // Top-right: Timer (if timer active) - large, aligned with track title
         if isTimerActive {
             drawCompactTimer(in: timerCompactRect)
         }
@@ -1003,15 +1003,15 @@ class IslandView: NSView {
         drawNotchPath()
 
         if isTimerActive && hasAudio {
-            // Combined: timer left, audio icon right
-            drawTimerText(in: timerLeftRect)
-            drawAudioIndicator(in: audioRightRect)
+            // Combined: waveform left, timer right
+            drawCompactWaveform()
+            drawTimerText(in: timerRightRect)
         } else if isTimerActive {
             // Timer only
-            drawTimerText(in: timerCenterRect)
+            drawTimerText(in: timerRightRect)
         } else if hasAudio {
             // Audio only
-            drawMiniTrackInfo(in: bounds)
+            drawCompactWaveform()
         }
     }
 
@@ -1027,13 +1027,14 @@ class IslandView: NSView {
         NSRect(x: 260, y: 0, width: 120, height: bounds.height)
     }
 
-    private var waveformRect: NSRect {
-        NSRect(x: 380, y: 0, width: 100, height: bounds.height)
-    }
-
     private var timerCompactRect: NSRect {
-        // Top-right corner in expanded view
-        NSRect(x: bounds.maxX - 68, y: bounds.height - 28, width: 60, height: 20)
+        // Top-right corner in expanded view, large size (16pt), aligned with track title
+        NSRect(x: bounds.maxX - 68, y: bounds.height - 50, width: 60, height: 20)
+    }
+    
+    private var waveformRect: NSRect {
+        // Top-left corner in expanded view, 4 pills
+        NSRect(x: 16, y: bounds.height - 20, width: 20, height: 12)
     }
 }
 ```

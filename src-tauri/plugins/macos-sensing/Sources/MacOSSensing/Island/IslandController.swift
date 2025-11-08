@@ -26,7 +26,7 @@ public final class IslandController {
     private init() {
         let configuration = IslandWindowConfiguration(
             compactSize: NSSize(width: 300.0, height: 36.0),
-            expandedSize: NSSize(width: 620.0, height: 90.0),
+            expandedSize: NSSize(width: 380.0, height: 130.0),
             hoverDelta: NSSize(width: 20.0, height: 4.0),
             expandedVerticalOffset: 12.0
         )

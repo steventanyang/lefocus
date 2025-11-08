@@ -75,23 +75,37 @@ public final class MediaMonitor {
             return MediaSnapshot(track: music, bundleID: music.sourceBundleID)
         }
 
-        if let generic = nowPlayingSnapshot() {
-            return MediaSnapshot(track: generic, bundleID: generic.sourceBundleID)
+        // Fallback to MPNowPlayingInfoCenter for generic sources (must be on main thread)
+        return DispatchQueue.main.sync {
+            nowPlayingSnapshot().map { MediaSnapshot(track: $0, bundleID: $0.sourceBundleID) }
         }
-
-        return nil
     }
 
     private func apply(snapshot: MediaSnapshot?) {
         activeBundleID = snapshot?.bundleID
 
-        guard snapshot?.track != currentTrack else { return }
+        // Check if track metadata changed (title, artist, playing state)
+        let trackChanged = snapshot?.track != currentTrack
+        
+        // Also check if artwork presence changed (nil -> image or image -> nil)
+        // This ensures we update even when only artwork is added/removed
+        let currentHasArtwork = currentTrack?.artwork != nil
+        let newHasArtwork = snapshot?.track.artwork != nil
+        let artworkPresenceChanged = currentHasArtwork != newHasArtwork
+        
+        // If track is the same but artwork was just added, force update
+        guard trackChanged || artworkPresenceChanged else { return }
 
         currentTrack = snapshot?.track
         onTrackChange?(currentTrack)
     }
 
     private func nowPlayingSnapshot() -> TrackInfo? {
+        // Must be called on main thread
+        guard Thread.isMainThread else {
+            return nil
+        }
+        
         guard let info = nowPlayingCenter.nowPlayingInfo else { return nil }
 
         let title = (info[MPMediaItemPropertyTitle] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)

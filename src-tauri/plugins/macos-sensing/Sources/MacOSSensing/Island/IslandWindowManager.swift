@@ -40,6 +40,15 @@ final class IslandWindowManager {
             return
         }
 
+        // Hide island on Macs without a notch
+        // TODO: check if this works
+        guard screen.lf_notchRect != nil else {
+            NSLog("IslandWindowManager: no notch detected, hiding island")
+            islandWindow?.orderOut(nil)
+            parentWindow?.orderOut(nil)
+            return
+        }
+
         if screenObserver == nil {
             screenObserver = NotificationCenter.default.addObserver(
                 forName: NSApplication.didChangeScreenParametersNotification,
@@ -180,17 +189,23 @@ final class IslandWindowManager {
         let originX = screen.frame.midX - size.width / 2.0
 
         if let notch = screen.lf_notchRect {
-            var originY = notch.maxY - size.height + islandVerticalInset(for: screen)
-            if isExpanded {
-                originY -= configuration.expandedVerticalOffset
-            }
+            // Calculate where the compact island's top edge would be
+            let compactHeight = configuration.compactSize.height
+            let compactTopEdge = notch.maxY + islandVerticalInset(for: screen)
+            
+            // Keep the top edge aligned when expanding - only grow downward
+            let originY = compactTopEdge - size.height
+            
             return NSRect(x: originX, y: originY, width: size.width, height: size.height)
         }
 
-        var originY = screen.frame.maxY - size.height - 8.0
-        if isExpanded {
-            originY -= configuration.expandedVerticalOffset
-        }
+        // For screens without notch, use similar logic
+        let compactHeight = configuration.compactSize.height
+        let compactTopEdge = screen.frame.maxY - 8.0
+        
+        // Keep the top edge aligned when expanding - only grow downward
+        let originY = compactTopEdge - size.height
+        
         return NSRect(x: originX, y: originY, width: size.width, height: size.height)
     }
 
