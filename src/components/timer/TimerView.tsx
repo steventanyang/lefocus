@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { useTimer } from "@/hooks/useTimer";
 import { useEndTimerMutation } from "@/hooks/queries";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -7,6 +8,12 @@ import { TimerControls } from "./TimerControls";
 import { DurationPicker } from "./DurationPicker";
 import { SessionResults } from "@/components/session/SessionResults";
 import type { SessionInfo, TimerMode } from "@/types/timer";
+import { useQueryClient } from "@tanstack/react-query";
+
+type SessionCompletedPayload = {
+  session_id: string;
+  session: SessionInfo;
+};
 
 interface TimerViewProps {
   onNavigate: (view: "timer" | "activities") => void;
@@ -15,6 +22,7 @@ interface TimerViewProps {
 export function TimerView({ onNavigate }: TimerViewProps) {
   const { timerState, error, startTimer, cancelTimer } = useTimer();
   const endTimerMutation = useEndTimerMutation();
+  const queryClient = useQueryClient();
 
   const [selectedDuration, setSelectedDuration] = useState<number>(
     25 * 60 * 1000
@@ -34,6 +42,24 @@ export function TimerView({ onNavigate }: TimerViewProps) {
       startTimer(selectedDuration, selectedMode);
     }
   };
+
+  useEffect(() => {
+    const unlistenPromise = listen<SessionCompletedPayload>(
+      "session-completed",
+      (event) => {
+        setCompletedSession(event.payload.session);
+        queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      }
+    );
+
+    return () => {
+      unlistenPromise
+        .then((unlisten) => unlisten())
+        .catch(() => {
+          /* ignore */
+        });
+    };
+  }, [queryClient]);
 
   // Set up keyboard shortcuts (must be called unconditionally)
   useKeyboardShortcuts({

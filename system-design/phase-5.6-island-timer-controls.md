@@ -402,7 +402,11 @@ use tauri::{AppHandle, Manager};
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 
 pub fn set_app_handle(handle: AppHandle) {
-    let _ = APP_HANDLE.set(handle);
+    // Panic on duplicate calls - indicates initialization bug
+    // Prevents silent failures with stale AppHandle during plugin reload
+    APP_HANDLE.set(handle).expect(
+        "set_app_handle called twice; this indicates a bug in initialization"
+    );
 }
 
 fn get_app_handle() -> Option<&'static AppHandle> {
@@ -617,6 +621,42 @@ pub async fn end_timer(&self) -> Result<SessionInfo> {
 
 ---
 
+### 7. Fail-Fast on Duplicate AppHandle
+
+**Why?** `OnceLock::set()` returns `Result` but was previously ignored with `let _`:
+- **Risk**: Second call during hot reload/plugin reinit silently fails
+- **Impact**: Callbacks bound to stale `AppHandle` → panic or no-op
+- **Very hard to debug**: No clear error pointing to the issue
+
+**Solution:** Panic on duplicate `set_app_handle()` calls
+
+```rust
+pub fn set_app_handle(handle: AppHandle) {
+    APP_HANDLE.set(handle).expect(
+        "set_app_handle called twice; this indicates a bug in initialization"
+    );
+}
+```
+
+**Why Panic Instead of Log?**
+- **Fail-fast**: Forces fix during development
+- **Production safety**: `.setup()` called only once in prod
+- **Clear diagnosis**: Stack trace points to duplicate call site
+- **Prevents corruption**: No stale handle = no silent failures
+
+**When This Triggers:**
+- ✅ Integration tests calling setup multiple times (good catch!)
+- ✅ Plugin reload bug (exposes initialization issue)
+- ❌ Normal dev hot reload (full process restart resets `OnceLock`)
+- ❌ Production (setup called once)
+
+**Alternatives Considered:**
+- **Log warning + ignore**: Silent failure still possible
+- **RwLock + replace**: Performance overhead, hides root cause
+- **Panic with expect**: ✅ **Chosen** - simplest, safest, debuggable
+
+---
+
 ## Testing Checklist
 
 ### Visual Testing
@@ -724,9 +764,10 @@ system-design/
 
 ---
 
-**Document Version**: 1.1
+**Document Version**: 1.2
 **Last Updated**: November 8, 2025
 **Author**: Claude Code + User
 **Changelog**:
+- v1.2: Added fail-fast panic for duplicate AppHandle initialization
 - v1.1: Added click debouncing (500ms) and timer mode validation
 - v1.0: Initial implementation with End/Cancel buttons

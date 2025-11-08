@@ -7,7 +7,9 @@ use tauri::{AppHandle, Manager};
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 
 pub fn set_app_handle(handle: AppHandle) {
-    let _ = APP_HANDLE.set(handle);
+    APP_HANDLE.set(handle).expect(
+        "set_app_handle called twice; this indicates a bug in initialization"
+    );
 }
 
 fn get_app_handle() -> Option<&'static AppHandle> {
