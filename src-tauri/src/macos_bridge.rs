@@ -193,23 +193,31 @@ pub fn audio_start_monitoring() {
     }
 }
 
-pub fn audio_toggle_playback() {
-    unsafe {
-        macos_sensing_audio_toggle_playback();
-    }
-}
-
-pub fn audio_next_track() {
-    unsafe {
-        macos_sensing_audio_next_track();
-    }
-}
-
-pub fn audio_previous_track() {
-    unsafe {
-        macos_sensing_audio_previous_track();
-    }
-}
+// NOTE: These functions are currently unused as media playback is controlled directly
+// through the Island UI in Swift. In the future, we can expose these as Tauri commands
+// to allow the frontend to control media playback programmatically.
+//
+// To enable frontend control, add Tauri commands like:
+// #[tauri::command]
+// fn media_toggle_playback() { audio_toggle_playback(); }
+//
+// pub fn audio_toggle_playback() {
+//     unsafe {
+//         macos_sensing_audio_toggle_playback();
+//     }
+// }
+//
+// pub fn audio_next_track() {
+//     unsafe {
+//         macos_sensing_audio_next_track();
+//     }
+// }
+//
+// pub fn audio_previous_track() {
+//     unsafe {
+//         macos_sensing_audio_previous_track();
+//     }
+// }
 
 pub fn handle_island_end_timer() {
     if let Some(app_handle) = get_app_handle() {
@@ -217,10 +225,14 @@ pub fn handle_island_end_timer() {
             let timer = state.timer.clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = timer.end_timer().await {
-                    eprintln!("Failed to end timer from island: {}", e);
+                    log::error!("Failed to end timer from island: {}", e);
                 }
             });
+        } else {
+            log::error!("Failed to get app state when ending timer from island");
         }
+    } else {
+        log::error!("Failed to get app handle when ending timer from island");
     }
 }
 
@@ -230,10 +242,14 @@ pub fn handle_island_cancel_timer() {
             let timer = state.timer.clone();
             tauri::async_runtime::spawn(async move {
                 if let Err(e) = timer.cancel_timer().await {
-                    eprintln!("Failed to cancel timer from island: {}", e);
+                    log::error!("Failed to cancel timer from island: {}", e);
                 }
             });
+        } else {
+            log::error!("Failed to get app state when canceling timer from island");
         }
+    } else {
+        log::error!("Failed to get app handle when canceling timer from island");
     }
 }
 
