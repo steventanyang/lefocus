@@ -182,6 +182,15 @@ impl TimerController {
                 return Err(anyhow!("no active session to end"));
             }
 
+            // Validate mode: end_timer() is only valid for stopwatch mode
+            // Countdown timers should auto-complete at 0:00, not be manually ended
+            if state.mode != TimerMode::Stopwatch {
+                return Err(anyhow!(
+                    "end_timer() is only valid for stopwatch mode (current mode: {:?})",
+                    state.mode
+                ));
+            }
+
             state.sync_active_from_anchor();
 
             let session_id = state

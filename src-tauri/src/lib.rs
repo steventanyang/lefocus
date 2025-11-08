@@ -167,6 +167,8 @@ pub fn run() {
                 // Initialize the island window on macOS to show "00:00" when idle
                 #[cfg(target_os = "macos")]
                 {
+                    macos_bridge::set_app_handle(app.handle().clone());
+                    macos_bridge::setup_timer_callbacks();
                     macos_bridge::island_init();
                     macos_bridge::audio_start_monitoring();
                 }

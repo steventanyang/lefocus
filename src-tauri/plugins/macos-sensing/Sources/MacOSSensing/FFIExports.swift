@@ -201,3 +201,4 @@ public func macos_sensing_swift_audio_previous_track() {
         MediaMonitor.shared.skipToPrevious()
     }
 }
+

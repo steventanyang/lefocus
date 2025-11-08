@@ -2,6 +2,13 @@ import Cocoa
 import Foundation
 import QuartzCore
 
+// Declare C FFI functions for timer callbacks
+@_silgen_name("macos_sensing_trigger_end_timer")
+func macos_sensing_trigger_end_timer()
+
+@_silgen_name("macos_sensing_trigger_cancel_timer")
+func macos_sensing_trigger_cancel_timer()
+
 /// Coordinates the Dynamic Island window, timer presenter, and audio controller.
 public final class IslandController {
     public static let shared = IslandController()
@@ -105,6 +112,16 @@ public final class IslandController {
         }
     }
 
+    public func endTimer() {
+        // Trigger Rust callback via C shim
+        macos_sensing_trigger_end_timer()
+    }
+
+    public func cancelTimer() {
+        // Trigger Rust callback via C shim
+        macos_sensing_trigger_cancel_timer()
+    }
+
     // MARK: - Private Helpers
 
     private func configureIslandView(_ view: IslandView) {
@@ -202,6 +219,14 @@ extension IslandController: IslandViewInteractionDelegate {
 
     func islandViewDidRequestPrevious(_ view: IslandView) {
         audioController.skipToPrevious()
+    }
+
+    func islandViewDidRequestEndTimer(_ view: IslandView) {
+        endTimer()
+    }
+
+    func islandViewDidRequestCancelTimer(_ view: IslandView) {
+        cancelTimer()
     }
 }
 

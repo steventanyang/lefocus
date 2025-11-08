@@ -1,6 +1,18 @@
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::ffi::{c_char, CStr, CString};
+use std::sync::OnceLock;
+use tauri::{AppHandle, Manager};
+
+static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
+
+pub fn set_app_handle(handle: AppHandle) {
+    let _ = APP_HANDLE.set(handle);
+}
+
+fn get_app_handle() -> Option<&'static AppHandle> {
+    APP_HANDLE.get()
+}
 
 #[repr(C)]
 struct WindowMetadataFFI {
@@ -41,6 +53,9 @@ extern "C" {
     fn macos_sensing_audio_toggle_playback();
     fn macos_sensing_audio_next_track();
     fn macos_sensing_audio_previous_track();
+
+    fn macos_sensing_set_timer_end_callback(callback: extern "C" fn());
+    fn macos_sensing_set_timer_cancel_callback(callback: extern "C" fn());
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -194,6 +209,32 @@ pub fn audio_previous_track() {
     }
 }
 
+pub fn handle_island_end_timer() {
+    if let Some(app_handle) = get_app_handle() {
+        if let Some(state) = app_handle.try_state::<crate::AppState>() {
+            let timer = state.timer.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = timer.end_timer().await {
+                    eprintln!("Failed to end timer from island: {}", e);
+                }
+            });
+        }
+    }
+}
+
+pub fn handle_island_cancel_timer() {
+    if let Some(app_handle) = get_app_handle() {
+        if let Some(state) = app_handle.try_state::<crate::AppState>() {
+            let timer = state.timer.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = timer.cancel_timer().await {
+                    eprintln!("Failed to cancel timer from island: {}", e);
+                }
+            });
+        }
+    }
+}
+
 #[cfg(target_os = "macos")]
 pub fn current_uptime_ms() -> i64 {
     use mach::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
@@ -218,4 +259,21 @@ unsafe fn c_ptr_to_string(ptr: *mut c_char) -> Result<String> {
         .to_str()
         .map(|s| s.to_owned())
         .map_err(|e| anyhow!(e))?)
+}
+
+// Callback functions that will be registered with C layer
+extern "C" fn rust_timer_end_callback() {
+    handle_island_end_timer();
+}
+
+extern "C" fn rust_timer_cancel_callback() {
+    handle_island_cancel_timer();
+}
+
+// Initialize timer callbacks
+pub fn setup_timer_callbacks() {
+    unsafe {
+        macos_sensing_set_timer_end_callback(rust_timer_end_callback);
+        macos_sensing_set_timer_cancel_callback(rust_timer_cancel_callback);
+    }
 }

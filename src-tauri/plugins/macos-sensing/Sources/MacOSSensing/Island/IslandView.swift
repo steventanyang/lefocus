@@ -8,6 +8,8 @@ protocol IslandViewInteractionDelegate: AnyObject {
     func islandViewDidRequestPlayPause(_ view: IslandView)
     func islandViewDidRequestNext(_ view: IslandView)
     func islandViewDidRequestPrevious(_ view: IslandView)
+    func islandViewDidRequestEndTimer(_ view: IslandView)
+    func islandViewDidRequestCancelTimer(_ view: IslandView)
 }
 
 final class IslandView: NSView {
@@ -31,6 +33,13 @@ final class IslandView: NSView {
     private var playPauseButton = ButtonArea()
     private var previousButton = ButtonArea()
     private var nextButton = ButtonArea()
+
+    private var timerEndButton = ButtonArea()
+    private var timerCancelButton = ButtonArea()
+
+    // Debouncing for timer control buttons
+    private var lastTimerButtonClickTime: TimeInterval?
+    private let timerButtonDebounceInterval: TimeInterval = 0.5  // 500ms
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -115,6 +124,7 @@ final class IslandView: NSView {
             drawAudioMetadataIfNeeded()
             drawPlaybackButtonsIfNeeded()
             drawTimerTextCompact()
+            drawTimerControlButtonsIfNeeded()
             drawWaveformIfNeeded()
         } else {
             // Compact layout: timer and audio indicator
@@ -152,15 +162,25 @@ final class IslandView: NSView {
         guard isExpanded else { return }
         let point = convert(event.locationInWindow, from: nil)
         layoutPlaybackButtonRects()
+        layoutTimerControlButtonRects()
+
         let wasHoveringPlay = playPauseButton.isHovered
         let wasHoveringPrev = previousButton.isHovered
         let wasHoveringNext = nextButton.isHovered
+        let wasHoveringEnd = timerEndButton.isHovered
+        let wasHoveringCancel = timerCancelButton.isHovered
+
         playPauseButton.isHovered = playPauseButton.rect.contains(point)
         previousButton.isHovered = previousButton.rect.contains(point)
         nextButton.isHovered = nextButton.rect.contains(point)
+        timerEndButton.isHovered = timerEndButton.rect.contains(point)
+        timerCancelButton.isHovered = timerCancelButton.rect.contains(point)
+
         if wasHoveringPlay != playPauseButton.isHovered ||
             wasHoveringPrev != previousButton.isHovered ||
-            wasHoveringNext != nextButton.isHovered {
+            wasHoveringNext != nextButton.isHovered ||
+            wasHoveringEnd != timerEndButton.isHovered ||
+            wasHoveringCancel != timerCancelButton.isHovered {
             needsDisplay = true
         }
     }
@@ -169,6 +189,8 @@ final class IslandView: NSView {
         let location = convert(event.locationInWindow, from: nil)
         if isExpanded {
             layoutPlaybackButtonRects()
+            layoutTimerControlButtonRects()
+
             if playPauseButton.rect.contains(location) {
                 interactionDelegate?.islandViewDidRequestPlayPause(self)
                 return
@@ -180,6 +202,25 @@ final class IslandView: NSView {
             if nextButton.rect.contains(location) {
                 interactionDelegate?.islandViewDidRequestNext(self)
                 return
+            }
+
+            // Debounce timer control buttons to prevent double-click issues
+            if timerEndButton.rect.contains(location) || timerCancelButton.rect.contains(location) {
+                let now = Date().timeIntervalSince1970
+                if let lastClick = lastTimerButtonClickTime,
+                   now - lastClick < timerButtonDebounceInterval {
+                    return  // Debounce: ignore rapid clicks
+                }
+                lastTimerButtonClickTime = now
+
+                if timerEndButton.rect.contains(location) {
+                    interactionDelegate?.islandViewDidRequestEndTimer(self)
+                    return
+                }
+                if timerCancelButton.rect.contains(location) {
+                    interactionDelegate?.islandViewDidRequestCancelTimer(self)
+                    return
+                }
             }
         }
         interactionDelegate?.islandViewDidRequestToggleExpansion(self)
@@ -502,10 +543,103 @@ final class IslandView: NSView {
         )
     }
 
+    private func layoutTimerControlButtonRects() {
+        guard isExpanded, !isIdle else {
+            timerEndButton = ButtonArea()
+            timerCancelButton = ButtonArea()
+            return
+        }
+
+        // Timer control buttons on the right side, below the timer display
+        let buttonWidth: CGFloat = 60.0
+        let buttonHeight: CGFloat = 24.0
+        let spacing: CGFloat = 8.0
+        let bottomY: CGFloat = 20.0
+        let rightPadding: CGFloat = 16.0
+
+        // For stopwatch: show both End and Cancel
+        // For countdown: show only Cancel
+        if mode == .stopwatch {
+            timerCancelButton.rect = NSRect(
+                x: bounds.maxX - rightPadding - buttonWidth,
+                y: bottomY,
+                width: buttonWidth,
+                height: buttonHeight
+            )
+            timerEndButton.rect = NSRect(
+                x: bounds.maxX - rightPadding - (buttonWidth * 2.0) - spacing,
+                y: bottomY,
+                width: buttonWidth,
+                height: buttonHeight
+            )
+        } else {
+            // Countdown mode: only Cancel button
+            timerCancelButton.rect = NSRect(
+                x: bounds.maxX - rightPadding - buttonWidth,
+                y: bottomY,
+                width: buttonWidth,
+                height: buttonHeight
+            )
+            timerEndButton.rect = .zero
+        }
+    }
+
+    private func drawTimerControlButtonsIfNeeded() {
+        guard isExpanded, !isIdle else {
+            timerEndButton = ButtonArea()
+            timerCancelButton = ButtonArea()
+            return
+        }
+
+        layoutTimerControlButtonRects()
+
+        if mode == .stopwatch {
+            drawTextButton(timerEndButton, text: "End", emphasized: true)
+        }
+        drawTextButton(timerCancelButton, text: "Cancel", emphasized: false)
+    }
+
+    private func drawTextButton(_ button: ButtonArea, text: String, emphasized: Bool) {
+        guard button.rect != .zero else { return }
+
+        // Draw rounded rectangle background
+        let bgPath = NSBezierPath(roundedRect: button.rect, xRadius: 6.0, yRadius: 6.0)
+
+        if emphasized {
+            // End button: semi-transparent white background
+            NSColor.white.withAlphaComponent(button.isHovered ? 0.25 : 0.15).setFill()
+        } else {
+            // Cancel button: subtle background
+            NSColor.white.withAlphaComponent(button.isHovered ? 0.15 : 0.08).setFill()
+        }
+        bgPath.fill()
+
+        // Draw border
+        NSColor.white.withAlphaComponent(button.isHovered ? 0.4 : 0.2).setStroke()
+        bgPath.lineWidth = 1.0
+        bgPath.stroke()
+
+        // Draw text
+        let fontSize: CGFloat = 11.0
+        let textColor = NSColor.white.withAlphaComponent(emphasized ? 0.95 : 0.85)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: fontSize, weight: emphasized ? .semibold : .regular),
+            .foregroundColor: textColor
+        ]
+        let string = NSAttributedString(string: text, attributes: attributes)
+        let origin = NSPoint(
+            x: button.rect.midX - string.size().width / 2.0,
+            y: button.rect.midY - string.size().height / 2.0
+        )
+        string.draw(at: origin)
+    }
+
     private func resetButtonAreas() {
         playPauseButton = ButtonArea()
         previousButton = ButtonArea()
         nextButton = ButtonArea()
+        timerEndButton = ButtonArea()
+        timerCancelButton = ButtonArea()
     }
 
     private func initializeTracking() {

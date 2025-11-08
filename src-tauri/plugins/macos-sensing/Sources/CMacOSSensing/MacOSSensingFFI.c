@@ -83,3 +83,27 @@ void macos_sensing_audio_next_track(void) {
 void macos_sensing_audio_previous_track(void) {
     macos_sensing_swift_audio_previous_track();
 }
+
+// Timer control callbacks
+static TimerEndCallback g_timer_end_callback = NULL;
+static TimerCancelCallback g_timer_cancel_callback = NULL;
+
+void macos_sensing_set_timer_end_callback(TimerEndCallback callback) {
+    g_timer_end_callback = callback;
+}
+
+void macos_sensing_set_timer_cancel_callback(TimerCancelCallback callback) {
+    g_timer_cancel_callback = callback;
+}
+
+void macos_sensing_trigger_end_timer(void) {
+    if (g_timer_end_callback != NULL) {
+        g_timer_end_callback();
+    }
+}
+
+void macos_sensing_trigger_cancel_timer(void) {
+    if (g_timer_cancel_callback != NULL) {
+        g_timer_cancel_callback();
+    }
+}
