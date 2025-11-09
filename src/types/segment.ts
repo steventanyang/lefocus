@@ -17,6 +17,7 @@ export interface Segment {
   readingCount: number;
   uniquePhashCount: number | null;
   segmentSummary: string | null;
+  iconDataUrl?: string | null; // App icon from apps table (base64 PNG data URL)
 }
 
 export interface Interruption {
@@ -33,6 +34,7 @@ export interface AppDuration {
   appName: string | null;
   durationSecs: number;
   percentage: number;
+  iconDataUrl?: string | null; // App icon from segments
 }
 
 export interface SegmentStats {

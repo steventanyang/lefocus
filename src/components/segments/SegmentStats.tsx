@@ -70,7 +70,21 @@ export function SegmentStats({ stats, segments, onSegmentClick }: SegmentStatsPr
                 />
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm font-normal">{app.appName || app.bundleId}</span>
+                <div className="flex items-center gap-2">
+                  {app.iconDataUrl ? (
+                    <img
+                      src={app.iconDataUrl}
+                      alt={app.appName || app.bundleId}
+                      className="w-4 h-4 flex-shrink-0"
+                    />
+                  ) : (
+                    <div
+                      className="w-4 h-4 border border-black flex-shrink-0"
+                      style={{ backgroundColor: getAppColor(app.bundleId) }}
+                    />
+                  )}
+                  <span className="text-sm font-normal">{app.appName || app.bundleId}</span>
+                </div>
                 <span className="text-sm font-semibold tabular-nums">
                   {formatDuration(app.durationSecs)} ({app.percentage.toFixed(0)}%)
                 </span>
