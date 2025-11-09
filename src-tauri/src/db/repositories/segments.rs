@@ -57,13 +57,31 @@ fn spawn_icon_fetch_task(db: Database, bundle_ids: HashSet<String>) {
         return;
     }
 
+    // Filter out synthetic bundle IDs that we know won't have icons
+    let bundle_ids_to_fetch: Vec<String> = bundle_ids
+        .into_iter()
+        .filter(|bid| {
+            // Skip synthetic system bundle ID
+            if bid == "com.apple.system" {
+                log::debug!("Skipping icon fetch for synthetic bundle ID: {}", bid);
+                false
+            } else {
+                true
+            }
+        })
+        .collect();
+
+    if bundle_ids_to_fetch.is_empty() {
+        return;
+    }
+
     log::info!(
-        "Fetching icons for {} apps in background",
-        bundle_ids.len()
+        "Fetching icons for {} apps at session end (apps that weren't pre-fetched during session)",
+        bundle_ids_to_fetch.len()
     );
 
     tokio::spawn(async move {
-        for bundle_id in bundle_ids {
+        for bundle_id in bundle_ids_to_fetch {
             match crate::macos_bridge::get_app_icon_data(&bundle_id) {
                 Some(icon_data_url) => {
                     if let Err(e) = db.update_app_icon(&bundle_id, &icon_data_url).await {

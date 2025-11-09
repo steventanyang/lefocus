@@ -72,6 +72,19 @@ impl<'a> AppRepository<'a> {
         Ok(())
     }
 
+    /// Check if app has an icon
+    pub fn has_icon(&self, bundle_id: &str) -> Result<bool> {
+        let result: Option<bool> = self
+            .conn
+            .query_row(
+                "SELECT icon_data_url IS NOT NULL FROM apps WHERE bundle_id = ?1",
+                params![bundle_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(result.unwrap_or(false))
+    }
+
     // /// Get apps with missing icons (for background fetch)
     // /// Used for post-migration backfill: after schema_v7 migration backfills apps table
     // /// from existing segments, this finds apps without icons to fetch them.
@@ -103,6 +116,29 @@ impl<'a> AppRepository<'a> {
 
 // Database async wrappers for app operations
 impl Database {
+    /// Ensure app exists in database
+    pub async fn ensure_app_exists(&self, bundle_id: &str, app_name: Option<&str>) -> Result<()> {
+        let bundle_id = bundle_id.to_string();
+        let app_name = app_name.map(String::from);
+
+        self.execute(move |conn| {
+            let app_repo = AppRepository::new(conn);
+            app_repo.ensure_app_exists(&bundle_id, app_name.as_deref())
+        })
+        .await
+    }
+
+    /// Check if app has an icon
+    pub async fn app_has_icon(&self, bundle_id: &str) -> Result<bool> {
+        let bundle_id = bundle_id.to_string();
+
+        self.execute(move |conn| {
+            let app_repo = AppRepository::new(conn);
+            app_repo.has_icon(&bundle_id)
+        })
+        .await
+    }
+
     /// Update app icon in database
     pub async fn update_app_icon(&self, bundle_id: &str, icon_data_url: &str) -> Result<()> {
         let bundle_id = bundle_id.to_string();

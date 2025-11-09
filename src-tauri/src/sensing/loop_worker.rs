@@ -9,6 +9,7 @@ use crate::{
     macos_bridge::{capture_screenshot, get_active_window_metadata, run_ocr},
 };
 
+use super::icon_manager::IconManager;
 use super::phash::{compute_hamming_distance, compute_phash};
 
 // Set to true to enable verbose logging in this module
@@ -25,6 +26,7 @@ const PHASH_CHANGE_THRESHOLD: u32 = 8;
 pub async fn sensing_loop(
     session_id: String,
     db: Database,
+    icon_manager: IconManager,
     cancel_token: CancellationToken,
 ) {
     let mut ticker = tokio::time::interval(Duration::from_secs(CAPTURE_INTERVAL_SECS));
@@ -42,6 +44,7 @@ pub async fn sensing_loop(
                     &session_id,
                     timestamp,
                     &db,
+                    &icon_manager,
                     &mut last_sampled_phash,
                     &mut last_ocr_phash,
                     &mut last_ocr_time,
@@ -65,6 +68,7 @@ async fn perform_capture(
     session_id: &str,
     timestamp: DateTime<Utc>,
     db: &Database,
+    icon_manager: &IconManager,
     last_sampled_phash: &mut Option<String>,
     last_ocr_phash: &mut Option<String>,
     last_ocr_time: &mut Option<Instant>,
@@ -75,6 +79,12 @@ async fn perform_capture(
     let mut metadata = get_active_window_metadata()
         .map_err(|err| anyhow!("active window metadata failed: {err}"))?;
     let metadata_duration_ms = metadata_start.elapsed().as_millis();
+
+    // Pre-fetch icon for this app if we haven't seen it before
+    // Do this early so icon fetching happens in parallel with screenshot/OCR
+    if !metadata.bundle_id.is_empty() && metadata.bundle_id != "com.apple.system" {
+        icon_manager.ensure_icon(&metadata.bundle_id, Some(&metadata.owner_name)).await;
+    }
 
     // Handle system windows (menu bar, dock, Spotlight, etc.) with empty bundle_id
     // Record them as "System UI" instead of skipping to maintain timeline continuity
