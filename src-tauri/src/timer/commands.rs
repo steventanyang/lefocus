@@ -67,20 +67,28 @@ pub async fn get_interruptions_for_segment(
 
 #[tauri::command]
 pub async fn list_sessions(state: State<'_, AppState>) -> Result<Vec<SessionSummary>, String> {
+    use std::collections::{HashMap, HashSet};
     let db = &state.db;
-    
+
     // Get all sessions (completed + interrupted)
     let sessions = db.list_sessions()
         .await
         .map_err(|e| e.to_string())?;
-    
+
     // For each session, get top 3 apps
     let mut summaries = Vec::new();
+    let mut all_bundle_ids = HashSet::new();
+
     for session in sessions {
         let top_apps = db.get_top_apps_for_session(&session.id, 3)
             .await
             .map_err(|e| e.to_string())?;
-        
+
+        // Collect all unique bundle IDs
+        for app in &top_apps {
+            all_bundle_ids.insert(app.bundle_id.clone());
+        }
+
         summaries.push(SessionSummary {
             id: session.id,
             started_at: session.started_at,
@@ -89,8 +97,19 @@ pub async fn list_sessions(state: State<'_, AppState>) -> Result<Vec<SessionSumm
             target_ms: session.target_ms,
             active_ms: session.active_ms,
             top_apps,
+            app_icons: HashMap::new(), // Will be populated below
         });
     }
-    
+
+    // Fetch all app icons in one go
+    let app_icons = db.get_app_icons_for_bundle_ids(&all_bundle_ids.into_iter().collect::<Vec<_>>())
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Share the same app_icons map across all summaries (efficient - no duplication)
+    for summary in &mut summaries {
+        summary.app_icons = app_icons.clone();
+    }
+
     Ok(summaries)
 }

@@ -1,3 +1,12 @@
+//! App repository for managing app metadata and icons.
+//!
+//! See system design documentation: Phase 6 (phase-6-ux-apps-table.md)
+//!
+//! **Dependency Direction:**
+//! - This module is a **leaf dependency** - it does NOT import from other repositories.
+//! - Other repositories (e.g., `segments.rs`) may import `AppRepository` from this module.
+//! - **DO NOT** import from `segments`, `sessions`, or `context_readings` here to avoid circular dependencies.
+
 use crate::db::{connection::Database, models::App};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -63,31 +72,33 @@ impl<'a> AppRepository<'a> {
         Ok(())
     }
 
-    /// Get apps with missing icons (for background fetch)
-    pub fn get_apps_with_missing_icons(&self) -> Result<Vec<App>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, bundle_id, app_name, icon_data_url, icon_fetched_at
-             FROM apps
-             WHERE icon_data_url IS NULL",
-        )?;
-
-        let apps = stmt
-            .query_map([], |row| {
-                Ok(App {
-                    id: row.get(0)?,
-                    bundle_id: row.get(1)?,
-                    app_name: row.get(2)?,
-                    icon_data_url: row.get(3)?,
-                    icon_fetched_at: row
-                        .get::<_, Option<String>>(4)?
-                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                        .map(|dt| dt.with_timezone(&Utc)),
-                })
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
-
-        Ok(apps)
-    }
+    // /// Get apps with missing icons (for background fetch)
+    // /// Used for post-migration backfill: after schema_v7 migration backfills apps table
+    // /// from existing segments, this finds apps without icons to fetch them.
+    // pub fn get_apps_with_missing_icons(&self) -> Result<Vec<App>> {
+    //     let mut stmt = self.conn.prepare(
+    //         "SELECT id, bundle_id, app_name, icon_data_url, icon_fetched_at
+    //          FROM apps
+    //          WHERE icon_data_url IS NULL",
+    //     )?;
+    //
+    //     let apps = stmt
+    //         .query_map([], |row| {
+    //             Ok(App {
+    //                 id: row.get(0)?,
+    //                 bundle_id: row.get(1)?,
+    //                 app_name: row.get(2)?,
+    //                 icon_data_url: row.get(3)?,
+    //                 icon_fetched_at: row
+    //                     .get::<_, Option<String>>(4)?
+    //                     .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+    //                     .map(|dt| dt.with_timezone(&Utc)),
+    //             })
+    //         })?
+    //         .collect::<Result<Vec<_>, _>>()?;
+    //
+    //     Ok(apps)
+    // }
 }
 
 // Database async wrappers for app operations
@@ -104,14 +115,17 @@ impl Database {
         .await
     }
 
-    /// Get apps with missing icons
-    pub async fn get_apps_with_missing_icons(&self) -> Result<Vec<App>> {
-        self.execute(move |conn| {
-            let app_repo = AppRepository::new(conn);
-            app_repo.get_apps_with_missing_icons()
-        })
-        .await
-    }
+    // TODO(Phase 7): Uncomment when implementing post-migration icon backfill
+    // /// Get apps with missing icons
+    // /// Used for post-migration backfill: after schema_v7 migration backfills apps table
+    // /// from existing segments, this finds apps without icons to fetch them.
+    // pub async fn get_apps_with_missing_icons(&self) -> Result<Vec<App>> {
+    //     self.execute(move |conn| {
+    //         let app_repo = AppRepository::new(conn);
+    //         app_repo.get_apps_with_missing_icons()
+    //     })
+    //     .await
+    // }
 
     /// Get app icons for a list of bundle IDs
     /// Returns a HashMap of bundle_id -> icon_data_url (None if icon not fetched yet)

@@ -1,10 +1,12 @@
 use anyhow::Result;
 use rusqlite::{params, Row};
+use std::collections::HashSet;
 
 use crate::db::{
     connection::Database,
     helpers::parse_datetime,
     models::{Interruption, Segment, TopApp},
+    repositories::apps::AppRepository,
 };
 
 fn row_to_segment(row: &Row) -> Result<Segment, rusqlite::Error> {
@@ -30,6 +32,7 @@ fn row_to_segment(row: &Row) -> Result<Segment, rusqlite::Error> {
         reading_count: row.get("reading_count")?,
         unique_phash_count: row.get("unique_phash_count")?,
         segment_summary: row.get("segment_summary")?,
+        icon_data_url: row.get("icon_data_url").ok(),
     })
 }
 
@@ -47,18 +50,60 @@ fn row_to_interruption(row: &Row) -> Result<Interruption, rusqlite::Error> {
     })
 }
 
+/// Spawn a background task to fetch and store app icons for the given bundle IDs.
+/// This is non-blocking - the function returns immediately after spawning the task.
+fn spawn_icon_fetch_task(db: Database, bundle_ids: HashSet<String>) {
+    if bundle_ids.is_empty() {
+        return;
+    }
+
+    log::info!(
+        "Fetching icons for {} apps in background",
+        bundle_ids.len()
+    );
+
+    tokio::spawn(async move {
+        for bundle_id in bundle_ids {
+            match crate::macos_bridge::get_app_icon_data(&bundle_id) {
+                Some(icon_data_url) => {
+                    if let Err(e) = db.update_app_icon(&bundle_id, &icon_data_url).await {
+                        log::warn!("Failed to store icon for {}: {}", bundle_id, e);
+                    } else {
+                        log::debug!("Stored icon for {}", bundle_id);
+                    }
+                }
+                None => {
+                    log::warn!("Failed to fetch icon for {}", bundle_id);
+                }
+            }
+        }
+    });
+}
+
 impl Database {
     /// Batch insert segments for a session.
+    /// After segments are inserted, spawns background tasks to fetch missing app icons.
     pub async fn insert_segments(
         &self,
         _session_id: &str,
         segments: &[Segment],
     ) -> Result<()> {
         let segments = segments.to_vec();
-        self.execute(move |conn| {
+
+        // Execute the database transaction and collect bundle IDs that need icons
+        let bundles_missing_icons = self.execute(move |conn| {
             let tx = conn.transaction()?;
+            let app_repo = AppRepository::new(&tx);
+            let mut bundles_missing_icons = HashSet::new();
 
             for segment in &segments {
+                // Ensure app exists in apps table
+                app_repo.ensure_app_exists(
+                    &segment.bundle_id,
+                    segment.app_name.as_deref(),
+                )?;
+
+                // Insert segment
                 tx.execute(
                     "INSERT INTO segments (
                         id,
@@ -97,12 +142,24 @@ impl Database {
                         segment.segment_summary,
                     ],
                 )?;
+
+                // Track apps with missing icons
+                if let Some(app) = app_repo.get_app(&segment.bundle_id)? {
+                    if app.icon_data_url.is_none() {
+                        bundles_missing_icons.insert(segment.bundle_id.clone());
+                    }
+                }
             }
 
             tx.commit()?;
-            Ok(())
+            Ok(bundles_missing_icons)
         })
-        .await
+        .await?;
+
+        // Spawn background task to fetch missing icons
+        spawn_icon_fetch_task(self.clone(), bundles_missing_icons);
+
+        Ok(())
     }
 
     /// Batch insert interruptions for segments.
@@ -142,6 +199,7 @@ impl Database {
     }
 
     /// Load all segments for a session, ordered by start_time.
+    /// Includes icon data from the apps table via LEFT JOIN.
     pub async fn get_segments_for_session(
         &self,
         session_id: &str,
@@ -150,25 +208,27 @@ impl Database {
         self.execute(move |conn| {
             let mut stmt = conn.prepare(
                 "SELECT
-                    id,
-                    session_id,
-                    start_time,
-                    end_time,
-                    duration_secs,
-                    bundle_id,
-                    app_name,
-                    window_title,
-                    confidence,
-                    duration_score,
-                    stability_score,
-                    visual_clarity_score,
-                    ocr_quality_score,
-                    reading_count,
-                    unique_phash_count,
-                    segment_summary
+                    segments.id,
+                    segments.session_id,
+                    segments.start_time,
+                    segments.end_time,
+                    segments.duration_secs,
+                    segments.bundle_id,
+                    segments.app_name,
+                    segments.window_title,
+                    segments.confidence,
+                    segments.duration_score,
+                    segments.stability_score,
+                    segments.visual_clarity_score,
+                    segments.ocr_quality_score,
+                    segments.reading_count,
+                    segments.unique_phash_count,
+                    segments.segment_summary,
+                    apps.icon_data_url
                 FROM segments
-                WHERE session_id = ?1
-                ORDER BY start_time ASC",
+                LEFT JOIN apps ON segments.bundle_id = apps.bundle_id
+                WHERE segments.session_id = ?1
+                ORDER BY segments.start_time ASC",
             )?;
 
             let segments_iter = stmt.query_map(params![session_id], |row| {
