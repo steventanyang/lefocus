@@ -1,6 +1,8 @@
 //! Segment and interruption data models.
 //!
-//! See system design documentation: Phase 4 (phase-4-segmentation.md)
+//! See system design documentation:
+//! - Segments & Interruptions: Phase 4 (phase-4-segmentation.md)
+//! - icon_data_url field: Phase 6 (phase-6-ux-apps-table.md)
 //!
 //! Segments represent continuous time intervals where the user focused on a single context (app/window).
 //! Interruptions represent brief context switches that were merged into a parent segment.
@@ -27,6 +29,9 @@ pub struct Segment {
     pub reading_count: i64,
     pub unique_phash_count: Option<i64>,
     pub segment_summary: Option<String>,
+    /// App icon data URL from apps table (populated by JOIN)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon_data_url: Option<String>,
 }
 
 impl Segment {
