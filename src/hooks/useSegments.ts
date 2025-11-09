@@ -27,17 +27,22 @@ export function calculateSegmentStats(segments: Segment[]): SegmentStats {
   );
 
   // Group segments by app
-  const appDurations = new Map<string, { bundleId: string; appName: string | null; durationSecs: number }>();
+  const appDurations = new Map<string, { bundleId: string; appName: string | null; durationSecs: number; iconDataUrl?: string | null }>();
 
   for (const segment of segments) {
     const existing = appDurations.get(segment.bundleId);
     if (existing) {
       existing.durationSecs += segment.durationSecs;
+      // Keep first non-null iconDataUrl we encounter
+      if (!existing.iconDataUrl && segment.iconDataUrl) {
+        existing.iconDataUrl = segment.iconDataUrl;
+      }
     } else {
       appDurations.set(segment.bundleId, {
         bundleId: segment.bundleId,
         appName: segment.appName,
         durationSecs: segment.durationSecs,
+        iconDataUrl: segment.iconDataUrl,
       });
     }
   }

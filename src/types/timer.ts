@@ -44,4 +44,5 @@ export interface SessionSummary {
   targetMs: number;
   activeMs: number;
   topApps: TopApp[];
+  appIcons: Record<string, string | null>; // bundleId -> icon data URL (base64 PNG)
 }

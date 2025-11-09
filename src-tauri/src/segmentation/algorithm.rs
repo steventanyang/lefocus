@@ -165,6 +165,7 @@ fn create_single_segment_for_session(
         reading_count: readings.len() as i64,
         unique_phash_count: Some(unique_phash_count),
         segment_summary: None,
+        icon_data_url: None, // Populated later by database query
     };
 
     // Compute scores
@@ -261,6 +262,7 @@ fn create_initial_segments_with_readings(
                     reading_count: group.reading_count() as i64,
                     unique_phash_count: None, // Will be computed later
                     segment_summary: None,
+                    icon_data_url: None, // Populated later by database query
                 },
                 readings: group.readings.clone(),
             }

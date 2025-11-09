@@ -1,0 +1,813 @@
+# Phase 6 UX: App Icons & Apps Table
+
+**Version:** 2.0 (Revised with Apps Table)
+**Date:** November 2025
+**Status:** Design Phase
+**Dependencies:** Phase 4.5 (Activities View), Schema V6
+
+---
+
+## Document Purpose
+
+This document specifies the design for **app icon display** and introduces the **`apps` table** - a simple database table for storing app metadata and icons.
+
+**Key Architectural Decision:**
+Instead of caching icons in React state (ephemeral), we store them in a persistent `apps` table. This table becomes the **single source of truth** for app metadata and icon caching.
+
+**Goals:**
+1. Display native macOS app icons in SessionResults and Activities view
+2. Persist icons in database (survive app restarts, faster than FFI re-fetching)
+3. Simple schema focused on Phase 6 needs only
+
+**Success Criteria:**
+- Initial render: < 100ms (unchanged)
+- Icon display: instant from DB cache, < 50ms FFI fallback
+- Schema migration: backward compatible, auto-backfill
+
+---
+
+## Table of Contents
+
+1. [Architecture Overview](#1-architecture-overview)
+2. [Apps Table Schema](#2-apps-table-schema)
+3. [Icon Storage Strategy](#3-icon-storage-strategy)
+4. [Database Operations](#4-database-operations)
+5. [Migration & Backfill](#5-migration--backfill)
+6. [FFI Layer (Icon Fetching)](#6-ffi-layer-icon-fetching)
+7. [React Integration](#7-react-integration)
+8. [Implementation Guide](#8-implementation-guide)
+
+---
+
+## 1. Architecture Overview
+
+### 1.1 System Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         React Frontend                           │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │  SessionResults / ActivitiesView                          │  │
+│  │    → Render app icons from DB                             │  │
+│  └─────────────────┬─────────────────────────────────────────┘  │
+│                    │ invoke("list_sessions")                     │
+└────────────────────┼─────────────────────────────────────────────┘
+                     │
+┌────────────────────▼─────────────────────────────────────────────┐
+│                    Tauri Rust Core                               │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │  list_sessions() command                                  │  │
+│  │    1. Fetch sessions                                      │  │
+│  │    2. Fetch segments → extract bundle IDs                 │  │
+│  │    3. JOIN with apps table → hydrate app metadata         │  │
+│  │    4. Return { sessions, app_icon_map }                   │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                   │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │  AppRepository (new)                                      │  │
+│  │    - ensure_app_exists(bundle_id, app_name)               │  │
+│  │    - get_app(bundle_id) → App                             │  │
+│  │    - update_icon(bundle_id, icon_data_url)                │  │
+│  │    - get_apps_with_missing_icons() → Vec<App>             │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                   │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │  Database (SQLite)                                        │  │
+│  │  ┌────────────────────────────────────────────────────┐  │  │
+│  │  │  apps table                                        │  │  │
+│  │  │  - id (PK)                                         │  │  │
+│  │  │  - bundle_id (UNIQUE)                              │  │  │
+│  │  │  - app_name                                        │  │  │
+│  │  │  - icon_data_url (base64 PNG, nullable)           │  │  │
+│  │  │  - icon_fetched_at                                 │  │  │
+│  │  │  - created_at, updated_at                          │  │  │
+│  │  └────────────────────────────────────────────────────┘  │  │
+│  └───────────────────────────────────────────────────────────┘  │
+└────────────────────┬──────────────────────────────────────────────┘
+                     │ FFI (only if icon missing)
+┌────────────────────▼──────────────────────────────────────────────┐
+│              Swift Plugin (MacOSSensing)                           │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │  AppIconProvider.swift                                    │  │
+│  │    - Fetches icon via NSWorkspace (main thread)           │  │
+│  │    - Returns base64 PNG data URL                          │  │
+│  └───────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 1.2 Data Flow
+
+**Session End Flow (Icon Population):**
+```
+1. User ends session
+   ↓
+2. Segmentation runs → creates segments with bundle_id
+   ↓
+3. For each bundle_id in segments:
+   a. AppRepository::ensure_app_exists(bundle_id, app_name)
+   b. save_segment_to_db()
+   c. If app.icon_data_url is NULL, add bundle_id to `missing_icon_set`
+   ↓
+4. After commit: spawn one background job per unique bundle_id in `missing_icon_set`
+   - FFI fetch icon once
+   - update apps.icon_data_url + icon_fetched_at
+```
+
+**Activities View Load (Icon Display):**
+```
+1. User clicks "Activities"
+   ↓
+2. invoke("list_sessions") → ~50ms
+   ↓
+3. Rust query:
+   - Fetch sessions + topApps aggregate (existing)
+   - LEFT JOIN apps once per unique bundle_id → build `AppIconMap`
+   ↓
+4. Return `{ sessions, app_icon_map }`
+   ↓
+5. React renders SessionCards with `app_icon_map[bundleId]` (no async fetch needed)
+   ↓
+6. SessionResults (`useSegments`) also JOINs apps to get per-segment icons
+```
+
+**Icon Missing Fallback:**
+```
+IF apps.icon_data_url IS NULL:
+  1. Show colored box (existing fallback)
+  2. Background job: fetch icon via FFI
+  3. Update apps.icon_data_url
+  4. Next render: icon appears
+```
+
+---
+
+## 2. Apps Table Schema
+
+### 2.1 Schema Definition
+
+**File:** `src-tauri/src/db/schemas/schema_v7.sql`
+
+```sql
+-- Migration to version 7: Add apps table for app metadata and icons
+
+CREATE TABLE apps (
+    -- Primary key
+    id TEXT PRIMARY KEY,
+
+    -- App identity
+    bundle_id TEXT NOT NULL UNIQUE,
+    app_name TEXT,
+
+    -- Icon storage (base64 PNG data URL)
+    icon_data_url TEXT,  -- "data:image/png;base64,iVBORw0KGgo..." or NULL
+    icon_fetched_at TEXT,  -- ISO 8601 timestamp of last fetch
+
+    -- Metadata
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+-- Index for bundle_id lookups
+CREATE INDEX idx_apps_bundle_id ON apps(bundle_id);
+```
+
+### 2.2 Field Descriptions
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | TEXT PK | UUID primary key |
+| `bundle_id` | TEXT UNIQUE | Unique app identifier (e.g., "com.microsoft.VSCode") |
+| `app_name` | TEXT | Display name (e.g., "Visual Studio Code") |
+| `icon_data_url` | TEXT NULL | Base64-encoded PNG data URL from NSWorkspace |
+| `icon_fetched_at` | TEXT NULL | Timestamp of last icon fetch |
+| `created_at` | TEXT | Row creation timestamp |
+| `updated_at` | TEXT | Row last modified timestamp |
+
+### 2.3 Example Rows
+
+```sql
+INSERT INTO apps VALUES (
+    'a1b2c3d4-e5f6-g7h8-i9j0-k1l2m3n4o5p6',  -- id (UUID)
+    'com.microsoft.VSCode',                   -- bundle_id
+    'Visual Studio Code',                     -- app_name
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...',  -- icon_data_url
+    '2025-11-08T14:23:45Z',                   -- icon_fetched_at
+    '2025-10-01T10:00:00Z',                   -- created_at
+    '2025-11-08T14:23:45Z'                    -- updated_at
+);
+```
+
+---
+
+## 3. Icon Storage Strategy
+
+### 3.1 Why Store Icons in DB?
+
+**Compared to React Cache (Old Approach):**
+
+| Aspect | React Cache | DB Storage |
+|--------|-------------|------------|
+| Persistence | Lost on app restart | Persists forever |
+| Initial load | Need FFI fetch (~50ms/icon) | Instant from DB |
+| Memory usage | ~2-5 MB in RAM | 0 MB in RAM (disk) |
+| Shared across views | No (per-component state) | Yes (global) |
+| Cache invalidation | Complex (manual) | Simple (timestamp) |
+
+**Decision:** Store in DB for better UX and simpler architecture.
+
+### 3.2 Icon Data Format
+
+**Format:** Base64-encoded PNG wrapped in data URL
+**Example:** `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0...`
+
+**Size:** ~10-20 KB per icon (32x32 PNG, optimized)
+
+**Storage Impact:**
+- 100 apps × 20 KB = 2 MB (negligible for SQLite)
+- 1000 apps × 20 KB = 20 MB (still acceptable)
+
+### 3.3 Icon Fetch Priority
+
+**Priority 1: DB Cache (Instant)**
+```rust
+// In list_sessions()
+let mut app_icon_map = HashMap::new();
+for bundle_id in unique_bundle_ids {
+    let icon = app_repo.get_app(&bundle_id)?.and_then(|app| app.icon_data_url);
+    app_icon_map.insert(bundle_id.clone(), icon);
+}
+```
+
+**Priority 2: FFI Fetch (Background)**
+```rust
+if app_icon_map.get(&bundle_id).and_then(|icon| icon.clone()).is_none() {
+    missing_icon_set.insert(bundle_id.clone());
+}
+```
+
+**Priority 3: Colored Box (Fallback)**
+```typescript
+const iconDataUrl = appIcons[bundleId] ?? null;
+return iconDataUrl ? (
+  <img src={iconDataUrl} alt="" />
+) : (
+  <div style={{ backgroundColor: getAppColor(bundleId) }} />
+);
+```
+
+### 3.4 Icon Cache Invalidation
+
+**Strategy:** Icons are cached indefinitely. Apps rarely update icons. If needed in the future, implement a background job to refresh icons older than 30 days.
+
+---
+
+## 4. Database Operations
+
+### 4.1 AppRepository API
+
+**File:** `src-tauri/src/db/repositories/apps.rs` (new file)
+
+```rust
+use crate::db::models::App;
+use anyhow::Result;
+use chrono::{DateTime, Utc};
+use rusqlite::{params, Connection, OptionalExtension};
+
+pub struct AppRepository<'a> {
+    conn: &'a Connection,
+}
+
+impl<'a> AppRepository<'a> {
+    pub fn new(conn: &'a Connection) -> Self {
+        Self { conn }
+    }
+
+    /// Ensure app exists in DB (upsert pattern)
+    pub fn ensure_app_exists(&self, bundle_id: &str, app_name: Option<&str>) -> Result<()> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let now = Utc::now().to_rfc3339();
+
+        self.conn.execute(
+            "INSERT INTO apps (id, bundle_id, app_name, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?4)
+             ON CONFLICT(bundle_id) DO UPDATE SET
+                 app_name = COALESCE(excluded.app_name, apps.app_name),
+                 updated_at = excluded.updated_at",
+            params![id, bundle_id, app_name, now],
+        )?;
+        Ok(())
+    }
+
+    /// Get app metadata (including icon)
+    pub fn get_app(&self, bundle_id: &str) -> Result<Option<App>> {
+        self.conn
+            .query_row(
+                "SELECT id, bundle_id, app_name, icon_data_url, icon_fetched_at
+                 FROM apps WHERE bundle_id = ?1",
+                params![bundle_id],
+                |row| {
+                    Ok(App {
+                        id: row.get(0)?,
+                        bundle_id: row.get(1)?,
+                        app_name: row.get(2)?,
+                        icon_data_url: row.get(3)?,
+                        icon_fetched_at: row
+                            .get::<_, Option<String>>(4)?
+                            .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                            .map(|dt| dt.with_timezone(&Utc)),
+                    })
+                },
+            )
+            .optional()
+            .map_err(Into::into)
+    }
+
+    /// Update app icon
+    pub fn update_icon(&self, bundle_id: &str, icon_data_url: &str) -> Result<()> {
+        let now = Utc::now().to_rfc3339();
+        self.conn.execute(
+            "UPDATE apps SET icon_data_url = ?1, icon_fetched_at = ?2, updated_at = ?2
+             WHERE bundle_id = ?3",
+            params![icon_data_url, now, bundle_id],
+        )?;
+        Ok(())
+    }
+
+    /// Get apps with missing icons (for background fetch)
+    pub fn get_apps_with_missing_icons(&self) -> Result<Vec<App>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, bundle_id, app_name, icon_data_url, icon_fetched_at
+             FROM apps
+             WHERE icon_data_url IS NULL",
+        )?;
+
+        let apps = stmt
+            .query_map([], |row| {
+                Ok(App {
+                    id: row.get(0)?,
+                    bundle_id: row.get(1)?,
+                    app_name: row.get(2)?,
+                    icon_data_url: row.get(3)?,
+                    icon_fetched_at: row
+                        .get::<_, Option<String>>(4)?
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc)),
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(apps)
+    }
+}
+```
+
+### 4.2 Integration with Segmentation
+
+**When segments are created, update apps table:**
+
+```rust
+use once_cell::sync::Lazy;
+use std::collections::HashSet;
+use std::sync::Mutex;
+
+static IN_FLIGHT_ICON_FETCHES: Lazy<Mutex<HashSet<String>>> =
+    Lazy::new(|| Mutex::new(HashSet::new()));
+
+// In segmentation/algorithm.rs or wherever segments are saved
+
+pub async fn save_segments(db: &Database, segments: Vec<Segment>) -> Result<()> {
+    let conn = db.conn.lock().await;
+    let tx = conn.transaction()?;
+    let app_repo = AppRepository::new(&tx);
+    let mut bundles_missing_icons = std::collections::HashSet::new();
+
+    for segment in &segments {
+        app_repo.ensure_app_exists(
+            &segment.bundle_id,
+            segment.app_name.as_deref(),
+        )?;
+
+        save_segment_to_db(&tx, segment)?;
+
+        if let Some(app) = app_repo.get_app(&segment.bundle_id)? {
+            if app.icon_data_url.is_none() {
+                bundles_missing_icons.insert(segment.bundle_id.clone());
+            }
+        }
+    }
+
+    tx.commit()?;
+
+    // Background icon fetch for missing icons
+    if !bundles_missing_icons.is_empty() {
+        let db_clone = db.clone();
+        tokio::spawn(async move {
+            for bundle_id in bundles_missing_icons {
+                if IN_FLIGHT_ICON_FETCHES.lock().unwrap().insert(bundle_id.clone()) {
+                    if let Some(icon) = macos_bridge::get_app_icon_data(&bundle_id) {
+                        if let Err(err) = db_clone.update_app_icon(&bundle_id, &icon).await {
+                            log::warn!("Failed to store icon for {}: {}", bundle_id, err);
+                        }
+                    } else {
+                        log::warn!("App icon fetch returned None for {}", bundle_id);
+                    }
+                    IN_FLIGHT_ICON_FETCHES.lock().unwrap().remove(&bundle_id);
+                }
+            }
+        });
+    }
+
+    Ok(())
+}
+```
+
+---
+
+## 5. Migration & Backfill
+
+### 5.1 Migration SQL
+
+**File:** `src-tauri/src/db/schemas/schema_v7.sql`
+
+```sql
+-- Migration to version 7: Add apps table for app metadata and icons
+
+CREATE TABLE apps (
+    -- Primary key
+    id TEXT PRIMARY KEY,
+
+    -- App identity
+    bundle_id TEXT NOT NULL UNIQUE,
+    app_name TEXT,
+
+    -- Icon storage (base64 PNG data URL)
+    icon_data_url TEXT,
+    icon_fetched_at TEXT,
+
+    -- Metadata
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+-- Index for bundle_id lookups
+CREATE INDEX idx_apps_bundle_id ON apps(bundle_id);
+
+-- Backfill apps table from existing segments
+INSERT INTO apps (
+    id,
+    bundle_id,
+    app_name,
+    created_at,
+    updated_at
+)
+SELECT
+    lower(hex(randomblob(16))) as id,
+    bundle_id,
+    MAX(app_name) as app_name,
+    datetime('now') as created_at,
+    datetime('now') as updated_at
+FROM segments
+GROUP BY bundle_id;
+```
+
+### 5.2 Migration Code
+
+**Update:** `src-tauri/src/db/migrations.rs`
+
+```rust
+const CURRENT_SCHEMA_VERSION: i32 = 7;  // Bump from 6 to 7
+
+fn apply_migration(tx: &Transaction<'_>, version: i32) -> Result<()> {
+    match version {
+        // ... existing migrations 1-6
+        7 => {
+            tx.execute_batch(include_str!("schemas/schema_v7.sql"))
+                .context("failed to execute schema_v7.sql")?;
+            Ok(())
+        }
+        _ => bail!("unknown migration target version: {version}"),
+    }
+}
+```
+
+### 5.3 Post-Migration Icon Fetch
+
+**After migration, fetch icons for all backfilled apps:**
+
+```rust
+// In app startup (after migrations run)
+pub async fn backfill_missing_icons(db: &Database) -> Result<()> {
+    let apps_without_icons = db.get_apps_with_missing_icons().await?;
+
+    log::info!("Backfilling icons for {} apps", apps_without_icons.len());
+
+    for app in apps_without_icons {
+        if let Some(icon) = macos_bridge::get_app_icon_data(&app.bundle_id) {
+            db.update_app_icon(&app.bundle_id, &icon).await?;
+        }
+
+        // Rate limit: 20ms per icon to avoid blocking main thread
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    Ok(())
+}
+```
+
+---
+
+## 6. FFI Layer (Icon Fetching)
+
+### 6.1 Swift Implementation
+
+**File:** `src-tauri/plugins/macos-sensing/Sources/MacOSSensing/AppIconProvider.swift`
+
+```swift
+import AppKit
+import Foundation
+
+public final class AppIconProvider {
+    public static let shared = AppIconProvider()
+    private init() {}
+
+    public func getIconData(forBundleId bundleId: String) -> String? {
+        guard let appPath = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId)?.path else {
+            return nil
+        }
+
+        let icon = NSWorkspace.shared.icon(forFile: appPath)
+        let targetSize = NSSize(width: 32, height: 32)
+        let resizedIcon = resizeImage(icon, to: targetSize)
+
+        guard let tiffData = resizedIcon.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            return nil
+        }
+
+        let base64String = pngData.base64EncodedString()
+        return "data:image/png;base64,\(base64String)"
+    }
+
+    private func resizeImage(_ image: NSImage, to size: NSSize) -> NSImage {
+        let resized = NSImage(size: size)
+        resized.lockFocus()
+        image.draw(in: NSRect(origin: .zero, size: size),
+                   from: NSRect(origin: .zero, size: image.size),
+                   operation: .copy,
+                   fraction: 1.0)
+        resized.unlockFocus()
+        return resized
+    }
+}
+```
+
+**FFI Export:**
+
+```swift
+@_cdecl("macos_sensing_swift_get_app_icon")
+public func getAppIconFFI(bundleIdPtr: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>? {
+    guard let bundleIdStr = String(validatingUTF8: bundleIdPtr) else {
+        return nil
+    }
+
+    // IMPORTANT: AppKit APIs must run on main thread
+    var result: String?
+    DispatchQueue.main.sync {
+        result = AppIconProvider.shared.getIconData(forBundleId: bundleIdStr)
+    }
+
+    guard let iconDataURL = result else {
+        return nil
+    }
+
+    return strdup(iconDataURL)
+}
+
+@_cdecl("macos_sensing_swift_free_string")
+public func freeStringFFI(ptr: UnsafeMutablePointer<CChar>) {
+    free(ptr)
+}
+```
+
+### 6.2 Rust Bridge
+
+**File:** `src-tauri/src/macos_bridge.rs`
+
+```rust
+extern "C" {
+    fn macos_sensing_get_app_icon(bundle_id: *const c_char) -> *mut c_char;
+    fn macos_sensing_free_app_icon_string(ptr: *mut c_char);
+}
+
+pub fn get_app_icon_data(bundle_id: &str) -> Option<String> {
+    unsafe {
+        let c_bundle_id = CString::new(bundle_id).ok()?;
+        let ptr = macos_sensing_get_app_icon(c_bundle_id.as_ptr());
+
+        if ptr.is_null() {
+            return None;
+        }
+
+        let c_str = CStr::from_ptr(ptr);
+        let result = c_str.to_str().ok().map(String::from);
+
+        macos_sensing_free_app_icon_string(ptr);
+
+        result
+    }
+}
+```
+
+---
+
+## 7. React Integration
+
+### 7.1 Type Changes
+
+```typescript
+export interface TopApp {
+  bundleId: string;
+  appName: string | null;
+  durationSecs: number;
+  percentage: number;
+}
+
+export interface SessionSummary {
+  id: string;
+  startedAt: string;
+  stoppedAt: string | null;
+  status: SessionStatus;
+  targetMs: number;
+  activeMs: number;
+  topApps: TopApp[];
+}
+
+export interface ActivitiesPayload {
+  sessions: SessionSummary[];
+  appIcons: Record<string, string | null>; // Unique bundleId -> icon
+}
+
+export interface Segment {
+  // existing fields...
+  bundleId: string;
+  appName: string | null;
+  iconDataUrl: string | null; // populated by useSegments() JOIN
+}
+```
+
+`appIcons` deduplicates icon payloads across every card, so Activities still transfers ~tens of kilobytes even if the same app shows up in dozens of sessions.
+
+### 7.2 Component Changes
+
+**AppIcon component (unchanged API, still accepts `iconDataUrl`):**
+```typescript
+<AppIcon
+  bundleId={bundleId}
+  iconDataUrl={appIcons[bundleId] ?? null}
+  size={12}
+/>
+```
+
+**SessionCard usage:**
+```typescript
+{session.topApps.map((app) => (
+  <div key={app.bundleId} className="flex items-center gap-2">
+    <AppIcon
+      bundleId={app.bundleId}
+      iconDataUrl={appIcons[app.bundleId] ?? null}
+      size={12}
+    />
+    <span>{app.appName || app.bundleId}</span>
+  </div>
+))}
+```
+
+**SessionResults / SegmentStats:**
+- `useSegments(sessionId)` now returns segments with `iconDataUrl`.
+- `SegmentStats` and `SegmentDetailsModal` pass `segment.iconDataUrl` into `AppIcon`, so post-session timelines share the same icons as Activities.
+
+**No async fetching needed** – icons arrive with the initial payloads (`appIcons` map for Activities, inline on segments for SessionResults).
+
+---
+
+## 8. Implementation Guide
+
+### 8.1 Implementation Order
+
+**Phase 1: Schema & Migration (1-2 hours)**
+1. Create `schema_v7.sql`
+2. Update `migrations.rs` (bump to version 7)
+3. Run migration, verify backfill
+4. Test on existing DB
+
+**Phase 2: Repository Layer (2-3 hours)**
+1. Create `src-tauri/src/db/repositories/apps.rs`
+2. Implement `AppRepository` methods
+3. Add `Database::apps()` helper
+4. Unit tests
+
+**Phase 3: Segmentation Integration (1 hour)**
+1. Update segment save flow to call `ensure_app_exists()`
+2. Background icon fetch job for missing icons
+
+**Phase 4: Icon Fetching (Swift/Rust) (2 hours)**
+1. Swift `AppIconProvider.swift` (from Phase 6 doc)
+2. FFI exports with main thread dispatch
+3. Rust `macos_bridge::get_app_icon_data()`
+4. Test FFI roundtrip
+
+**Phase 5: Update Queries (2 hours)**
+1. Modify `list_sessions()` to JOIN with apps table
+2. Return `{ sessions, app_icon_map }` (unique icons only)
+3. Extend `list_segments()` JOIN to emit `segment.icon_data_url`
+4. Test query performance
+
+**Phase 6: React Updates (1 hour)**
+1. Update Activities data hook to read `{ sessions, appIcons }`
+2. Simplify `AppIcon` component (no cache hook)
+3. Update `SessionCard` and `SegmentStats` to pull icons from `appIcons`/`segment.iconDataUrl`
+4. Remove old React cache code
+
+**Phase 7: Post-Migration Icon Backfill (1 hour)**
+1. Add startup job to fetch missing icons
+2. Rate-limited background fetch
+3. Progress logging
+
+**Total Estimate:** 10-12 hours
+
+### 8.2 Testing Checklist
+
+**Schema:**
+- [ ] Migration runs successfully on fresh DB
+- [ ] Migration runs successfully on existing DB with segments
+- [ ] Backfill populates apps table correctly
+- [ ] Indexes created properly
+
+**Repository:**
+- [ ] `ensure_app_exists()` creates new apps
+- [ ] `ensure_app_exists()` updates existing apps (upsert)
+- [ ] `get_app()` returns correct data
+- [ ] `update_icon()` persists icon
+- [ ] `get_apps_with_missing_icons()` returns apps without icons
+
+**Icon Fetching:**
+- [ ] Swift FFI returns valid base64 PNG
+- [ ] Swift FFI returns null for missing apps
+- [ ] Main thread dispatch prevents crashes
+- [ ] Icon fetched on first segment creation
+- [ ] Icon cached in DB on subsequent loads
+
+**Query Performance:**
+- [ ] `list_sessions()` with icons: < 100ms
+
+**React:**
+- [ ] Icons display in SessionResults
+- [ ] Icons display in ActivitiesView
+- [ ] Colored box fallback works
+- [ ] No layout shift on icon load
+
+---
+
+## Appendix: File Manifest
+
+### New Files
+
+**SQL:**
+- `src-tauri/src/db/schemas/schema_v7.sql` (~35 lines)
+
+**Rust:**
+- `src-tauri/src/db/repositories/apps.rs` (~90 lines)
+- `src-tauri/src/db/models/app.rs` (~12 lines)
+
+**Swift:**
+- `src-tauri/plugins/macos-sensing/Sources/MacOSSensing/AppIconProvider.swift` (~60 lines)
+
+**React:**
+- No new files (simplifies existing components)
+
+### Modified Files
+
+**Rust:**
+- `src-tauri/src/db/migrations.rs` (+10 lines)
+- `src-tauri/src/db/repositories/mod.rs` (+1 export)
+- `src-tauri/src/segmentation/algorithm.rs` (~20 lines - app upsert)
+- `src-tauri/src/timer/commands.rs` (~30 lines - JOIN apps table)
+- `src-tauri/src/macos_bridge.rs` (+20 lines - FFI wrapper)
+
+**React:**
+- `src/types/timer.ts` (add `ActivitiesPayload`, `Segment.iconDataUrl`)
+- `src/components/session/AppIcon.tsx` (simplified, -30 lines)
+- `src/components/session/SessionCard.tsx` (~5 lines)
+- `src/components/segments/SegmentStats.tsx` (~10 lines)
+
+**Total LOC:** ~200 new, ~100 modified
+
+---
+
+**End of Phase 6 UX: App Icons & Apps Table Design**
+
+**Version:** 2.0
+**Total Lines:** ~800
+**Key Innovation:** Apps table as single source of truth for app metadata and icon caching
+**Performance:** Instant icon display from DB cache, < 50ms FFI fallback, scalable to 1000+ apps

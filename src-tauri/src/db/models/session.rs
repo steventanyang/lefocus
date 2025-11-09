@@ -3,9 +3,11 @@
 //! See system design documentation:
 //! - `Session`, `SessionStatus`, `SessionInfo`: Phase 2 (phase-2-timer-database.md)
 //! - `TopApp`, `SessionSummary`: Phase 4.5 (phase-4.5-activities-view.md)
+//! - `app_icons` in SessionSummary: Phase 6 (phase-6-ux-apps-table.md)
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -85,4 +87,7 @@ pub struct SessionSummary {
     pub target_ms: u64,
     pub active_ms: u64,
     pub top_apps: Vec<TopApp>,
+    /// Map of bundle_id -> icon_data_url (base64 PNG)
+    /// Deduplicates icons across all sessions returned in the list
+    pub app_icons: HashMap<String, Option<String>>,
 }

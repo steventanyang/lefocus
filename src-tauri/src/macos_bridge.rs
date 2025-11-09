@@ -58,6 +58,10 @@ extern "C" {
 
     fn macos_sensing_set_timer_end_callback(callback: extern "C" fn());
     fn macos_sensing_set_timer_cancel_callback(callback: extern "C" fn());
+
+    // App icon fetching
+    fn macos_sensing_swift_get_app_icon(bundle_id: *const c_char) -> *mut c_char;
+    fn macos_sensing_swift_free_string(ptr: *mut c_char);
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -293,5 +297,25 @@ pub fn setup_timer_callbacks() {
     unsafe {
         macos_sensing_set_timer_end_callback(rust_timer_end_callback);
         macos_sensing_set_timer_cancel_callback(rust_timer_cancel_callback);
+    }
+}
+
+/// Get app icon as base64-encoded PNG data URL
+/// Returns None if the app is not found or icon cannot be fetched
+pub fn get_app_icon_data(bundle_id: &str) -> Option<String> {
+    unsafe {
+        let c_bundle_id = CString::new(bundle_id).ok()?;
+        let ptr = macos_sensing_swift_get_app_icon(c_bundle_id.as_ptr());
+
+        if ptr.is_null() {
+            return None;
+        }
+
+        let c_str = CStr::from_ptr(ptr);
+        let result = c_str.to_str().ok().map(String::from);
+
+        macos_sensing_swift_free_string(ptr);
+
+        result
     }
 }
