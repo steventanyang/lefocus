@@ -15,6 +15,10 @@ extern void macos_sensing_swift_island_start(int64_t start_uptime_ms, int64_t ta
 extern void macos_sensing_swift_island_sync(int64_t value_ms);
 extern void macos_sensing_swift_island_reset(void);
 extern void macos_sensing_swift_island_cleanup(void);
+extern void macos_sensing_swift_audio_start_monitoring(void);
+extern void macos_sensing_swift_audio_toggle_playback(void);
+extern void macos_sensing_swift_audio_next_track(void);
+extern void macos_sensing_swift_audio_previous_track(void);
 
 CMacOSSensing_WindowMetadataFFI *macos_sensing_get_active_window_metadata(void) {
     return macos_sensing_swift_get_window();
@@ -62,4 +66,44 @@ void macos_sensing_island_reset(void) {
 
 void macos_sensing_island_cleanup(void) {
     macos_sensing_swift_island_cleanup();
+}
+
+void macos_sensing_audio_start_monitoring(void) {
+    macos_sensing_swift_audio_start_monitoring();
+}
+
+void macos_sensing_audio_toggle_playback(void) {
+    macos_sensing_swift_audio_toggle_playback();
+}
+
+void macos_sensing_audio_next_track(void) {
+    macos_sensing_swift_audio_next_track();
+}
+
+void macos_sensing_audio_previous_track(void) {
+    macos_sensing_swift_audio_previous_track();
+}
+
+// Timer control callbacks
+static TimerEndCallback g_timer_end_callback = NULL;
+static TimerCancelCallback g_timer_cancel_callback = NULL;
+
+void macos_sensing_set_timer_end_callback(TimerEndCallback callback) {
+    g_timer_end_callback = callback;
+}
+
+void macos_sensing_set_timer_cancel_callback(TimerCancelCallback callback) {
+    g_timer_cancel_callback = callback;
+}
+
+void macos_sensing_trigger_end_timer(void) {
+    if (g_timer_end_callback != NULL) {
+        g_timer_end_callback();
+    }
+}
+
+void macos_sensing_trigger_cancel_timer(void) {
+    if (g_timer_cancel_callback != NULL) {
+        g_timer_cancel_callback();
+    }
 }

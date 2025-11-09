@@ -35,3 +35,21 @@ void macos_sensing_island_start(int64_t start_uptime_ms, int64_t target_ms, cons
 void macos_sensing_island_sync(int64_t value_ms);
 void macos_sensing_island_reset(void);
 void macos_sensing_island_cleanup(void);
+
+// Audio monitoring/control
+void macos_sensing_audio_start_monitoring(void);
+void macos_sensing_audio_toggle_playback(void);
+void macos_sensing_audio_next_track(void);
+void macos_sensing_audio_previous_track(void);
+
+// Timer control callback types
+typedef void (*TimerEndCallback)(void);
+typedef void (*TimerCancelCallback)(void);
+
+// Rust sets these callbacks
+void macos_sensing_set_timer_end_callback(TimerEndCallback callback);
+void macos_sensing_set_timer_cancel_callback(TimerCancelCallback callback);
+
+// Swift calls these to trigger Rust actions
+void macos_sensing_trigger_end_timer(void);
+void macos_sensing_trigger_cancel_timer(void);

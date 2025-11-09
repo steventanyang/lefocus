@@ -37,8 +37,14 @@ final class IslandSpaceManager {
             removeWindows(windows, from: space)
         }
         registeredWindows.removeAllObjects()
-        CGSHideSpaces(_CGSDefaultConnection(), [NSNumber(value: space)] as CFArray)
-        CGSSpaceDestroy(_CGSDefaultConnection(), space)
+        logIfCGSError(
+            CGSHideSpaces(_CGSDefaultConnection(), [NSNumber(value: space)] as CFArray),
+            context: "CGSHideSpaces"
+        )
+        logIfCGSError(
+            CGSSpaceDestroy(_CGSDefaultConnection(), space),
+            context: "CGSSpaceDestroy"
+        )
         spaceIdentifier = nil
     }
 
@@ -56,8 +62,14 @@ final class IslandSpaceManager {
             return nil
         }
 
-        CGSSpaceSetAbsoluteLevel(connection, space, Int32.max)
-        CGSShowSpaces(connection, [NSNumber(value: space)] as CFArray)
+        logIfCGSError(
+            CGSSpaceSetAbsoluteLevel(connection, space, Int32.max),
+            context: "CGSSpaceSetAbsoluteLevel"
+        )
+        logIfCGSError(
+            CGSShowSpaces(connection, [NSNumber(value: space)] as CFArray),
+            context: "CGSShowSpaces"
+        )
         spaceIdentifier = space
         return space
     }
@@ -67,7 +79,10 @@ final class IslandSpaceManager {
         let connection = _CGSDefaultConnection()
         let cfWindows = windowIDs.map { NSNumber(value: $0) } as CFArray
         let cfSpaces = [NSNumber(value: space)] as CFArray
-        CGSAddWindowsToSpaces(connection, cfWindows, cfSpaces)
+        logIfCGSError(
+            CGSAddWindowsToSpaces(connection, cfWindows, cfSpaces),
+            context: "CGSAddWindowsToSpaces"
+        )
     }
 
     private func removeWindows(_ windowIDs: [CGSWindowID], from space: CGSSpaceID) {
@@ -75,7 +90,10 @@ final class IslandSpaceManager {
         let connection = _CGSDefaultConnection()
         let cfWindows = windowIDs.map { NSNumber(value: $0) } as CFArray
         let cfSpaces = [NSNumber(value: space)] as CFArray
-        CGSRemoveWindowsFromSpaces(connection, cfWindows, cfSpaces)
+        logIfCGSError(
+            CGSRemoveWindowsFromSpaces(connection, cfWindows, cfSpaces),
+            context: "CGSRemoveWindowsFromSpaces"
+        )
     }
 
     private func windowID(for window: NSWindow) -> CGSWindowID? {
@@ -105,6 +123,13 @@ final class IslandSpaceManager {
               let windowID = windowID(for: window) else { return }
         addWindows([windowID], to: space)
     }
+
+    private func logIfCGSError(_ status: Int32, context: String) {
+        if status == kCGErrorSuccess || status == kCGErrorAlreadyDone {
+            return
+        }
+        NSLog("IslandSpaceManager: \(context) failed with status \(status)")
+    }
 }
 
 // MARK: - CGS private declarations
@@ -112,6 +137,8 @@ final class IslandSpaceManager {
 private typealias CGSConnectionID = UInt32
 private typealias CGSSpaceID = UInt64
 private typealias CGSWindowID = UInt32
+private let kCGErrorSuccess: Int32 = 0
+private let kCGErrorAlreadyDone: Int32 = 1
 
 @_silgen_name("_CGSDefaultConnection")
 private func _CGSDefaultConnection() -> CGSConnectionID

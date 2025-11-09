@@ -1,6 +1,20 @@
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::ffi::{c_char, CStr, CString};
+use std::sync::OnceLock;
+use tauri::{AppHandle, Manager};
+
+static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
+
+pub fn set_app_handle(handle: AppHandle) {
+    APP_HANDLE.set(handle).expect(
+        "set_app_handle called twice; this indicates a bug in initialization"
+    );
+}
+
+fn get_app_handle() -> Option<&'static AppHandle> {
+    APP_HANDLE.get()
+}
 
 #[repr(C)]
 struct WindowMetadataFFI {
@@ -34,9 +48,16 @@ extern "C" {
 
     fn macos_sensing_island_init();
     fn macos_sensing_island_start(start_uptime_ms: i64, target_ms: i64, mode: *const c_char);
-    fn macos_sensing_island_sync(value_ms: i64);
+   fn macos_sensing_island_sync(value_ms: i64);
     fn macos_sensing_island_reset();
     fn macos_sensing_island_cleanup();
+    fn macos_sensing_audio_start_monitoring();
+    fn macos_sensing_audio_toggle_playback();
+    fn macos_sensing_audio_next_track();
+    fn macos_sensing_audio_previous_track();
+
+    fn macos_sensing_set_timer_end_callback(callback: extern "C" fn());
+    fn macos_sensing_set_timer_cancel_callback(callback: extern "C" fn());
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -166,6 +187,72 @@ pub fn island_cleanup() {
     }
 }
 
+pub fn audio_start_monitoring() {
+    unsafe {
+        macos_sensing_audio_start_monitoring();
+    }
+}
+
+// NOTE: These functions are currently unused as media playback is controlled directly
+// through the Island UI in Swift. In the future, we can expose these as Tauri commands
+// to allow the frontend to control media playback programmatically.
+//
+// To enable frontend control, add Tauri commands like:
+// #[tauri::command]
+// fn media_toggle_playback() { audio_toggle_playback(); }
+//
+// pub fn audio_toggle_playback() {
+//     unsafe {
+//         macos_sensing_audio_toggle_playback();
+//     }
+// }
+//
+// pub fn audio_next_track() {
+//     unsafe {
+//         macos_sensing_audio_next_track();
+//     }
+// }
+//
+// pub fn audio_previous_track() {
+//     unsafe {
+//         macos_sensing_audio_previous_track();
+//     }
+// }
+
+pub fn handle_island_end_timer() {
+    if let Some(app_handle) = get_app_handle() {
+        if let Some(state) = app_handle.try_state::<crate::AppState>() {
+            let timer = state.timer.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = timer.end_timer().await {
+                    log::error!("Failed to end timer from island: {}", e);
+                }
+            });
+        } else {
+            log::error!("Failed to get app state when ending timer from island");
+        }
+    } else {
+        log::error!("Failed to get app handle when ending timer from island");
+    }
+}
+
+pub fn handle_island_cancel_timer() {
+    if let Some(app_handle) = get_app_handle() {
+        if let Some(state) = app_handle.try_state::<crate::AppState>() {
+            let timer = state.timer.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = timer.cancel_timer().await {
+                    log::error!("Failed to cancel timer from island: {}", e);
+                }
+            });
+        } else {
+            log::error!("Failed to get app state when canceling timer from island");
+        }
+    } else {
+        log::error!("Failed to get app handle when canceling timer from island");
+    }
+}
+
 #[cfg(target_os = "macos")]
 pub fn current_uptime_ms() -> i64 {
     use mach::mach_time::{mach_absolute_time, mach_timebase_info, mach_timebase_info_data_t};
@@ -190,4 +277,21 @@ unsafe fn c_ptr_to_string(ptr: *mut c_char) -> Result<String> {
         .to_str()
         .map(|s| s.to_owned())
         .map_err(|e| anyhow!(e))?)
+}
+
+// Callback functions that will be registered with C layer
+extern "C" fn rust_timer_end_callback() {
+    handle_island_end_timer();
+}
+
+extern "C" fn rust_timer_cancel_callback() {
+    handle_island_cancel_timer();
+}
+
+// Initialize timer callbacks
+pub fn setup_timer_callbacks() {
+    unsafe {
+        macos_sensing_set_timer_end_callback(rust_timer_end_callback);
+        macos_sensing_set_timer_cancel_callback(rust_timer_cancel_callback);
+    }
 }

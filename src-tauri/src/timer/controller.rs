@@ -182,6 +182,9 @@ impl TimerController {
                 return Err(anyhow!("no active session to end"));
             }
 
+            // Allow manual end for both countdown and stopwatch modes
+            // Users should be able to end any timer early from the island UI
+
             state.sync_active_from_anchor();
 
             let session_id = state
