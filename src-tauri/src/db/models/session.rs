@@ -90,4 +90,7 @@ pub struct SessionSummary {
     /// Map of bundle_id -> icon_data_url (base64 PNG)
     /// Deduplicates icons across all sessions returned in the list
     pub app_icons: HashMap<String, Option<String>>,
+    /// Map of bundle_id -> icon_color (hex string like "#AABBCC")
+    /// Dominant color extracted from app icons
+    pub app_colors: HashMap<String, Option<String>>,
 }
