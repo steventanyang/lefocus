@@ -18,6 +18,7 @@ export interface Segment {
   uniquePhashCount: number | null;
   segmentSummary: string | null;
   iconDataUrl?: string | null; // App icon from apps table (base64 PNG data URL)
+  iconColor?: string | null; // App icon dominant color from apps table (hex like "#AABBCC")
 }
 
 export interface Interruption {
@@ -35,6 +36,7 @@ export interface AppDuration {
   durationSecs: number;
   percentage: number;
   iconDataUrl?: string | null; // App icon from segments
+  iconColor?: string | null; // App icon dominant color from segments
 }
 
 export interface SegmentStats {

@@ -54,20 +54,25 @@ export const APP_COLORS: Record<string, string> = {
 
 /**
  * Get color for a given bundle ID
- * Falls back to confidence-based color if no specific color defined
+ * Priority: 1. iconColor (extracted from icon), 2. hardcoded map, 3. confidence-based, 4. default gray
  */
-export function getAppColor(bundleId: string, confidence?: number): string {
-  // Check if we have a specific color for this app
+export function getAppColor(bundleId: string, options?: { iconColor?: string | null; confidence?: number }): string {
+  // Priority 1: Use extracted icon color if available
+  if (options?.iconColor) {
+    return options.iconColor;
+  }
+
+  // Priority 2: Check if we have a specific color for this app in hardcoded map
   if (bundleId in APP_COLORS) {
     return APP_COLORS[bundleId];
   }
 
-  // Fallback to confidence-based colors if provided
-  if (confidence !== undefined) {
-    return getConfidenceColor(confidence);
+  // Priority 3: Fallback to confidence-based colors if provided
+  if (options?.confidence !== undefined) {
+    return getConfidenceColor(options.confidence);
   }
 
-  // Default fallback - neutral gray
+  // Priority 4: Default fallback - neutral gray
   return "#7A7A7A";
 }
 

@@ -55,7 +55,7 @@ export function SegmentDetailsModal({
               <div className="flex items-center gap-2">
                 <span
                   className="w-3 h-3 border border-black flex-shrink-0"
-                  style={{ backgroundColor: getAppColor(segment.bundleId, segment.confidence) }}
+                  style={{ backgroundColor: getAppColor(segment.bundleId, { iconColor: segment.iconColor, confidence: segment.confidence }) }}
                 />
                 <span className="text-sm font-normal text-right max-w-[60%] break-words">
                   {segment.appName || segment.bundleId}
@@ -151,7 +151,7 @@ export function SegmentDetailsModal({
                       <div className="flex items-center gap-2 flex-1">
                         <span
                           className="w-2 h-2 border border-black flex-shrink-0"
-                          style={{ backgroundColor: getAppColor(interruption.bundleId) }}
+                          style={{ backgroundColor: getAppColor(interruption.bundleId, {}) }}
                         />
                         <span className="text-sm font-normal">
                           {interruption.appName || interruption.bundleId}

@@ -45,10 +45,10 @@ export function SegmentStats({
         <div className="flex h-[60px] border border-black overflow-hidden bg-white">
           {segments.map((segment) => {
             const widthPercent = (segment.durationSecs / totalDuration) * 100;
-            const backgroundColor = getAppColor(
-              segment.bundleId,
-              segment.confidence
-            );
+            const backgroundColor = getAppColor(segment.bundleId, {
+              iconColor: segment.iconColor,
+              confidence: segment.confidence,
+            });
             return (
               <button
                 key={segment.id}
@@ -84,7 +84,7 @@ export function SegmentStats({
               ) : (
                 <div
                   className="w-8 h-8 border border-black flex-shrink-0"
-                  style={{ backgroundColor: getAppColor(app.bundleId) }}
+                  style={{ backgroundColor: getAppColor(app.bundleId, { iconColor: app.iconColor }) }}
                 />
               )}
 
@@ -106,7 +106,7 @@ export function SegmentStats({
                       className="h-full transition-all duration-300"
                       style={{
                         width: `${app.percentage}%`,
-                        backgroundColor: getAppColor(app.bundleId),
+                        backgroundColor: getAppColor(app.bundleId, { iconColor: app.iconColor }),
                       }}
                     />
                   </div>

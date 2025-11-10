@@ -45,4 +45,5 @@ export interface SessionSummary {
   activeMs: number;
   topApps: TopApp[];
   appIcons: Record<string, string | null>; // bundleId -> icon data URL (base64 PNG)
+  appColors: Record<string, string | null>; // bundleId -> icon color (hex like "#AABBCC")
 }

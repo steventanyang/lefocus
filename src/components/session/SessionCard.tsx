@@ -97,10 +97,10 @@ export function SessionCard({ session, segments, onClick }: SessionCardProps) {
             if (totalDuration === 0) return null;
             
             return segments.map((segment, index) => {
-              const backgroundColor = getAppColor(
-                segment.bundleId,
-                segment.confidence
-              );
+              const backgroundColor = getAppColor(segment.bundleId, {
+                iconColor: segment.iconColor,
+                confidence: segment.confidence,
+              });
               return (
                 <div
                   key={segment.id}
@@ -122,7 +122,8 @@ export function SessionCard({ session, segments, onClick }: SessionCardProps) {
       ) : session.topApps && session.topApps.length > 0 ? (
         <div className="flex h-8 w-full border border-black overflow-hidden bg-white">
           {session.topApps.map((app, index) => {
-            const backgroundColor = getAppColor(app.bundleId);
+            const iconColor = session.appColors[app.bundleId];
+            const backgroundColor = getAppColor(app.bundleId, { iconColor });
             return (
               <div
                 key={app.bundleId}
@@ -150,6 +151,7 @@ export function SessionCard({ session, segments, onClick }: SessionCardProps) {
           </span>
           {session.topApps.map((app) => {
             const iconDataUrl = session.appIcons[app.bundleId];
+            const iconColor = session.appColors[app.bundleId];
             return (
               <div key={app.bundleId} className="flex justify-between items-center gap-4">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -162,7 +164,7 @@ export function SessionCard({ session, segments, onClick }: SessionCardProps) {
                   ) : (
                     <div
                       className="w-3 h-3 border border-black flex-shrink-0"
-                      style={{ backgroundColor: getAppColor(app.bundleId) }}
+                      style={{ backgroundColor: getAppColor(app.bundleId, { iconColor }) }}
                     />
                   )}
                   <span className="text-sm font-normal truncate">

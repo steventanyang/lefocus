@@ -1,8 +1,8 @@
 # Phase 6 UX: App Icons & Apps Table
 
-**Version:** 2.0 (Revised with Apps Table)
+**Version:** 2.1 (Added Icon Color Extraction)
 **Date:** November 2025
-**Status:** Design Phase
+**Status:** Implemented
 **Dependencies:** Phase 4.5 (Activities View), Schema V6
 
 ---
@@ -17,7 +17,8 @@ Instead of caching icons in React state (ephemeral), we store them in a persiste
 **Goals:**
 1. Display native macOS app icons in SessionResults and Activities view
 2. Persist icons in database (survive app restarts, faster than FFI re-fetching)
-3. Simple schema focused on Phase 6 needs only
+3. Extract and store dominant colors from app icons for progress bar theming
+4. Simple schema focused on Phase 6 needs only
 
 **Success Criteria:**
 - Initial render: < 100ms (unchanged)
@@ -79,6 +80,7 @@ Instead of caching icons in React state (ephemeral), we store them in a persiste
 │  │  │  - bundle_id (UNIQUE)                              │  │  │
 │  │  │  - app_name                                        │  │  │
 │  │  │  - icon_data_url (base64 PNG, nullable)           │  │  │
+│  │  │  - icon_color (hex color, nullable)               │  │  │
 │  │  │  - icon_fetched_at                                 │  │  │
 │  │  │  - created_at, updated_at                          │  │  │
 │  │  └────────────────────────────────────────────────────┘  │  │
@@ -90,7 +92,8 @@ Instead of caching icons in React state (ephemeral), we store them in a persiste
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │  AppIconProvider.swift                                    │  │
 │  │    - Fetches icon via NSWorkspace (main thread)           │  │
-│  │    - Returns base64 PNG data URL                          │  │
+│  │    - Extracts dominant color from icon pixels             │  │
+│  │    - Returns base64 PNG data URL + hex color              │  │
 │  └───────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -109,8 +112,8 @@ Instead of caching icons in React state (ephemeral), we store them in a persiste
    c. If app.icon_data_url is NULL, add bundle_id to `missing_icon_set`
    ↓
 4. After commit: spawn one background job per unique bundle_id in `missing_icon_set`
-   - FFI fetch icon once
-   - update apps.icon_data_url + icon_fetched_at
+   - FFI fetch icon and extract color
+   - update apps.icon_data_url + icon_color + icon_fetched_at
 ```
 
 **Activities View Load (Icon Display):**
@@ -134,9 +137,15 @@ Instead of caching icons in React state (ephemeral), we store them in a persiste
 ```
 IF apps.icon_data_url IS NULL:
   1. Show colored box (existing fallback)
-  2. Background job: fetch icon via FFI
-  3. Update apps.icon_data_url
+  2. Background job: fetch icon + color via FFI
+  3. Update apps.icon_data_url + icon_color
   4. Next render: icon appears
+
+IF apps.icon_color IS NULL (but icon_data_url exists):
+  1. Use hardcoded color map or confidence-based color
+  2. Background job: extract color from existing icon
+  3. Update apps.icon_color
+  4. Next render: progress bars use extracted color
 ```
 
 ---
@@ -145,7 +154,8 @@ IF apps.icon_data_url IS NULL:
 
 ### 2.1 Schema Definition
 
-**File:** `src-tauri/src/db/schemas/schema_v7.sql`
+**File:** `src-tauri/src/db/schemas/schema_v7.sql` (initial)
+**File:** `src-tauri/src/db/schemas/schema_v8.sql` (adds icon_color)
 
 ```sql
 -- Migration to version 7: Add apps table for app metadata and icons
@@ -171,6 +181,13 @@ CREATE TABLE apps (
 CREATE INDEX idx_apps_bundle_id ON apps(bundle_id);
 ```
 
+```sql
+-- Migration to version 8: Add icon_color column to apps table
+
+-- Add icon_color column to store extracted dominant color from app icons
+ALTER TABLE apps ADD COLUMN icon_color TEXT;
+```
+
 ### 2.2 Field Descriptions
 
 | Field | Type | Description |
@@ -179,6 +196,7 @@ CREATE INDEX idx_apps_bundle_id ON apps(bundle_id);
 | `bundle_id` | TEXT UNIQUE | Unique app identifier (e.g., "com.microsoft.VSCode") |
 | `app_name` | TEXT | Display name (e.g., "Visual Studio Code") |
 | `icon_data_url` | TEXT NULL | Base64-encoded PNG data URL from NSWorkspace |
+| `icon_color` | TEXT NULL | Hex color string (e.g., "#AABBCC") extracted from icon |
 | `icon_fetched_at` | TEXT NULL | Timestamp of last icon fetch |
 | `created_at` | TEXT | Row creation timestamp |
 | `updated_at` | TEXT | Row last modified timestamp |
@@ -191,6 +209,7 @@ INSERT INTO apps VALUES (
     'com.microsoft.VSCode',                   -- bundle_id
     'Visual Studio Code',                     -- app_name
     'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...',  -- icon_data_url
+    '#4A5F7A',                                -- icon_color (extracted dominant color)
     '2025-11-08T14:23:45Z',                   -- icon_fetched_at
     '2025-10-01T10:00:00Z',                   -- created_at
     '2025-11-08T14:23:45Z'                    -- updated_at
@@ -248,12 +267,19 @@ if app_icon_map.get(&bundle_id).and_then(|icon| icon.clone()).is_none() {
 **Priority 3: Colored Box (Fallback)**
 ```typescript
 const iconDataUrl = appIcons[bundleId] ?? null;
+const iconColor = appColors[bundleId] ?? null;
 return iconDataUrl ? (
   <img src={iconDataUrl} alt="" />
 ) : (
-  <div style={{ backgroundColor: getAppColor(bundleId) }} />
+  <div style={{ backgroundColor: getAppColor(bundleId, { iconColor }) }} />
 );
 ```
+
+**Color Priority (for progress bars):**
+1. Extracted `icon_color` from database (preferred)
+2. Hardcoded color map (`appColors.ts`)
+3. Confidence-based color (for unknown apps)
+4. Default gray fallback
 
 ### 3.4 Icon Cache Invalidation
 
@@ -302,7 +328,7 @@ impl<'a> AppRepository<'a> {
     pub fn get_app(&self, bundle_id: &str) -> Result<Option<App>> {
         self.conn
             .query_row(
-                "SELECT id, bundle_id, app_name, icon_data_url, icon_fetched_at
+                "SELECT id, bundle_id, app_name, icon_data_url, icon_color, icon_fetched_at
                  FROM apps WHERE bundle_id = ?1",
                 params![bundle_id],
                 |row| {
@@ -322,15 +348,28 @@ impl<'a> AppRepository<'a> {
             .map_err(Into::into)
     }
 
-    /// Update app icon
-    pub fn update_icon(&self, bundle_id: &str, icon_data_url: &str) -> Result<()> {
+    /// Update app icon and color
+    pub fn update_icon(&self, bundle_id: &str, icon_data_url: &str, icon_color: Option<&str>) -> Result<()> {
         let now = Utc::now().to_rfc3339();
         self.conn.execute(
-            "UPDATE apps SET icon_data_url = ?1, icon_fetched_at = ?2, updated_at = ?2
-             WHERE bundle_id = ?3",
-            params![icon_data_url, now, bundle_id],
+            "UPDATE apps SET icon_data_url = ?1, icon_color = ?2, icon_fetched_at = ?3, updated_at = ?3
+             WHERE bundle_id = ?4",
+            params![icon_data_url, icon_color, now, bundle_id],
         )?;
         Ok(())
+    }
+
+    /// Check if app has a color
+    pub fn has_color(&self, bundle_id: &str) -> Result<bool> {
+        let result: Option<bool> = self
+            .conn
+            .query_row(
+                "SELECT icon_color IS NOT NULL AND icon_color != '' FROM apps WHERE bundle_id = ?1",
+                params![bundle_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(result.unwrap_or(false))
     }
 
     /// Get apps with missing icons (for background fetch)
@@ -404,8 +443,9 @@ pub async fn save_segments(db: &Database, segments: Vec<Segment>) -> Result<()> 
         tokio::spawn(async move {
             for bundle_id in bundles_missing_icons {
                 if IN_FLIGHT_ICON_FETCHES.lock().unwrap().insert(bundle_id.clone()) {
-                    if let Some(icon) = macos_bridge::get_app_icon_data(&bundle_id) {
-                        if let Err(err) = db_clone.update_app_icon(&bundle_id, &icon).await {
+                    if let Some((icon, color)) = macos_bridge::get_app_icon_and_color(&bundle_id) {
+                        let color_opt = if color.is_empty() { None } else { Some(color.as_str()) };
+                        if let Err(err) = db_clone.update_app_icon(&bundle_id, &icon, color_opt).await {
                             log::warn!("Failed to store icon for {}: {}", bundle_id, err);
                         }
                     } else {
@@ -427,7 +467,8 @@ pub async fn save_segments(db: &Database, segments: Vec<Segment>) -> Result<()> 
 
 ### 5.1 Migration SQL
 
-**File:** `src-tauri/src/db/schemas/schema_v7.sql`
+**File:** `src-tauri/src/db/schemas/schema_v7.sql` (initial apps table)
+**File:** `src-tauri/src/db/schemas/schema_v8.sql` (adds icon_color)
 
 ```sql
 -- Migration to version 7: Add apps table for app metadata and icons
@@ -475,7 +516,7 @@ GROUP BY bundle_id;
 **Update:** `src-tauri/src/db/migrations.rs`
 
 ```rust
-const CURRENT_SCHEMA_VERSION: i32 = 7;  // Bump from 6 to 7
+const CURRENT_SCHEMA_VERSION: i32 = 8;  // Bump from 7 to 8 (added icon_color)
 
 fn apply_migration(tx: &Transaction<'_>, version: i32) -> Result<()> {
     match version {
@@ -483,6 +524,11 @@ fn apply_migration(tx: &Transaction<'_>, version: i32) -> Result<()> {
         7 => {
             tx.execute_batch(include_str!("schemas/schema_v7.sql"))
                 .context("failed to execute schema_v7.sql")?;
+            Ok(())
+        }
+        8 => {
+            tx.execute_batch(include_str!("schemas/schema_v8.sql"))
+                .context("failed to execute schema_v8.sql")?;
             Ok(())
         }
         _ => bail!("unknown migration target version: {version}"),
@@ -502,8 +548,9 @@ pub async fn backfill_missing_icons(db: &Database) -> Result<()> {
     log::info!("Backfilling icons for {} apps", apps_without_icons.len());
 
     for app in apps_without_icons {
-        if let Some(icon) = macos_bridge::get_app_icon_data(&app.bundle_id) {
-            db.update_app_icon(&app.bundle_id, &icon).await?;
+        if let Some((icon, color)) = macos_bridge::get_app_icon_and_color(&app.bundle_id) {
+            let color_opt = if color.is_empty() { None } else { Some(color.as_str()) };
+            db.update_app_icon(&app.bundle_id, &icon, color_opt).await?;
         }
 
         // Rate limit: 20ms per icon to avoid blocking main thread
@@ -516,77 +563,45 @@ pub async fn backfill_missing_icons(db: &Database) -> Result<()> {
 
 ---
 
-## 6. FFI Layer (Icon Fetching)
+## 6. FFI Layer (Icon Fetching & Color Extraction)
 
 ### 6.1 Swift Implementation
 
 **File:** `src-tauri/plugins/macos-sensing/Sources/MacOSSensing/AppIconProvider.swift`
 
+The Swift implementation includes:
+- Icon fetching via NSWorkspace
+- Dominant color extraction from icon pixels
+- Returns both icon data URL and hex color
+
+**Key Methods:**
+
 ```swift
-import AppKit
-import Foundation
+/// Extract dominant color from an NSImage
+/// Filters out black, white, and transparent pixels, then finds the most common color cluster
+private func extractDominantColor(from image: NSImage) -> String? {
+    // 1. Sample all pixels from the 32x32 icon
+    // 2. Filter out transparent, very dark (< 20 brightness), and very light (> 235 brightness) pixels
+    // 3. Separate colorful pixels (maxDiff >= 15 RGB units) from grayscale
+    // 4. Cluster similar colors together
+    // 5. Return the largest colorful cluster's average color as hex
+    // 6. Fallback: if no colorful pixels, use most common non-black/white color
+}
 
-public final class AppIconProvider {
-    public static let shared = AppIconProvider()
-    private init() {}
-
-    public func getIconData(forBundleId bundleId: String) -> String? {
-        guard let appPath = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId)?.path else {
-            return nil
-        }
-
-        let icon = NSWorkspace.shared.icon(forFile: appPath)
-        let targetSize = NSSize(width: 32, height: 32)
-        let resizedIcon = resizeImage(icon, to: targetSize)
-
-        guard let tiffData = resizedIcon.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiffData),
-              let pngData = bitmap.representation(using: .png, properties: [:]) else {
-            return nil
-        }
-
-        let base64String = pngData.base64EncodedString()
-        return "data:image/png;base64,\(base64String)"
-    }
-
-    private func resizeImage(_ image: NSImage, to size: NSSize) -> NSImage {
-        let resized = NSImage(size: size)
-        resized.lockFocus()
-        image.draw(in: NSRect(origin: .zero, size: size),
-                   from: NSRect(origin: .zero, size: image.size),
-                   operation: .copy,
-                   fraction: 1.0)
-        resized.unlockFocus()
-        return resized
-    }
+/// Get app icon data and dominant color
+public func getIconDataAndColor(forBundleId bundleId: String) -> (icon: String, color: String)? {
+    // Fetch icon, resize to 32x32, extract color
+    // Returns tuple: (icon_data_url, hex_color) or nil
 }
 ```
 
 **FFI Export:**
 
 ```swift
-@_cdecl("macos_sensing_swift_get_app_icon")
-public func getAppIconFFI(bundleIdPtr: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>? {
-    guard let bundleIdStr = String(validatingUTF8: bundleIdPtr) else {
-        return nil
-    }
-
-    // IMPORTANT: AppKit APIs must run on main thread
-    var result: String?
-    DispatchQueue.main.sync {
-        result = AppIconProvider.shared.getIconData(forBundleId: bundleIdStr)
-    }
-
-    guard let iconDataURL = result else {
-        return nil
-    }
-
-    return strdup(iconDataURL)
-}
-
-@_cdecl("macos_sensing_swift_free_string")
-public func freeStringFFI(ptr: UnsafeMutablePointer<CChar>) {
-    free(ptr)
+@_cdecl("macos_sensing_swift_get_app_icon_and_color")
+public func getAppIconAndColorFFI(bundleIdPtr: UnsafePointer<CChar>) -> UnsafeMutablePointer<CChar>? {
+    // Returns JSON: {"icon": "data:image/png;base64,...", "color": "#AABBCC"}
+    // Must run on main thread (AppKit requirement)
 }
 ```
 
@@ -596,28 +611,20 @@ public func freeStringFFI(ptr: UnsafeMutablePointer<CChar>) {
 
 ```rust
 extern "C" {
-    fn macos_sensing_get_app_icon(bundle_id: *const c_char) -> *mut c_char;
-    fn macos_sensing_free_app_icon_string(ptr: *mut c_char);
+    fn macos_sensing_swift_get_app_icon_and_color(bundle_id: *const c_char) -> *mut c_char;
+    fn macos_sensing_swift_free_string(ptr: *mut c_char);
 }
 
-pub fn get_app_icon_data(bundle_id: &str) -> Option<String> {
+/// Get app icon and dominant color
+/// Returns tuple of (icon_data_url, icon_color) where color may be empty string if extraction failed
+pub fn get_app_icon_and_color(bundle_id: &str) -> Option<(String, String)> {
     unsafe {
-        let c_bundle_id = CString::new(bundle_id).ok()?;
-        let ptr = macos_sensing_get_app_icon(c_bundle_id.as_ptr());
-
-        if ptr.is_null() {
-            return None;
-        }
-
-        let c_str = CStr::from_ptr(ptr);
-        let result = c_str.to_str().ok().map(String::from);
-
-        macos_sensing_free_app_icon_string(ptr);
-
-        result
+        // Call FFI, parse JSON response, return (icon, color)
     }
 }
 ```
+
+**Note:** The old `get_app_icon_data()` function is deprecated and commented out. All icon fetching now uses `get_app_icon_and_color()`.
 
 ---
 
@@ -643,16 +650,33 @@ export interface SessionSummary {
   topApps: TopApp[];
 }
 
-export interface ActivitiesPayload {
-  sessions: SessionSummary[];
-  appIcons: Record<string, string | null>; // Unique bundleId -> icon
+export interface SessionSummary {
+  id: string;
+  startedAt: string;
+  stoppedAt: string | null;
+  status: SessionStatus;
+  targetMs: number;
+  activeMs: number;
+  topApps: TopApp[];
+  appIcons: Record<string, string | null>; // Unique bundleId -> icon data URL
+  appColors: Record<string, string | null>; // Unique bundleId -> icon color (hex)
 }
 
 export interface Segment {
   // existing fields...
   bundleId: string;
   appName: string | null;
-  iconDataUrl: string | null; // populated by useSegments() JOIN
+  iconDataUrl?: string | null; // populated by useSegments() JOIN
+  iconColor?: string | null; // populated by useSegments() JOIN
+}
+
+export interface AppDuration {
+  bundleId: string;
+  appName: string | null;
+  durationSecs: number;
+  percentage: number;
+  iconDataUrl?: string | null;
+  iconColor?: string | null; // extracted color from icon
 }
 ```
 
@@ -684,10 +708,21 @@ export interface Segment {
 ```
 
 **SessionResults / SegmentStats:**
-- `useSegments(sessionId)` now returns segments with `iconDataUrl`.
+- `useSegments(sessionId)` now returns segments with `iconDataUrl` and `iconColor`.
 - `SegmentStats` and `SegmentDetailsModal` pass `segment.iconDataUrl` into `AppIcon`, so post-session timelines share the same icons as Activities.
+- Progress bars use `getAppColor(bundleId, { iconColor: segment.iconColor })` to prioritize extracted colors.
 
-**No async fetching needed** – icons arrive with the initial payloads (`appIcons` map for Activities, inline on segments for SessionResults).
+**Color Usage:**
+```typescript
+// Progress bar color priority:
+const barColor = getAppColor(app.bundleId, {
+  iconColor: app.iconColor,  // 1. Extracted from icon (preferred)
+  confidence: segment.confidence  // 3. Fallback to confidence-based
+});
+// Falls back to hardcoded map, then default gray
+```
+
+**No async fetching needed** – icons and colors arrive with the initial payloads (`appIcons`/`appColors` maps for Activities, inline on segments for SessionResults).
 
 ---
 
@@ -711,30 +746,33 @@ export interface Segment {
 1. Update segment save flow to call `ensure_app_exists()`
 2. Background icon fetch job for missing icons
 
-**Phase 4: Icon Fetching (Swift/Rust) (2 hours)**
-1. Swift `AppIconProvider.swift` (from Phase 6 doc)
-2. FFI exports with main thread dispatch
-3. Rust `macos_bridge::get_app_icon_data()`
-4. Test FFI roundtrip
+**Phase 4: Icon Fetching & Color Extraction (Swift/Rust) (3-4 hours)**
+1. Swift `AppIconProvider.swift` with color extraction algorithm
+2. FFI exports with main thread dispatch (`get_app_icon_and_color`)
+3. Rust `macos_bridge::get_app_icon_and_color()` JSON parsing
+4. Test FFI roundtrip and color extraction accuracy
 
-**Phase 5: Update Queries (2 hours)**
+**Phase 5: Update Queries (2-3 hours)**
 1. Modify `list_sessions()` to JOIN with apps table
-2. Return `{ sessions, app_icon_map }` (unique icons only)
-3. Extend `list_segments()` JOIN to emit `segment.icon_data_url`
-4. Test query performance
+2. Return `{ sessions, app_icons, app_colors }` (unique icons/colors only)
+3. Extend `list_segments()` JOIN to emit `segment.icon_data_url` and `segment.icon_color`
+4. Update `get_app_icons_for_bundle_ids()` to return tuples of `(icon, color)`
+5. Test query performance
 
-**Phase 6: React Updates (1 hour)**
-1. Update Activities data hook to read `{ sessions, appIcons }`
+**Phase 6: React Updates (2 hours)**
+1. Update Activities data hook to read `{ sessions, appIcons, appColors }`
 2. Simplify `AppIcon` component (no cache hook)
 3. Update `SessionCard` and `SegmentStats` to pull icons from `appIcons`/`segment.iconDataUrl`
-4. Remove old React cache code
+4. Update `getAppColor()` to prioritize `iconColor` from database
+5. Update all components to pass `iconColor` to `getAppColor()`
+6. Remove old React cache code
 
 **Phase 7: Post-Migration Icon Backfill (1 hour)**
 1. Add startup job to fetch missing icons
 2. Rate-limited background fetch
 3. Progress logging
 
-**Total Estimate:** 10-12 hours
+**Total Estimate:** 12-15 hours (includes color extraction feature)
 
 ### 8.2 Testing Checklist
 
@@ -751,12 +789,15 @@ export interface Segment {
 - [ ] `update_icon()` persists icon
 - [ ] `get_apps_with_missing_icons()` returns apps without icons
 
-**Icon Fetching:**
+**Icon Fetching & Color Extraction:**
 - [ ] Swift FFI returns valid base64 PNG
 - [ ] Swift FFI returns null for missing apps
+- [ ] Color extraction returns valid hex colors for colorful icons
+- [ ] Color extraction falls back to grayscale for monochrome icons
 - [ ] Main thread dispatch prevents crashes
-- [ ] Icon fetched on first segment creation
-- [ ] Icon cached in DB on subsequent loads
+- [ ] Icon + color fetched on first segment creation
+- [ ] Icon + color cached in DB on subsequent loads
+- [ ] Existing icons get colors backfilled when app is used again
 
 **Query Performance:**
 - [ ] `list_sessions()` with icons: < 100ms
@@ -764,6 +805,8 @@ export interface Segment {
 **React:**
 - [ ] Icons display in SessionResults
 - [ ] Icons display in ActivitiesView
+- [ ] Progress bars use extracted icon colors
+- [ ] Color fallback chain works (iconColor → hardcoded → confidence → default)
 - [ ] Colored box fallback works
 - [ ] No layout shift on icon load
 
@@ -774,14 +817,15 @@ export interface Segment {
 ### New Files
 
 **SQL:**
-- `src-tauri/src/db/schemas/schema_v7.sql` (~35 lines)
+- `src-tauri/src/db/schemas/schema_v7.sql` (~35 lines) - initial apps table
+- `src-tauri/src/db/schemas/schema_v8.sql` (~4 lines) - adds icon_color column
 
 **Rust:**
 - `src-tauri/src/db/repositories/apps.rs` (~90 lines)
 - `src-tauri/src/db/models/app.rs` (~12 lines)
 
 **Swift:**
-- `src-tauri/plugins/macos-sensing/Sources/MacOSSensing/AppIconProvider.swift` (~60 lines)
+- `src-tauri/plugins/macos-sensing/Sources/MacOSSensing/AppIconProvider.swift` (~240 lines) - includes color extraction
 
 **React:**
 - No new files (simplifies existing components)
@@ -789,25 +833,37 @@ export interface Segment {
 ### Modified Files
 
 **Rust:**
-- `src-tauri/src/db/migrations.rs` (+10 lines)
+- `src-tauri/src/db/migrations.rs` (+15 lines - adds v8 migration)
 - `src-tauri/src/db/repositories/mod.rs` (+1 export)
+- `src-tauri/src/db/repositories/apps.rs` (+30 lines - color support)
+- `src-tauri/src/db/models/app.rs` (+1 field - icon_color)
+- `src-tauri/src/db/models/segment.rs` (+1 field - icon_color)
 - `src-tauri/src/segmentation/algorithm.rs` (~20 lines - app upsert)
-- `src-tauri/src/timer/commands.rs` (~30 lines - JOIN apps table)
-- `src-tauri/src/macos_bridge.rs` (+20 lines - FFI wrapper)
+- `src-tauri/src/timer/commands.rs` (~40 lines - JOIN apps table, return colors)
+- `src-tauri/src/macos_bridge.rs` (+30 lines - FFI wrapper for icon+color)
+- `src-tauri/src/sensing/icon_manager.rs` (~20 lines - color backfill logic)
 
 **React:**
-- `src/types/timer.ts` (add `ActivitiesPayload`, `Segment.iconDataUrl`)
+- `src/types/timer.ts` (add `appColors` to `SessionSummary`)
+- `src/types/segment.ts` (add `iconColor` to `Segment`, `AppDuration`)
+- `src/constants/appColors.ts` (~15 lines - update `getAppColor()` to use iconColor)
 - `src/components/session/AppIcon.tsx` (simplified, -30 lines)
-- `src/components/session/SessionCard.tsx` (~5 lines)
-- `src/components/segments/SegmentStats.tsx` (~10 lines)
+- `src/components/session/SessionCard.tsx` (~15 lines - use iconColor)
+- `src/components/segments/SegmentStats.tsx` (~20 lines - use iconColor)
+- `src/components/segments/SegmentTimeline.tsx` (~5 lines - use iconColor)
+- `src/components/segments/SegmentDetailsModal.tsx` (~5 lines - use iconColor)
+- `src/hooks/useSegments.ts` (~10 lines - aggregate iconColor)
 
-**Total LOC:** ~200 new, ~100 modified
+**Total LOC:** ~350 new, ~150 modified
 
 ---
 
 **End of Phase 6 UX: App Icons & Apps Table Design**
 
-**Version:** 2.0
-**Total Lines:** ~800
-**Key Innovation:** Apps table as single source of truth for app metadata and icon caching
+**Version:** 2.1
+**Total Lines:** ~900
+**Key Innovation:** 
+- Apps table as single source of truth for app metadata and icon caching
+- Dominant color extraction from app icons for dynamic progress bar theming
 **Performance:** Instant icon display from DB cache, < 50ms FFI fallback, scalable to 1000+ apps
+**Color Extraction:** Analyzes icon pixels to extract dominant colors, falls back gracefully for monochrome icons

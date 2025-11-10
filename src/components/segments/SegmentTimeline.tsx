@@ -44,7 +44,10 @@ export function SegmentTimeline({
       <div className="flex h-[60px] border border-black overflow-hidden bg-white">
         {segments.map((segment) => {
           const widthPercent = (segment.durationSecs / totalDuration) * 100;
-          const backgroundColor = getAppColor(segment.bundleId, segment.confidence);
+          const backgroundColor = getAppColor(segment.bundleId, {
+            iconColor: segment.iconColor,
+            confidence: segment.confidence,
+          });
           return (
             <button
               key={segment.id}
