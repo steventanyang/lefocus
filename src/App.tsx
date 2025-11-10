@@ -2,16 +2,30 @@ import { useState } from "react";
 import "./App.css";
 import { TimerView } from "@/components/timer/TimerView";
 import { ActivitiesView } from "@/components/activities/ActivitiesView";
+import { useWindowSize } from "@/hooks/useWindowSize";
 
 type View = "timer" | "activities";
 
 function App() {
   const [currentView, setCurrentView] = useState<View>("timer");
+  const { height } = useWindowSize();
+
+  // Timer view should be centered, activities view should be scrollable from top
+  const isTimerView = currentView === "timer";
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-8">
+    <main
+      className={`flex-1 flex flex-col p-8 bg-white ${
+        isTimerView
+          ? "items-center justify-center"
+          : "items-center justify-start overflow-y-auto"
+      }`}
+      style={{ height: height > 0 ? `${height}px` : "100vh" }}
+    >
       {currentView === "timer" && <TimerView onNavigate={setCurrentView} />}
-      {currentView === "activities" && <ActivitiesView onNavigate={setCurrentView} />}
+      {currentView === "activities" && (
+        <ActivitiesView onNavigate={setCurrentView} />
+      )}
     </main>
   );
 }
