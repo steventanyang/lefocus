@@ -166,6 +166,7 @@ fn create_single_segment_for_session(
         unique_phash_count: Some(unique_phash_count),
         segment_summary: None,
         icon_data_url: None, // Populated later by database query
+        icon_color: None, // Populated later by database query
     };
 
     // Compute scores
@@ -263,6 +264,7 @@ fn create_initial_segments_with_readings(
                     unique_phash_count: None, // Will be computed later
                     segment_summary: None,
                     icon_data_url: None, // Populated later by database query
+                    icon_color: None, // Populated later by database query
                 },
                 readings: group.readings.clone(),
             }

@@ -98,17 +98,27 @@ pub async fn list_sessions(state: State<'_, AppState>) -> Result<Vec<SessionSumm
             active_ms: session.active_ms,
             top_apps,
             app_icons: HashMap::new(), // Will be populated below
+            app_colors: HashMap::new(), // Will be populated below
         });
     }
 
-    // Fetch all app icons in one go
-    let app_icons = db.get_app_icons_for_bundle_ids(&all_bundle_ids.into_iter().collect::<Vec<_>>())
+    // Fetch all app icons and colors in one go
+    let app_icons_and_colors = db.get_app_icons_for_bundle_ids(&all_bundle_ids.into_iter().collect::<Vec<_>>())
         .await
         .map_err(|e| e.to_string())?;
 
-    // Share the same app_icons map across all summaries (efficient - no duplication)
+    // Split into separate maps for icons and colors
+    let mut app_icons = HashMap::new();
+    let mut app_colors = HashMap::new();
+    for (bundle_id, (icon, color)) in app_icons_and_colors {
+        app_icons.insert(bundle_id.clone(), icon);
+        app_colors.insert(bundle_id, color);
+    }
+
+    // Share the same maps across all summaries (efficient - no duplication)
     for summary in &mut summaries {
         summary.app_icons = app_icons.clone();
+        summary.app_colors = app_colors.clone();
     }
 
     Ok(summaries)

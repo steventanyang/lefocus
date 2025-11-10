@@ -41,7 +41,7 @@ impl<'a> AppRepository<'a> {
     pub fn get_app(&self, bundle_id: &str) -> Result<Option<App>> {
         self.conn
             .query_row(
-                "SELECT id, bundle_id, app_name, icon_data_url, icon_fetched_at
+                "SELECT id, bundle_id, app_name, icon_data_url, icon_color, icon_fetched_at
                  FROM apps WHERE bundle_id = ?1",
                 params![bundle_id],
                 |row| {
@@ -50,8 +50,9 @@ impl<'a> AppRepository<'a> {
                         bundle_id: row.get(1)?,
                         app_name: row.get(2)?,
                         icon_data_url: row.get(3)?,
+                        icon_color: row.get(4)?,
                         icon_fetched_at: row
-                            .get::<_, Option<String>>(4)?
+                            .get::<_, Option<String>>(5)?
                             .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
                             .map(|dt| dt.with_timezone(&Utc)),
                     })
@@ -61,13 +62,13 @@ impl<'a> AppRepository<'a> {
             .map_err(Into::into)
     }
 
-    /// Update app icon
-    pub fn update_icon(&self, bundle_id: &str, icon_data_url: &str) -> Result<()> {
+    /// Update app icon and color
+    pub fn update_icon(&self, bundle_id: &str, icon_data_url: &str, icon_color: Option<&str>) -> Result<()> {
         let now = Utc::now().to_rfc3339();
         self.conn.execute(
-            "UPDATE apps SET icon_data_url = ?1, icon_fetched_at = ?2, updated_at = ?2
-             WHERE bundle_id = ?3",
-            params![icon_data_url, now, bundle_id],
+            "UPDATE apps SET icon_data_url = ?1, icon_color = ?2, icon_fetched_at = ?3, updated_at = ?3
+             WHERE bundle_id = ?4",
+            params![icon_data_url, icon_color, now, bundle_id],
         )?;
         Ok(())
     }
@@ -78,6 +79,19 @@ impl<'a> AppRepository<'a> {
             .conn
             .query_row(
                 "SELECT icon_data_url IS NOT NULL FROM apps WHERE bundle_id = ?1",
+                params![bundle_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(result.unwrap_or(false))
+    }
+
+    /// Check if app has a color
+    pub fn has_color(&self, bundle_id: &str) -> Result<bool> {
+        let result: Option<bool> = self
+            .conn
+            .query_row(
+                "SELECT icon_color IS NOT NULL AND icon_color != '' FROM apps WHERE bundle_id = ?1",
                 params![bundle_id],
                 |row| row.get(0),
             )
@@ -139,14 +153,26 @@ impl Database {
         .await
     }
 
-    /// Update app icon in database
-    pub async fn update_app_icon(&self, bundle_id: &str, icon_data_url: &str) -> Result<()> {
+    /// Check if app has a color
+    pub async fn app_has_color(&self, bundle_id: &str) -> Result<bool> {
         let bundle_id = bundle_id.to_string();
-        let icon_data_url = icon_data_url.to_string();
 
         self.execute(move |conn| {
             let app_repo = AppRepository::new(conn);
-            app_repo.update_icon(&bundle_id, &icon_data_url)
+            app_repo.has_color(&bundle_id)
+        })
+        .await
+    }
+
+    /// Update app icon and color in database
+    pub async fn update_app_icon(&self, bundle_id: &str, icon_data_url: &str, icon_color: Option<&str>) -> Result<()> {
+        let bundle_id = bundle_id.to_string();
+        let icon_data_url = icon_data_url.to_string();
+        let icon_color = icon_color.map(String::from);
+
+        self.execute(move |conn| {
+            let app_repo = AppRepository::new(conn);
+            app_repo.update_icon(&bundle_id, &icon_data_url, icon_color.as_deref())
         })
         .await
     }
@@ -163,12 +189,12 @@ impl Database {
     //     .await
     // }
 
-    /// Get app icons for a list of bundle IDs
-    /// Returns a HashMap of bundle_id -> icon_data_url (None if icon not fetched yet)
+    /// Get app icons and colors for a list of bundle IDs
+    /// Returns a HashMap of bundle_id -> (icon_data_url, icon_color)
     pub async fn get_app_icons_for_bundle_ids(
         &self,
         bundle_ids: &[String],
-    ) -> Result<std::collections::HashMap<String, Option<String>>> {
+    ) -> Result<std::collections::HashMap<String, (Option<String>, Option<String>)>> {
         use std::collections::HashMap;
         let bundle_ids = bundle_ids.to_vec();
 
@@ -183,7 +209,7 @@ impl Database {
             // Build parameterized query with placeholders
             let placeholders = bundle_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
             let query = format!(
-                "SELECT bundle_id, icon_data_url FROM apps WHERE bundle_id IN ({})",
+                "SELECT bundle_id, icon_data_url, icon_color FROM apps WHERE bundle_id IN ({})",
                 placeholders
             );
 
@@ -197,12 +223,13 @@ impl Database {
             while let Some(row) = rows.next()? {
                 let bundle_id: String = row.get(0)?;
                 let icon_data_url: Option<String> = row.get(1)?;
-                app_icons.insert(bundle_id, icon_data_url);
+                let icon_color: Option<String> = row.get(2)?;
+                app_icons.insert(bundle_id, (icon_data_url, icon_color));
             }
 
-            // For bundle_ids not in the apps table, insert None
+            // For bundle_ids not in the apps table, insert (None, None)
             for bundle_id in &bundle_ids {
-                app_icons.entry(bundle_id.clone()).or_insert(None);
+                app_icons.entry(bundle_id.clone()).or_insert((None, None));
             }
 
             Ok(app_icons)

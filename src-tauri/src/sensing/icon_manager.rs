@@ -81,29 +81,44 @@ async fn prefetch_icon_for_app(
     // First, ensure the app exists in the database
     db.ensure_app_exists(bundle_id, app_name).await?;
 
-    // Check if the app already has an icon
+    // Check if the app already has an icon AND a color
     let has_icon = db.app_has_icon(bundle_id).await?;
+    let has_color = db.app_has_color(bundle_id).await?;
 
-    if has_icon {
-        log::trace!("App {} already has icon, skipping prefetch", bundle_id);
+    // If we have both icon and color, skip prefetch
+    if has_icon && has_color {
+        log::trace!("App {} already has icon and color, skipping prefetch", bundle_id);
         return Ok(());
     }
 
-    // Fetch the icon using the existing bridge
-    log::debug!("Pre-fetching icon for {} during session", bundle_id);
+    // If we have icon but no color, we need to backfill the color
+    if has_icon && !has_color {
+        log::debug!("App {} has icon but missing color, backfilling color", bundle_id);
+    } else {
+        log::debug!("Pre-fetching icon for {} during session", bundle_id);
+    }
 
-    match crate::macos_bridge::get_app_icon_data(bundle_id) {
-        Some(icon_data_url) => {
-            // Store the icon in the database
-            if let Err(e) = db.update_app_icon(bundle_id, &icon_data_url).await {
-                log::warn!("Failed to store prefetched icon for {}: {}", bundle_id, e);
+    match crate::macos_bridge::get_app_icon_and_color(bundle_id) {
+        Some((icon_data_url, icon_color)) => {
+            // Store the icon and color in the database
+            let color_opt = if icon_color.is_empty() {
+                None
             } else {
-                log::info!("Successfully prefetched icon for {}", bundle_id);
+                Some(icon_color.as_str())
+            };
+            if let Err(e) = db.update_app_icon(bundle_id, &icon_data_url, color_opt).await {
+                log::warn!("Failed to store icon/color for {}: {}", bundle_id, e);
+            } else {
+                if has_icon && !has_color {
+                    log::info!("Successfully backfilled color for {}", bundle_id);
+                } else {
+                    log::info!("Successfully prefetched icon and color for {}", bundle_id);
+                }
             }
         }
         None => {
             // Don't log as warning during prefetch - this is expected for some apps
-            log::debug!("Could not prefetch icon for {} (app might not be installed)", bundle_id);
+            log::debug!("Could not fetch icon/color for {} (app might not be installed)", bundle_id);
         }
     }
 
