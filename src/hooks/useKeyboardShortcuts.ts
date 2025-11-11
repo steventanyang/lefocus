@@ -2,7 +2,7 @@ import { useEffect } from "react";
 
 interface UseKeyboardShortcutsOptions {
   onStart: () => void;
-  onSwitchMode: (mode: "countdown" | "stopwatch") => void;
+  onSwitchMode: (mode: "countdown" | "stopwatch" | "break") => void;
   isIdle: boolean;
   startDisabled: boolean;
 }
@@ -37,6 +37,8 @@ function isMac(): boolean {
  * - Enter: Start timer (only when idle and not disabled)
  * - S: Switch to stopwatch mode (only when idle)
  * - T: Switch to timer/countdown mode (only when idle)
+ * - B: Switch to break mode (only when idle)
+ * - Cmd+B: Switch to break mode (only when idle)
  * 
  * Note: Cmd+A and Cmd+T are handled globally via useGlobalNavigationShortcuts
  */
@@ -74,6 +76,20 @@ export function useKeyboardShortcuts({
       if (event.key === "t" && isIdle && !isModifierPressed) {
         event.preventDefault();
         onSwitchMode("countdown");
+        return;
+      }
+
+      // B: Switch to break mode (only when idle, without modifier)
+      if (event.key === "b" && isIdle && !isModifierPressed) {
+        event.preventDefault();
+        onSwitchMode("break");
+        return;
+      }
+
+      // Cmd+B (Mac) or Ctrl+B (non-Mac): Switch to break mode (only when idle)
+      if (event.key === "b" && isIdle && isModifierPressed) {
+        event.preventDefault();
+        onSwitchMode("break");
         return;
       }
     };

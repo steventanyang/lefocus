@@ -6,6 +6,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { TimerDisplay } from "./TimerDisplay";
 import { TimerControls } from "./TimerControls";
 import { DurationPicker } from "./DurationPicker";
+import { BreakDurationPicker } from "./BreakDurationPicker";
 import { SessionResults } from "@/components/session/SessionResults";
 import { KeyBox } from "@/components/ui/KeyBox";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
@@ -29,6 +30,9 @@ export function TimerView({ onNavigate }: TimerViewProps) {
   const [selectedDuration, setSelectedDuration] = useState<number>(
     25 * 60 * 1000
   ); // Default 25 min
+  const [selectedBreakDuration, setSelectedBreakDuration] = useState<number>(
+    5 * 60 * 1000
+  ); // Default 5 min for break
   const [selectedMode, setSelectedMode] = useState<TimerMode>("countdown");
   const [completedSession, setCompletedSession] = useState<SessionInfo | null>(
     null
@@ -37,11 +41,13 @@ export function TimerView({ onNavigate }: TimerViewProps) {
   // Calculate state-dependent values (handle null case)
   const isIdle = timerState?.state.status === "idle" || false;
   const startDisabled =
-    selectedMode === "countdown" && selectedDuration === null;
+    (selectedMode === "countdown" && selectedDuration === null) ||
+    (selectedMode === "break" && selectedBreakDuration === null);
 
   const handleStart = () => {
     if (timerState) {
-      startTimer(selectedDuration, selectedMode);
+      const duration = selectedMode === "break" ? selectedBreakDuration : selectedDuration;
+      startTimer(duration, selectedMode);
     }
   };
 
@@ -96,6 +102,12 @@ export function TimerView({ onNavigate }: TimerViewProps) {
   const isRunning = state.status === "running";
 
   const handleEnd = async () => {
+    // For break mode, just end the timer without showing results
+    if (state.mode === "break") {
+      await endTimerMutation.mutateAsync();
+      return;
+    }
+    
     // Use mutation to end timer - automatically invalidates sessions cache
     const sessionInfo = await endTimerMutation.mutateAsync();
     if (sessionInfo) {
@@ -111,26 +123,29 @@ export function TimerView({ onNavigate }: TimerViewProps) {
           <>
             <button
               onClick={() => setSelectedMode("countdown")}
-              className={`text-sm font-light flex items-center gap-2 ${
-                selectedMode === "countdown" ? "opacity-100" : "opacity-60"
-              }`}
+              className="text-base font-light flex items-center gap-2"
             >
               <KeyBox selected={selectedMode === "countdown"}>T</KeyBox>
               <span className="nav-button-text">Timer</span>
             </button>
             <button
               onClick={() => setSelectedMode("stopwatch")}
-              className={`text-sm font-light flex items-center gap-2 ${
-                selectedMode === "stopwatch" ? "opacity-100" : "opacity-60"
-              }`}
+              className="text-base font-light flex items-center gap-2"
             >
               <KeyBox selected={selectedMode === "stopwatch"}>S</KeyBox>
               <span className="nav-button-text">Stopwatch</span>
             </button>
+            <button
+              onClick={() => setSelectedMode("break")}
+              className="text-base font-light flex items-center gap-2"
+            >
+              <KeyBox selected={selectedMode === "break"}>B</KeyBox>
+              <span className="nav-button-text">Break</span>
+            </button>
           </>
         )}
         <button
-          className="text-sm font-light flex items-center gap-2"
+          className="text-base font-light flex items-center gap-2"
           onClick={() => onNavigate("activities")}
         >
           <KeyboardShortcut keyLetter="a" />
@@ -152,6 +167,18 @@ export function TimerView({ onNavigate }: TimerViewProps) {
           <DurationPicker
             selectedDuration={selectedDuration}
             onSelect={setSelectedDuration}
+          />
+        </div>
+      )}
+
+      {state.status === "idle" && selectedMode === "break" && (
+        <div className="flex flex-col gap-4 items-center w-full">
+          <label className="text-sm font-light tracking-wide uppercase">
+            Duration
+          </label>
+          <BreakDurationPicker
+            selectedDuration={selectedBreakDuration}
+            onSelect={setSelectedBreakDuration}
           />
         </div>
       )}

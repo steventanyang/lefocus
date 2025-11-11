@@ -2,7 +2,7 @@
 
 export type TimerStatus = "idle" | "running" | "stopped";
 
-export type TimerMode = "countdown" | "stopwatch";
+export type TimerMode = "countdown" | "stopwatch" | "break";
 
 export type SessionStatus = "active" | "completed" | "interrupted";
 

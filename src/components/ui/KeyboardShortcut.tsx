@@ -15,7 +15,7 @@ export function KeyboardShortcut({ keyLetter, className = "" }: KeyboardShortcut
   
   return (
     <span className={`inline-flex items-center gap-1 ${className}`}>
-      <KeyBox className="text-gray-600">
+      <KeyBox className="text-gray-600 font-medium">
         {modifier}
       </KeyBox>
       <KeyBox className="text-gray-600 font-medium">

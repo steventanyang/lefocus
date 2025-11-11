@@ -46,7 +46,7 @@ export function TimerControls({
       );
     }
 
-    // In countdown mode, only show Cancel
+    // In countdown and break modes, only show Cancel
     return (
       <div className="flex gap-4 justify-center">
         <button onClick={onCancel} className={secondaryClass}>
