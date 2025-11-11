@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { isUserTyping, isMac } from "@/utils/keyboardUtils";
 
 interface UseKeyboardShortcutsOptions {
@@ -86,13 +87,14 @@ export function useKeyboardShortcuts({
  * Shortcuts:
  * - Cmd+A (Mac) / Ctrl+A (non-Mac): Navigate to activities
  * - Cmd+T (Mac) / Ctrl+T (non-Mac): Navigate to timer
+ * - Cmd+F (Mac) / Ctrl+F (non-Mac): Toggle fullscreen
  */
 export function useGlobalNavigationShortcuts(
   onNavigateActivities: () => void,
   onNavigateTimer: () => void
 ): void {
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = async (event: KeyboardEvent) => {
       // Ignore shortcuts when user is typing
       if (isUserTyping()) {
         return;
@@ -113,12 +115,27 @@ export function useGlobalNavigationShortcuts(
         onNavigateTimer();
         return;
       }
+
+      // Cmd+F (Mac) or Ctrl+F (non-Mac): Toggle fullscreen
+      if ((event.key === "f" || event.key === "F") && isModifierPressed) {
+        event.preventDefault();
+        event.stopPropagation();
+        try {
+          const window = getCurrentWindow();
+          const isFullscreen = await window.isFullscreen();
+          await window.setFullscreen(!isFullscreen);
+        } catch (err) {
+          console.error("Failed to toggle fullscreen:", err);
+        }
+        return;
+      }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
+    // Use capture phase to ensure we catch the event before other handlers
+    window.addEventListener("keydown", handleKeyDown, true);
 
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown, true);
     };
   }, [onNavigateActivities, onNavigateTimer]);
 }

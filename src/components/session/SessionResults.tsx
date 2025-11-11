@@ -135,6 +135,7 @@ export function SessionResults({
           segments={segments}
           onSegmentClick={setSelectedSegment}
           backButton={backButton}
+          dateTime={session?.startedAt}
         />
       )}
 

@@ -23,10 +23,17 @@ export function TimerDisplay({
   initialMs
 }: TimerDisplayProps) {
   const displayMs = useSmoothCountdown(remainingMs, isRunning, mode === "stopwatch");
-  const [editableValue, setEditableValue] = useState<number>(0);
+  // Initialize editableValue from initialMs if provided and editable
+  const [editableValue, setEditableValue] = useState<number>(() => {
+    if (isEditable && initialMs !== undefined) {
+      return msToMMSS(initialMs);
+    }
+    return 0;
+  });
   const displayRef = useRef<HTMLDivElement>(null);
   const lastSentMsRef = useRef<number | null>(null);
-  const lastExternalInitialMsRef = useRef<number | undefined>(initialMs);
+  // Initialize to undefined so first effect run detects initialMs as a change
+  const lastExternalInitialMsRef = useRef<number | undefined>(undefined);
 
   const { handleKeyDown } = useTimerKeyboard({
     isEditable,

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTimer } from "@/hooks/useTimer";
 import { useEndTimerMutation } from "@/hooks/queries";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -10,6 +11,7 @@ import { BreakDurationPicker } from "./BreakDurationPicker";
 import { SessionResults } from "@/components/session/SessionResults";
 import { KeyBox } from "@/components/ui/KeyBox";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
+import { isUserTyping, isMac } from "@/utils/keyboardUtils";
 import type { TimerMode } from "@/types/timer";
 
 interface TimerViewProps {
@@ -29,6 +31,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
   ); // Default 5 min for break
   const [selectedMode, setSelectedMode] = useState<TimerMode>("countdown");
   const [dismissedSessionId, setDismissedSessionId] = useState<string | null>(null);
+  const [controlsVisible, setControlsVisible] = useState<boolean>(true);
 
   // Calculate state-dependent values (handle null case)
   const isIdle = timerState?.state.status === "idle" || false;
@@ -56,6 +59,31 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     isIdle,
     startDisabled,
   });
+
+  // Handle h key to toggle controls visibility
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Ignore shortcuts when user is typing
+      if (isUserTyping()) {
+        return;
+      }
+
+      // H key: Toggle controls visibility
+      if (event.key === "h" || event.key === "H") {
+        const isModifierPressed = isMac() ? event.metaKey : event.ctrlKey;
+        // Only toggle if no modifier is pressed (just H, not Cmd+H)
+        if (!isModifierPressed) {
+          event.preventDefault();
+          setControlsVisible((prev) => !prev);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   if (!timerState) {
     return (
@@ -96,38 +124,75 @@ export function TimerView({ onNavigate }: TimerViewProps) {
   return (
     <div className="w-full max-w-md flex flex-col items-center gap-12">
       {/* Navigation buttons in top left */}
-      <div className="fixed top-8 left-8 flex flex-col gap-2 z-10">
-        {state.status === "idle" && (
-          <>
-            <button
-              onClick={() => setSelectedMode("countdown")}
-              className="text-base font-light flex items-center gap-2"
-            >
-              <KeyBox selected={selectedMode === "countdown"}>T</KeyBox>
-              <span className="nav-button-text">Timer</span>
-            </button>
-            <button
-              onClick={() => setSelectedMode("stopwatch")}
-              className="text-base font-light flex items-center gap-2"
-            >
-              <KeyBox selected={selectedMode === "stopwatch"}>S</KeyBox>
-              <span className="nav-button-text">Stopwatch</span>
-            </button>
-            <button
-              onClick={() => setSelectedMode("break")}
-              className="text-base font-light flex items-center gap-2"
-            >
-              <KeyBox selected={selectedMode === "break"}>B</KeyBox>
-              <span className="nav-button-text">Break</span>
-            </button>
-          </>
-        )}
+      <div
+        className={`fixed top-8 left-8 flex flex-col gap-4 z-10 transition-opacity duration-300 ${
+          controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+      >
+        {/* Main navigation block */}
+        <div className="flex flex-col gap-2">
+          {state.status === "idle" && (
+            <>
+              <button
+                onClick={() => setSelectedMode("countdown")}
+                className="text-base font-light flex items-center gap-2"
+              >
+                <KeyBox selected={selectedMode === "countdown"}>T</KeyBox>
+                <span className="nav-button-text">Timer</span>
+              </button>
+              <button
+                onClick={() => setSelectedMode("stopwatch")}
+                className="text-base font-light flex items-center gap-2"
+              >
+                <KeyBox selected={selectedMode === "stopwatch"}>S</KeyBox>
+                <span className="nav-button-text">Stopwatch</span>
+              </button>
+              <button
+                onClick={() => setSelectedMode("break")}
+                className="text-base font-light flex items-center gap-2"
+              >
+                <KeyBox selected={selectedMode === "break"}>B</KeyBox>
+                <span className="nav-button-text">Break</span>
+              </button>
+            </>
+          )}
+          <button
+            className="text-base font-light flex items-center gap-2"
+            onClick={() => onNavigate("activities")}
+          >
+            <KeyboardShortcut keyLetter="a" />
+            <span className="nav-button-text">Activities</span>
+          </button>
+        </div>
+      </div>
+
+      {/* General controls in bottom left */}
+      <div
+        className={`fixed bottom-8 left-8 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
+          controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+      >
         <button
           className="text-base font-light flex items-center gap-2"
-          onClick={() => onNavigate("activities")}
+          onClick={async () => {
+            try {
+              const window = getCurrentWindow();
+              const isFullscreen = await window.isFullscreen();
+              await window.setFullscreen(!isFullscreen);
+            } catch (err) {
+              console.error("Failed to toggle fullscreen:", err);
+            }
+          }}
         >
-          <KeyboardShortcut keyLetter="a" />
-          <span className="nav-button-text">Activities</span>
+          <KeyboardShortcut keyLetter="f" />
+          <span className="nav-button-text">Fullscreen</span>
+        </button>
+        <button
+          className="text-base font-light flex items-center gap-2"
+          onClick={() => setControlsVisible(false)}
+        >
+          <KeyBox>H</KeyBox>
+          <span className="nav-button-text">Hide</span>
         </button>
       </div>
 
