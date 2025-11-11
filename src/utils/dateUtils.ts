@@ -2,6 +2,8 @@
  * Date range utility functions for filtering segments by time windows
  */
 
+import type { SessionSummary } from "@/types/timer";
+
 export type TimeWindow = "day" | "week" | "month";
 
 export interface DateRange {
@@ -77,5 +79,69 @@ export function getTimeWindowLabel(window: TimeWindow): string {
     case "month":
       return "This Month";
   }
+}
+
+/**
+ * Group sessions by day
+ * Returns array of day groups sorted by date descending (today first)
+ */
+export interface DayGroup {
+  date: Date;
+  dateLabel: string;
+  sessions: SessionSummary[];
+}
+
+export function groupSessionsByDay(sessions: SessionSummary[]): DayGroup[] {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  // Group sessions by date (ignoring time)
+  const sessionsByDate = new Map<string, SessionSummary[]>();
+
+  for (const session of sessions) {
+    const sessionDate = new Date(session.startedAt);
+    const dateKey = new Date(
+      sessionDate.getFullYear(),
+      sessionDate.getMonth(),
+      sessionDate.getDate()
+    ).toISOString();
+
+    if (!sessionsByDate.has(dateKey)) {
+      sessionsByDate.set(dateKey, []);
+    }
+    sessionsByDate.get(dateKey)!.push(session);
+  }
+
+  // Convert to array and sort by date descending
+  const dayGroups: DayGroup[] = Array.from(sessionsByDate.entries()).map(([dateKey, sessions]) => {
+    const date = new Date(dateKey);
+    let dateLabel: string;
+
+    if (date.getTime() === today.getTime()) {
+      dateLabel = "Today";
+    } else if (date.getTime() === yesterday.getTime()) {
+      dateLabel = "Yesterday";
+    } else {
+      // Format as "Nov 10" or "Nov 10, 2024" if different year
+      dateLabel = date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+      });
+    }
+
+    return {
+      date,
+      dateLabel,
+      sessions: sessions.sort((a, b) => 
+        new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+      ), // Sort sessions within day by time descending
+    };
+  });
+
+  // Sort day groups by date descending (today first)
+  return dayGroups.sort((a, b) => b.date.getTime() - a.date.getTime());
 }
 
