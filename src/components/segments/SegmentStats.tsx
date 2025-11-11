@@ -5,6 +5,7 @@ interface SegmentStatsProps {
   stats: Stats;
   segments: Segment[];
   onSegmentClick: (segment: Segment) => void;
+  backButton?: React.ReactNode;
 }
 
 function formatDuration(seconds: number): string {
@@ -19,6 +20,7 @@ export function SegmentStats({
   stats,
   segments,
   onSegmentClick,
+  backButton,
 }: SegmentStatsProps) {
   const totalDuration = segments.reduce(
     (sum, seg) => sum + seg.durationSecs,
@@ -26,9 +28,12 @@ export function SegmentStats({
   );
 
   return (
-    <div className="border border-black p-6 flex flex-col gap-6">
-      <div className="text-base font-light tracking-wide uppercase pb-2 border-b border-black">
-        Session Summary
+    <div className="p-6 flex flex-col gap-6">
+      <div className="flex items-center justify-between pb-2">
+        <div className="text-base font-light tracking-wide uppercase">
+          Session Summary
+        </div>
+        {backButton && <div>{backButton}</div>}
       </div>
 
       <div className="flex flex-col gap-2">

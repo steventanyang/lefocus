@@ -3,12 +3,19 @@ import "./App.css";
 import { TimerView } from "@/components/timer/TimerView";
 import { ActivitiesView } from "@/components/activities/ActivitiesView";
 import { useWindowSize } from "@/hooks/useWindowSize";
+import { useGlobalNavigationShortcuts } from "@/hooks/useKeyboardShortcuts";
 
 type View = "timer" | "activities";
 
 function App() {
   const [currentView, setCurrentView] = useState<View>("timer");
   const { height } = useWindowSize();
+
+  // Set up global navigation shortcuts (work from anywhere)
+  useGlobalNavigationShortcuts(
+    () => setCurrentView("activities"),
+    () => setCurrentView("timer")
+  );
 
   // Timer view should be centered, activities view should be scrollable from top
   const isTimerView = currentView === "timer";

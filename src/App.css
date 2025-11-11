@@ -33,3 +33,33 @@
     flex-direction: column;
   }
 }
+
+/* Underline animation for navigation buttons */
+@keyframes slideUnderline {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.nav-button-text {
+  position: relative;
+  display: inline-block;
+}
+
+.nav-button-text::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background-color: currentColor;
+  transition: width 0.3s ease-out;
+}
+
+button:hover .nav-button-text::after {
+  width: 100%;
+}

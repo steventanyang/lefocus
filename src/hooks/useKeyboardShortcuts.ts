@@ -2,7 +2,6 @@ import { useEffect } from "react";
 
 interface UseKeyboardShortcutsOptions {
   onStart: () => void;
-  onNavigateActivities: () => void;
   onSwitchMode: (mode: "countdown" | "stopwatch") => void;
   isIdle: boolean;
   startDisabled: boolean;
@@ -36,13 +35,13 @@ function isMac(): boolean {
  *
  * Shortcuts:
  * - Enter: Start timer (only when idle and not disabled)
- * - Cmd+A (Mac) / Ctrl+A (non-Mac): Navigate to activities
  * - S: Switch to stopwatch mode (only when idle)
  * - T: Switch to timer/countdown mode (only when idle)
+ * 
+ * Note: Cmd+A and Cmd+T are handled globally via useGlobalNavigationShortcuts
  */
 export function useKeyboardShortcuts({
   onStart,
-  onNavigateActivities,
   onSwitchMode,
   isIdle,
   startDisabled,
@@ -63,13 +62,6 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      // Cmd+A (Mac) or Ctrl+A (non-Mac): Navigate to activities
-      if (event.key === "a" && isModifierPressed) {
-        event.preventDefault(); // Prevent browser "Select All"
-        onNavigateActivities();
-        return;
-      }
-
       // S: Switch to stopwatch mode (only when idle)
       if (event.key === "s" && isIdle && !isModifierPressed) {
         event.preventDefault();
@@ -77,7 +69,8 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      // T: Switch to timer/countdown mode (only when idle)
+      // T: Switch to timer/countdown mode (only when idle, without modifier)
+      // Note: Cmd+T is handled globally for navigation
       if (event.key === "t" && isIdle && !isModifierPressed) {
         event.preventDefault();
         onSwitchMode("countdown");
@@ -90,16 +83,20 @@ export function useKeyboardShortcuts({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onStart, onNavigateActivities, onSwitchMode, isIdle, startDisabled]);
+  }, [onStart, onSwitchMode, isIdle, startDisabled]);
 }
 
 /**
- * Simple hook for navigation shortcuts (used in ActivitiesView)
+ * Global navigation shortcuts hook (works from anywhere in the app)
  *
  * Shortcuts:
+ * - Cmd+A (Mac) / Ctrl+A (non-Mac): Navigate to activities
  * - Cmd+T (Mac) / Ctrl+T (non-Mac): Navigate to timer
  */
-export function useNavigationShortcuts(onNavigateTimer: () => void): void {
+export function useGlobalNavigationShortcuts(
+  onNavigateActivities: () => void,
+  onNavigateTimer: () => void
+): void {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Ignore shortcuts when user is typing
@@ -108,6 +105,13 @@ export function useNavigationShortcuts(onNavigateTimer: () => void): void {
       }
 
       const isModifierPressed = isMac() ? event.metaKey : event.ctrlKey;
+
+      // Cmd+A (Mac) or Ctrl+A (non-Mac): Navigate to activities
+      if (event.key === "a" && isModifierPressed) {
+        event.preventDefault(); // Prevent browser "Select All"
+        onNavigateActivities();
+        return;
+      }
 
       // Cmd+T (Mac) or Ctrl+T (non-Mac): Navigate to timer
       if (event.key === "t" && isModifierPressed) {
@@ -122,5 +126,5 @@ export function useNavigationShortcuts(onNavigateTimer: () => void): void {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onNavigateTimer]);
+  }, [onNavigateActivities, onNavigateTimer]);
 }

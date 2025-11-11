@@ -7,6 +7,8 @@ import { TimerDisplay } from "./TimerDisplay";
 import { TimerControls } from "./TimerControls";
 import { DurationPicker } from "./DurationPicker";
 import { SessionResults } from "@/components/session/SessionResults";
+import { KeyBox } from "@/components/ui/KeyBox";
+import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import type { SessionInfo, TimerMode } from "@/types/timer";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -64,7 +66,6 @@ export function TimerView({ onNavigate }: TimerViewProps) {
   // Set up keyboard shortcuts (must be called unconditionally)
   useKeyboardShortcuts({
     onStart: handleStart,
-    onNavigateActivities: () => onNavigate("activities"),
     onSwitchMode: setSelectedMode,
     isIdle,
     startDisabled,
@@ -104,40 +105,37 @@ export function TimerView({ onNavigate }: TimerViewProps) {
 
   return (
     <div className="w-full max-w-md flex flex-col items-center gap-12">
-      <div className="w-full flex items-center justify-between">
-        <h1 className="text-2xl font-light tracking-wide">LeFocus</h1>
-        <div className="flex gap-2">
-          {state.status === "idle" && (
-            <>
-              <button
-                onClick={() => setSelectedMode("countdown")}
-                className={
-                  selectedMode === "countdown"
-                    ? "text-sm font-semibold border border-black px-3 py-1 bg-black text-white transition-colors"
-                    : "text-sm font-light border border-black px-3 py-1 hover:bg-black hover:text-white transition-colors"
-                }
-              >
-                Timer
-              </button>
-              <button
-                onClick={() => setSelectedMode("stopwatch")}
-                className={
-                  selectedMode === "stopwatch"
-                    ? "text-sm font-semibold border border-black px-3 py-1 bg-black text-white transition-colors"
-                    : "text-sm font-light border border-black px-3 py-1 hover:bg-black hover:text-white transition-colors"
-                }
-              >
-                Stopwatch
-              </button>
-            </>
-          )}
-          <button
-            className="text-sm font-light border border-black px-3 py-1 hover:bg-black hover:text-white transition-colors"
-            onClick={() => onNavigate("activities")}
-          >
-            Activities
-          </button>
-        </div>
+      {/* Navigation buttons in top left */}
+      <div className="fixed top-8 left-8 flex flex-col gap-2 z-10">
+        {state.status === "idle" && (
+          <>
+            <button
+              onClick={() => setSelectedMode("countdown")}
+              className={`text-sm font-light flex items-center gap-2 ${
+                selectedMode === "countdown" ? "opacity-100" : "opacity-60"
+              }`}
+            >
+              <KeyBox selected={selectedMode === "countdown"}>T</KeyBox>
+              <span className="nav-button-text">Timer</span>
+            </button>
+            <button
+              onClick={() => setSelectedMode("stopwatch")}
+              className={`text-sm font-light flex items-center gap-2 ${
+                selectedMode === "stopwatch" ? "opacity-100" : "opacity-60"
+              }`}
+            >
+              <KeyBox selected={selectedMode === "stopwatch"}>S</KeyBox>
+              <span className="nav-button-text">Stopwatch</span>
+            </button>
+          </>
+        )}
+        <button
+          className="text-sm font-light flex items-center gap-2"
+          onClick={() => onNavigate("activities")}
+        >
+          <KeyboardShortcut keyLetter="a" />
+          <span className="nav-button-text">Activities</span>
+        </button>
       </div>
 
       <TimerDisplay
