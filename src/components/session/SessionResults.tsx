@@ -116,7 +116,7 @@ export function SessionResults({
   
   const backButton = (
     <button
-      className="text-sm font-light hover:opacity-70 transition-opacity flex items-center gap-2"
+      className="text-base font-light hover:opacity-70 transition-opacity flex items-center gap-2"
       onClick={onBack}
     >
       <KeyboardShortcut keyLetter={shortcutKey} />

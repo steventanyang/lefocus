@@ -39,7 +39,7 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-light tracking-wide">Activities</h1>
         <button
-          className="text-sm font-light hover:opacity-70 transition-opacity flex items-center gap-2"
+          className="text-base font-light hover:opacity-70 transition-opacity flex items-center gap-2"
           onClick={() => onNavigate("timer")}
         >
           <KeyboardShortcut keyLetter="t" />
