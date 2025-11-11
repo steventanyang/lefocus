@@ -71,7 +71,7 @@ export function SessionResults({
     };
   }, [onBack, backButtonText]);
 
-  const stats = calculateSegmentStats(segments);
+  const stats = calculateSegmentStats(segments, 5); // Limit to top 5 apps for session view
   const sessionDurationSecs =
     typeof session?.activeMs === "number"
       ? Math.max(0, Math.floor(session.activeMs / 1000))

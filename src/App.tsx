@@ -2,10 +2,11 @@ import { useState } from "react";
 import "./App.css";
 import { TimerView } from "@/components/timer/TimerView";
 import { ActivitiesView } from "@/components/activities/ActivitiesView";
+import { StatsView } from "@/components/stats/StatsView";
 import { useWindowSize } from "@/hooks/useWindowSize";
 import { useGlobalNavigationShortcuts } from "@/hooks/useKeyboardShortcuts";
 
-type View = "timer" | "activities";
+type View = "timer" | "activities" | "stats";
 
 function App() {
   const [currentView, setCurrentView] = useState<View>("timer");
@@ -14,10 +15,11 @@ function App() {
   // Set up global navigation shortcuts (work from anywhere)
   useGlobalNavigationShortcuts(
     () => setCurrentView("activities"),
-    () => setCurrentView("timer")
+    () => setCurrentView("timer"),
+    () => setCurrentView("stats")
   );
 
-  // Timer view should be centered, activities view should be scrollable from top
+  // Timer view should be centered, activities and stats views should be scrollable from top
   const isTimerView = currentView === "timer";
 
   return (
@@ -32,6 +34,9 @@ function App() {
       {currentView === "timer" && <TimerView onNavigate={setCurrentView} />}
       {currentView === "activities" && (
         <ActivitiesView onNavigate={setCurrentView} />
+      )}
+      {currentView === "stats" && (
+        <StatsView onNavigate={setCurrentView} />
       )}
     </main>
   );

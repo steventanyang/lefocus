@@ -15,7 +15,7 @@ import { isUserTyping, isMac } from "@/utils/keyboardUtils";
 import type { TimerMode } from "@/types/timer";
 
 interface TimerViewProps {
-  onNavigate: (view: "timer" | "activities") => void;
+  onNavigate: (view: "timer" | "activities" | "stats") => void;
 }
 
 export function TimerView({ onNavigate }: TimerViewProps) {
@@ -162,6 +162,13 @@ export function TimerView({ onNavigate }: TimerViewProps) {
           >
             <KeyboardShortcut keyLetter="a" />
             <span className="nav-button-text">Activities</span>
+          </button>
+          <button
+            className="text-base font-light flex items-center gap-2"
+            onClick={() => onNavigate("stats")}
+          >
+            <KeyboardShortcut keyLetter="s" />
+            <span className="nav-button-text">Stats</span>
           </button>
         </div>
       </div>

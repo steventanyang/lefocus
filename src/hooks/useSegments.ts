@@ -10,8 +10,10 @@ import { Segment, SegmentStats } from "@/types/segment";
 /**
  * Calculate aggregate statistics from an array of segments
  * Used by SessionResults component to display session summary
+ * @param segments - Array of segments to calculate stats from
+ * @param limit - Optional limit for number of apps to return. Pass undefined to return all apps.
  */
-export function calculateSegmentStats(segments: Segment[]): SegmentStats {
+export function calculateSegmentStats(segments: Segment[], limit?: number): SegmentStats {
   if (segments.length === 0) {
     return {
       totalDurationSecs: 0,
@@ -52,14 +54,19 @@ export function calculateSegmentStats(segments: Segment[]): SegmentStats {
     }
   }
 
-  // Sort by duration and take top apps
-  const topApps = Array.from(appDurations.values())
-    .sort((a, b) => b.durationSecs - a.durationSecs)
-    .slice(0, 5)
-    .map(app => ({
-      ...app,
-      percentage: totalDuration > 0 ? (app.durationSecs / totalDuration) * 100 : 0,
-    }));
+  // Sort by duration
+  let sortedApps = Array.from(appDurations.values())
+    .sort((a, b) => b.durationSecs - a.durationSecs);
+
+  // Apply limit: if limit is undefined, return all apps; otherwise use the limit
+  if (limit !== undefined) {
+    sortedApps = sortedApps.slice(0, limit);
+  }
+
+  const topApps = sortedApps.map(app => ({
+    ...app,
+    percentage: totalDuration > 0 ? (app.durationSecs / totalDuration) * 100 : 0,
+  }));
 
   return {
     totalDurationSecs: totalDuration,
