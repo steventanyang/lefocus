@@ -22,6 +22,7 @@ impl Default for TimerStatus {
 pub enum TimerMode {
     Countdown,
     Stopwatch,
+    Break,
 }
 
 impl Default for TimerMode {
@@ -71,6 +72,11 @@ impl TimerState {
         match (self.status, self.mode) {
             (TimerStatus::Idle | TimerStatus::Stopped, _) => 0,
             (TimerStatus::Running, TimerMode::Countdown) => {
+                let remaining = self.target_ms as i64 - self.current_active_ms() as i64;
+                cmp::max(remaining, 0)
+            }
+            (TimerStatus::Running, TimerMode::Break) => {
+                // Break mode works like countdown
                 let remaining = self.target_ms as i64 - self.current_active_ms() as i64;
                 cmp::max(remaining, 0)
             }

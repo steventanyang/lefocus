@@ -134,7 +134,7 @@ extension IslandView {
         let centerX = (rightSectionStartX + rightSectionEndX) / 2.0
 
         // For stopwatch: show both End and Cancel, centered as a group
-        // For countdown: show only Cancel, centered
+        // For countdown and break: show only Cancel, centered
         if mode == .stopwatch {
             // Total width of both buttons with spacing
             let totalWidth = buttonWidth * 2.0 + spacing
@@ -153,7 +153,7 @@ extension IslandView {
                 height: buttonHeight
             )
         } else {
-            // Countdown mode: only Cancel button, centered under timer
+            // Countdown and break modes: only Cancel button, centered under timer
             timerCancelButton.rect = NSRect(
                 x: centerX - buttonWidth / 2.0,
                 y: bottomY,
@@ -162,5 +162,44 @@ extension IslandView {
             )
             timerEndButton.rect = .zero
         }
+    }
+
+    func drawBreakLabel() {
+        guard isExpanded, mode == .break, !isIdle else { return }
+        
+        let labelText = "Break"
+        let labelFont = NSFont.systemFont(ofSize: 10, weight: .medium)
+        
+        // Very subtle - minimal visibility
+        let baseAlpha: CGFloat = isHovered ? 0.3 : 0.25
+        let textColor = NSColor.white.withAlphaComponent(baseAlpha * expandedContentOpacity)
+        
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: labelFont,
+            .foregroundColor: textColor
+        ]
+        
+        let attributed = NSAttributedString(string: labelText, attributes: attributes)
+        let textSize = attributed.size()
+        
+        // Position in top-right corner, aligned with waveform (which is at bounds.height - 20.0)
+        // Waveform is centered vertically at baseY, so align break label center with waveform center
+        let waveformBaseY: CGFloat = bounds.height - 20.0
+        let waveformCenterY = waveformBaseY // Waveform bars are centered at baseY
+        
+        // Position break label in top-right, vertically aligned with waveform
+        let padding: CGFloat = 16.0
+        let breakLabelX = bounds.maxX - textSize.width - padding
+        
+        // Center the text vertically with the waveform
+        // draw(at:) uses bottom-left origin, so we need to position it so the center aligns
+        let breakLabelY = waveformCenterY - textSize.height / 2.0
+        
+        let origin = NSPoint(
+            x: breakLabelX,
+            y: breakLabelY
+        )
+        
+        attributed.draw(at: origin)
     }
 }

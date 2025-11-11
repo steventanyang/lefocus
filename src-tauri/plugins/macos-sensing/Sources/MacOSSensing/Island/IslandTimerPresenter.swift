@@ -25,11 +25,11 @@ final class IslandTimerPresenter {
         isIdle = false
         mode = payload.mode
         startUptimeMs = payload.startUptimeMs
-        targetMs = payload.mode == .countdown ? payload.targetMs : nil
+        targetMs = (payload.mode == .countdown || payload.mode == .break) ? payload.targetMs : nil
 
         let initialDisplayMs: Int64 = {
             switch payload.mode {
-            case .countdown:
+            case .countdown, .break:
                 return max(0, payload.targetMs)
             case .stopwatch:
                 return 0
@@ -79,7 +79,7 @@ final class IslandTimerPresenter {
     private func reseedClock(authoritativeMs: Int64) {
         let now = currentUptimeMs()
         switch mode {
-        case .countdown:
+        case .countdown, .break:
             guard let target = targetMs else { return }
             let elapsed = max(Int64(0), target - authoritativeMs)
             startUptimeMs = now - elapsed
@@ -93,7 +93,7 @@ final class IslandTimerPresenter {
         let now = currentUptimeMs()
         let elapsed = max(Int64(0), now - startUptimeMs)
         switch mode {
-        case .countdown:
+        case .countdown, .break:
             guard let target = targetMs else { return 0 }
             return max(Int64(0), target - elapsed)
         case .stopwatch:

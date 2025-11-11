@@ -102,6 +102,12 @@ impl TimerController {
                 }
                 target_ms
             }
+            TimerMode::Break => {
+                if target_ms == 0 {
+                    return Err(anyhow!("target_ms must be greater than zero for break mode"));
+                }
+                target_ms
+            }
             TimerMode::Stopwatch => i64::MAX as u64,
         };
 
@@ -115,18 +121,21 @@ impl TimerController {
         let session_id = Uuid::new_v4().to_string();
         let started_at = Utc::now();
 
-        let session = Session {
-            id: session_id.clone(),
-            started_at,
-            stopped_at: None,
-            status: SessionStatus::Running,
-            target_ms: actual_target_ms,
-            active_ms: 0,
-            created_at: started_at,
-            updated_at: started_at,
-        };
+        // Skip DB insert and sensing for Break mode
+        if mode != TimerMode::Break {
+            let session = Session {
+                id: session_id.clone(),
+                started_at,
+                stopped_at: None,
+                status: SessionStatus::Running,
+                target_ms: actual_target_ms,
+                active_ms: 0,
+                created_at: started_at,
+                updated_at: started_at,
+            };
 
-        self.db.insert_session(&session).await?;
+            self.db.insert_session(&session).await?;
+        }
 
         // Initialize state without the anchor yet
         {
@@ -134,11 +143,14 @@ impl TimerController {
             state.begin_session(session_id.clone(), actual_target_ms, mode, started_at, Instant::now());
         }
 
-        self.sensing
-            .lock()
-            .await
-            .start_sensing(session_id, self.db.clone())
-            .await?;
+        // Skip sensing start for Break mode
+        if mode != TimerMode::Break {
+            self.sensing
+                .lock()
+                .await
+                .start_sensing(session_id, self.db.clone())
+                .await?;
+        }
 
         self.spawn_ticker().await;
 
@@ -158,10 +170,15 @@ impl TimerController {
                     let clamped = actual_target_ms.min(i64::MAX as u64);
                     clamped as i64
                 }
+                TimerMode::Break => {
+                    let clamped = actual_target_ms.min(i64::MAX as u64);
+                    clamped as i64
+                }
                 TimerMode::Stopwatch => 0,
             };
             let mode_str = match mode {
                 TimerMode::Countdown => "countdown",
+                TimerMode::Break => "break",
                 TimerMode::Stopwatch => "stopwatch",
             };
 
@@ -176,11 +193,13 @@ impl TimerController {
     pub async fn end_timer(&self) -> Result<SessionInfo> {
         let stopped_at = Utc::now();
 
-        let session_snapshot = {
+        let (session_snapshot, is_break_mode) = {
             let mut state = self.state.lock().await;
             if state.status == TimerStatus::Idle {
                 return Err(anyhow!("no active session to end"));
             }
+
+            let is_break = state.mode == TimerMode::Break;
 
             // Allow manual end for both countdown and stopwatch modes
             // Users should be able to end any timer early from the island UI
@@ -198,24 +217,45 @@ impl TimerController {
             state.stop();
             state.cancel();
 
-            Session {
-                id: session_id,
-                started_at,
-                stopped_at: Some(stopped_at),
-                status: SessionStatus::Completed,
-                target_ms,
-                active_ms,
-                created_at: started_at,
-                updated_at: stopped_at,
-            }
+            (
+                Session {
+                    id: session_id,
+                    started_at,
+                    stopped_at: Some(stopped_at),
+                    status: SessionStatus::Completed,
+                    target_ms,
+                    active_ms,
+                    created_at: started_at,
+                    updated_at: stopped_at,
+                },
+                is_break,
+            )
         };
 
-        self.sensing.lock().await.stop_sensing().await?;
+        // Skip sensing stop for Break mode (it was never started)
+        if !is_break_mode {
+            self.sensing.lock().await.stop_sensing().await?;
+        }
         self.cancel_ticker().await;
 
         #[cfg(target_os = "macos")]
         {
             island_reset();
+        }
+
+        // Skip DB updates and segmentation for Break mode
+        if is_break_mode {
+            // Emit state change before returning so frontend knows timer is back to idle
+            self.emit_state_changed().await?;
+            
+            return Ok(SessionInfo {
+                id: session_snapshot.id,
+                started_at: session_snapshot.started_at,
+                stopped_at: session_snapshot.stopped_at,
+                status: SessionStatus::Completed,
+                target_ms: session_snapshot.target_ms,
+                active_ms: session_snapshot.active_ms,
+            });
         }
 
         self.db
@@ -276,14 +316,18 @@ impl TimerController {
         self.emit_state_changed().await?;
 
         let session_info = SessionInfo::from(session_snapshot);
-        self.emit_session_completed(&session_info).await?;
+        
+        // Skip session_completed event for Break mode (no results modal)
+        if !is_break_mode {
+            self.emit_session_completed(&session_info).await?;
+        }
 
         Ok(session_info)
     }
 
     pub async fn cancel_timer(&self) -> Result<()> {
         let cancelled_at = Utc::now();
-        let (session_id, active_ms) = {
+        let (session_id, active_ms, is_break_mode) = {
             let mut state = self.state.lock().await;
             if state.status == TimerStatus::Idle {
                 #[cfg(target_os = "macos")]
@@ -292,6 +336,7 @@ impl TimerController {
                 }
                 return Ok(());
             }
+            let is_break = state.mode == TimerMode::Break;
             state.sync_active_from_anchor();
             let session_id = state
                 .session_id
@@ -299,10 +344,13 @@ impl TimerController {
                 .ok_or_else(|| anyhow!("no active session to cancel"))?;
             let active_ms = state.active_ms;
             state.cancel();
-            (session_id, active_ms)
+            (session_id, active_ms, is_break)
         };
 
-        self.sensing.lock().await.stop_sensing().await?;
+        // Skip sensing stop for Break mode (it was never started)
+        if !is_break_mode {
+            self.sensing.lock().await.stop_sensing().await?;
+        }
         self.cancel_ticker().await;
 
         #[cfg(target_os = "macos")]
@@ -310,15 +358,18 @@ impl TimerController {
             island_reset();
         }
 
-        self.db
-            .mark_session_status(
-                &session_id,
-                SessionStatus::Cancelled,
-                active_ms,
-                Some(cancelled_at),
-                cancelled_at,
-            )
-            .await?;
+        // Skip DB update for Break mode
+        if !is_break_mode {
+            self.db
+                .mark_session_status(
+                    &session_id,
+                    SessionStatus::Cancelled,
+                    active_ms,
+                    Some(cancelled_at),
+                    cancelled_at,
+                )
+                .await?;
+        }
         self.emit_state_changed().await?;
         Ok(())
     }
@@ -358,39 +409,44 @@ impl TimerController {
                     island_sync(snapshot.remaining_ms());
                 }
 
-                // Only auto-stop in countdown mode when timer reaches 0
-                if remaining <= 0 && snapshot.mode == TimerMode::Countdown {
+                // Auto-stop in countdown and break modes when timer reaches 0
+                if remaining <= 0 && (snapshot.mode == TimerMode::Countdown || snapshot.mode == TimerMode::Break) {
                     let final_snapshot = {
                         let mut guard = state.lock().await;
                         guard.sync_active_from_anchor();
-                    guard.stop();
-                    guard.active_ms = guard.active_ms.min(guard.target_ms);
-                    guard.clone()
-                };
+                        guard.stop();
+                        guard.active_ms = guard.active_ms.min(guard.target_ms);
+                        guard.clone()
+                    };
 
                 #[cfg(target_os = "macos")]
                 {
                     island_reset();
                 }
 
-                // Stop sensing immediately
-                if let Err(e) = sensing.lock().await.stop_sensing().await {
-                    error!("Failed to stop sensing on timer completion: {}", e);
+                // Stop sensing immediately (skip for Break mode)
+                if final_snapshot.mode != TimerMode::Break {
+                    if let Err(e) = sensing.lock().await.stop_sensing().await {
+                        error!("Failed to stop sensing on timer completion: {}", e);
+                    }
                 }
 
                     emit_timer_state(&app_handle, final_snapshot.clone());
 
-                    if let Some(session_id) = final_snapshot.session_id.clone() {
-                        let db_clone = db.clone();
-                        tokio::spawn(async move {
-                            let _ = db_clone
-                                .update_session_progress(
-                                    &session_id,
-                                    final_snapshot.active_ms,
-                                    Utc::now(),
-                                )
-                                .await;
-                        });
+                    // Skip DB update for Break mode
+                    if final_snapshot.mode != TimerMode::Break {
+                        if let Some(session_id) = final_snapshot.session_id.clone() {
+                            let db_clone = db.clone();
+                            tokio::spawn(async move {
+                                let _ = db_clone
+                                    .update_session_progress(
+                                        &session_id,
+                                        final_snapshot.active_ms,
+                                        Utc::now(),
+                                    )
+                                    .await;
+                            });
+                        }
                     }
 
                     break;
