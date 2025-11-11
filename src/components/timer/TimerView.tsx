@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
+import { useState } from "react";
 import { useTimer } from "@/hooks/useTimer";
 import { useEndTimerMutation } from "@/hooks/queries";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { useSessionCompleted } from "@/hooks/useSessionCompleted";
 import { TimerDisplay } from "./TimerDisplay";
 import { TimerControls } from "./TimerControls";
 import { DurationPicker } from "./DurationPicker";
@@ -10,13 +10,7 @@ import { BreakDurationPicker } from "./BreakDurationPicker";
 import { SessionResults } from "@/components/session/SessionResults";
 import { KeyBox } from "@/components/ui/KeyBox";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
-import type { SessionInfo, TimerMode } from "@/types/timer";
-import { useQueryClient } from "@tanstack/react-query";
-
-type SessionCompletedPayload = {
-  session_id: string;
-  session: SessionInfo;
-};
+import type { TimerMode } from "@/types/timer";
 
 interface TimerViewProps {
   onNavigate: (view: "timer" | "activities") => void;
@@ -25,7 +19,7 @@ interface TimerViewProps {
 export function TimerView({ onNavigate }: TimerViewProps) {
   const { timerState, error, startTimer, cancelTimer } = useTimer();
   const endTimerMutation = useEndTimerMutation();
-  const queryClient = useQueryClient();
+  const completedSession = useSessionCompleted();
 
   const [selectedDuration, setSelectedDuration] = useState<number>(
     25 * 60 * 1000
@@ -34,15 +28,13 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     5 * 60 * 1000
   ); // Default 5 min for break
   const [selectedMode, setSelectedMode] = useState<TimerMode>("countdown");
-  const [completedSession, setCompletedSession] = useState<SessionInfo | null>(
-    null
-  );
+  const [dismissedSessionId, setDismissedSessionId] = useState<string | null>(null);
 
   // Calculate state-dependent values (handle null case)
   const isIdle = timerState?.state.status === "idle" || false;
   const startDisabled =
-    (selectedMode === "countdown" && selectedDuration === null) ||
-    (selectedMode === "break" && selectedBreakDuration === null);
+    (selectedMode === "countdown" && (selectedDuration === null || selectedDuration === 0)) ||
+    (selectedMode === "break" && (selectedBreakDuration === null || selectedBreakDuration === 0));
 
   const handleStart = () => {
     if (timerState) {
@@ -51,23 +43,11 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     }
   };
 
-  useEffect(() => {
-    const unlistenPromise = listen<SessionCompletedPayload>(
-      "session-completed",
-      (event) => {
-        setCompletedSession(event.payload.session);
-        queryClient.invalidateQueries({ queryKey: ["sessions"] });
-      }
-    );
-
-    return () => {
-      unlistenPromise
-        .then((unlisten) => unlisten())
-        .catch(() => {
-          /* ignore */
-        });
-    };
-  }, [queryClient]);
+  // Calculate displayed session during render (no effect needed)
+  // Show session if it exists and hasn't been dismissed
+  const displayedSession = completedSession && completedSession.id !== dismissedSessionId 
+    ? completedSession 
+    : null;
 
   // Set up keyboard shortcuts (must be called unconditionally)
   useKeyboardShortcuts({
@@ -87,13 +67,13 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     );
   }
 
-  // Show session results if we have a completed session
-  if (completedSession) {
+  // Show session results if we have a displayed session
+  if (displayedSession) {
     return (
       <SessionResults
-        sessionId={completedSession.id}
-        session={completedSession}
-        onBack={() => setCompletedSession(null)}
+        sessionId={displayedSession.id}
+        session={displayedSession}
+        onBack={() => setDismissedSessionId(displayedSession.id)}
       />
     );
   }
@@ -109,10 +89,8 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     }
     
     // Use mutation to end timer - automatically invalidates sessions cache
-    const sessionInfo = await endTimerMutation.mutateAsync();
-    if (sessionInfo) {
-      setCompletedSession(sessionInfo);
-    }
+    // The session will be displayed via useSessionCompleted hook
+    await endTimerMutation.mutateAsync();
   };
 
   return (
@@ -157,6 +135,15 @@ export function TimerView({ onNavigate }: TimerViewProps) {
         remainingMs={remaining_ms}
         isRunning={isRunning}
         mode={state.mode}
+        isEditable={state.status === "idle"}
+        onTimeChange={(ms) => {
+          if (selectedMode === "break") {
+            setSelectedBreakDuration(ms);
+          } else {
+            setSelectedDuration(ms);
+          }
+        }}
+        initialMs={selectedMode === "break" ? selectedBreakDuration : selectedDuration}
       />
 
       {state.status === "idle" && selectedMode === "countdown" && (

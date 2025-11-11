@@ -149,34 +149,31 @@ export function SessionCard({ session, segments, onClick }: SessionCardProps) {
           <span className="text-xs font-light uppercase tracking-wide">
             Top Apps
           </span>
-          {session.topApps.map((app) => {
-            const iconDataUrl = session.appIcons[app.bundleId];
-            const iconColor = session.appColors[app.bundleId];
-            return (
-              <div key={app.bundleId} className="flex justify-between items-center gap-4">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div className="flex items-center gap-3">
+            {session.topApps.slice(0, 3).map((app) => {
+              const iconDataUrl = session.appIcons[app.bundleId];
+              const iconColor = session.appColors[app.bundleId];
+              return (
+                <div key={app.bundleId} className="flex items-center gap-2">
                   {iconDataUrl ? (
                     <img
                       src={iconDataUrl}
                       alt={app.appName || app.bundleId}
-                      className="w-3 h-3 flex-shrink-0"
+                      className="w-6 h-6 flex-shrink-0"
                     />
                   ) : (
                     <div
-                      className="w-3 h-3 border border-black flex-shrink-0"
+                      className="w-6 h-6 border border-black flex-shrink-0"
                       style={{ backgroundColor: getAppColor(app.bundleId, { iconColor }) }}
                     />
                   )}
-                  <span className="text-sm font-normal truncate">
+                  <span className="text-sm font-normal whitespace-nowrap">
                     {app.appName || app.bundleId}
                   </span>
                 </div>
-                <span className="text-sm font-light tabular-nums flex-shrink-0 whitespace-nowrap">
-                  {formatDuration(app.durationSecs)} ({app.percentage.toFixed(0)}%)
-                </span>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       ) : (
         <div className="text-sm font-light text-gray-500 text-center py-4">

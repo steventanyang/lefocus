@@ -5,21 +5,8 @@ import { calculateSegmentStats } from "@/hooks/useSegments";
 import { SegmentStats } from "@/components/segments/SegmentStats";
 import { SegmentDetailsModal } from "@/components/segments/SegmentDetailsModal";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
+import { isUserTyping, isMac } from "@/utils/keyboardUtils";
 import type { SessionStatus } from "@/types/timer";
-
-function isUserTyping(): boolean {
-  const activeElement = document.activeElement;
-  if (!activeElement) return false;
-  const tagName = activeElement.tagName.toLowerCase();
-  const isInput = tagName === "input";
-  const isTextarea = tagName === "textarea";
-  const isContentEditable = activeElement.getAttribute("contenteditable") === "true";
-  return isInput || isTextarea || isContentEditable;
-}
-
-function isMac(): boolean {
-  return navigator.platform.toUpperCase().indexOf("MAC") >= 0;
-}
 
 type SessionDescriptor = {
   id: string;
@@ -46,15 +33,10 @@ export function SessionResults({
   const { data: segments = [], isLoading: loading, error } = useSegments(sessionId);
   const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
 
-  // Handle Cmd+A when viewing session results from Activities view
+  // Handle keyboard shortcuts for navigation
   // When backButtonText is "View Activities", Cmd+A should close the session
-  // When backButtonText is "View Timer", let the global handler navigate to Activities
+  // When backButtonText is "View Timer", Cmd+T should close the session
   useEffect(() => {
-    // Only intercept if we're in Activities view (backButtonText === "View Activities")
-    if (backButtonText !== "View Activities") {
-      return; // Let global handler work
-    }
-
     const handleKeyDown = (event: KeyboardEvent) => {
       // Ignore shortcuts when user is typing
       if (isUserTyping()) {
@@ -63,12 +45,22 @@ export function SessionResults({
 
       const isModifierPressed = isMac() ? event.metaKey : event.ctrlKey;
 
-      // Cmd+A (Mac) or Ctrl+A (non-Mac): Close the session (go back to activities list)
-      if (event.key === "a" && isModifierPressed) {
-        event.preventDefault();
-        event.stopPropagation(); // Prevent global handler from firing
-        onBack();
-        return;
+      if (backButtonText === "View Activities") {
+        // Cmd+A (Mac) or Ctrl+A (non-Mac): Close the session (go back to activities list)
+        if (event.key === "a" && isModifierPressed) {
+          event.preventDefault();
+          event.stopPropagation(); // Prevent global handler from firing
+          onBack();
+          return;
+        }
+      } else if (backButtonText === "View Timer") {
+        // Cmd+T (Mac) or Ctrl+T (non-Mac): Close the session (go back to timer)
+        if (event.key === "t" && isModifierPressed) {
+          event.preventDefault();
+          event.stopPropagation(); // Prevent global handler from firing
+          onBack();
+          return;
+        }
       }
     };
 

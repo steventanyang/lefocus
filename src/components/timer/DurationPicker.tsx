@@ -15,7 +15,8 @@ export function DurationPicker({ onSelect, selectedDuration }: DurationPickerPro
   return (
     <div className="flex gap-4 justify-center">
       {PRESETS.map((preset) => {
-        const isSelected = selectedDuration === preset.ms;
+        // Compare with small tolerance to handle any rounding differences
+        const isSelected = selectedDuration !== null && Math.abs(selectedDuration - preset.ms) < 100;
         return (
           <button
             key={preset.ms}
