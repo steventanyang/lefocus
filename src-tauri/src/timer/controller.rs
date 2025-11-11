@@ -246,12 +246,21 @@ impl TimerController {
                         } else if let Err(e) = self.db.insert_interruptions(&interruptions).await {
                             error!("Failed to insert interruptions: {}", e);
                         } else {
-                            info!(
-                                "Created {} segments and {} interruptions for session {}",
-                                segments.len(),
-                                interruptions.len(),
-                                session_id
-                            );
+                            // Update context_readings with segment_ids
+                            let segment_tuples: Vec<(String, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)> = segments
+                                .iter()
+                                .map(|s| (s.id.clone(), s.start_time, s.end_time))
+                                .collect();
+                            if let Err(e) = self.db.update_readings_with_segment_ids(&session_id, &segment_tuples).await {
+                                error!("Failed to update readings with segment_ids: {}", e);
+                            } else {
+                                info!(
+                                    "Created {} segments and {} interruptions for session {}",
+                                    segments.len(),
+                                    interruptions.len(),
+                                    session_id
+                                );
+                            }
                         }
                     }
                     Err(e) => {

@@ -105,6 +105,7 @@ async fn perform_capture(
             ocr_text: None,
             ocr_confidence: None,
             ocr_word_count: None,
+            segment_id: None,
         };
 
         db.insert_context_reading(&reading)
@@ -199,6 +200,7 @@ async fn perform_capture(
         ocr_text,
         ocr_confidence,
         ocr_word_count,
+        segment_id: None,
     };
 
     db.insert_context_reading(&reading)

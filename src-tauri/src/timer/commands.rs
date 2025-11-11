@@ -66,6 +66,17 @@ pub async fn get_interruptions_for_segment(
 }
 
 #[tauri::command]
+pub async fn get_window_titles_for_segment(
+    state: State<'_, AppState>,
+    segment_id: String,
+) -> Result<Vec<String>, String> {
+    let db = &state.db;
+    db.get_unique_window_titles_for_segment(&segment_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub async fn list_sessions(state: State<'_, AppState>) -> Result<Vec<SessionSummary>, String> {
     use std::collections::{HashMap, HashSet};
     let db = &state.db;

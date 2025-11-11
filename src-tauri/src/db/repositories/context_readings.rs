@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use rusqlite::params;
 use serde_json::{from_str, to_string};
 
@@ -33,8 +34,9 @@ impl Database {
                     phash,
                     ocr_text,
                     ocr_confidence,
-                    ocr_word_count
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                    ocr_word_count,
+                    segment_id
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                 params![
                     record.session_id,
                     record.timestamp.to_rfc3339(),
@@ -47,6 +49,7 @@ impl Database {
                     record.ocr_text,
                     record.ocr_confidence,
                     ocr_word_count,
+                    record.segment_id,
                 ],
             )?;
             Ok(())
@@ -73,7 +76,8 @@ impl Database {
                     phash,
                     ocr_text,
                     ocr_confidence,
-                    ocr_word_count
+                    ocr_word_count,
+                    segment_id
                 FROM context_readings
                 WHERE session_id = ?1
                 ORDER BY timestamp ASC",
@@ -92,6 +96,7 @@ impl Database {
                 let ocr_text: Option<String> = row.get(9)?;
                 let ocr_confidence: Option<f64> = row.get(10)?;
                 let ocr_word_count: Option<i64> = row.get(11)?;
+                let segment_id: Option<String> = row.get(12)?;
 
                 let timestamp = parse_datetime(&timestamp_str, "timestamp")
                     .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))))?;
@@ -117,6 +122,7 @@ impl Database {
                     ocr_text,
                     ocr_confidence,
                     ocr_word_count: ocr_word_count.map(|c| c as u64),
+                    segment_id,
                 })
             })?;
 
@@ -126,6 +132,71 @@ impl Database {
             }
 
             Ok(readings)
+        })
+        .await
+    }
+
+    /// Update context_readings with their corresponding segment_id based on time range.
+    /// Readings are matched to segments if their timestamp falls within [segment.start_time, segment.end_time].
+    pub async fn update_readings_with_segment_ids(
+        &self,
+        session_id: &str,
+        segments: &[(String, DateTime<Utc>, DateTime<Utc>)], // (segment_id, start_time, end_time)
+    ) -> Result<()> {
+        let session_id = session_id.to_string();
+        let segments = segments.to_vec();
+        self.execute(move |conn| {
+            let tx = conn.transaction()?;
+
+            for (segment_id, start_time, end_time) in &segments {
+                tx.execute(
+                    "UPDATE context_readings
+                    SET segment_id = ?1
+                    WHERE session_id = ?2
+                    AND timestamp >= ?3
+                    AND timestamp <= ?4
+                    AND segment_id IS NULL",
+                    params![
+                        segment_id,
+                        session_id,
+                        start_time.to_rfc3339(),
+                        end_time.to_rfc3339(),
+                    ],
+                )?;
+            }
+
+            tx.commit()?;
+            Ok(())
+        })
+        .await
+    }
+
+    /// Get unique window titles for a specific segment.
+    pub async fn get_unique_window_titles_for_segment(
+        &self,
+        segment_id: &str,
+    ) -> Result<Vec<String>> {
+        let segment_id = segment_id.to_string();
+        self.execute(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT DISTINCT window_title
+                FROM context_readings
+                WHERE segment_id = ?1
+                AND window_title IS NOT NULL
+                AND window_title != ''
+                ORDER BY window_title ASC",
+            )?;
+
+            let titles_iter = stmt.query_map(params![segment_id], |row| {
+                Ok(row.get::<_, String>(0)?)
+            })?;
+
+            let mut titles = Vec::new();
+            for title_result in titles_iter {
+                titles.push(title_result?);
+            }
+
+            Ok(titles)
         })
         .await
     }

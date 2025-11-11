@@ -5,6 +5,7 @@
  * - ['sessions'] - List of all sessions
  * - ['segments', sessionId] - Segments for a specific session
  * - ['interruptions', segmentId] - Interruptions for a specific segment
+ * - ['windowTitles', segmentId] - Window titles for a specific segment
  */
 
 import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
@@ -51,6 +52,18 @@ export function useInterruptions(segmentId: string | null) {
     queryFn: () => invoke<Interruption[]>("get_interruptions_for_segment", { segmentId }),
     enabled: !!segmentId, // Only fetch when segmentId is provided
     staleTime: 300_000, // Consider fresh for 5 minutes (interruptions rarely change)
+  });
+}
+
+/**
+ * Fetch window titles for a specific segment
+ */
+export function useWindowTitles(segmentId: string | null) {
+  return useQuery({
+    queryKey: ['windowTitles', segmentId],
+    queryFn: () => invoke<string[]>("get_window_titles_for_segment", { segmentId }),
+    enabled: !!segmentId, // Only fetch when segmentId is provided
+    staleTime: 300_000, // Consider fresh for 5 minutes (window titles rarely change)
   });
 }
 
