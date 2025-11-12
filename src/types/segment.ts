@@ -30,6 +30,11 @@ export interface Interruption {
   durationSecs: number;
 }
 
+export interface WindowTitleWithDuration {
+  title: string;
+  durationSecs: number;
+}
+
 export interface AppDuration {
   bundleId: string;
   appName: string | null;

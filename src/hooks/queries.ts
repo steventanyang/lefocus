@@ -11,7 +11,7 @@
 import { useQuery, useMutation, useQueryClient, useQueries } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary, SessionInfo } from "@/types/timer";
-import type { Segment, Interruption } from "@/types/segment";
+import type { Segment, Interruption, WindowTitleWithDuration } from "@/types/segment";
 
 // ============================================================================
 // QUERY HOOKS (Data Fetching)
@@ -56,12 +56,15 @@ export function useInterruptions(segmentId: string | null) {
 }
 
 /**
- * Fetch window titles for a specific segment
+ * Fetch window titles for a specific segment with durations
  */
 export function useWindowTitles(segmentId: string | null) {
   return useQuery({
     queryKey: ['windowTitles', segmentId],
-    queryFn: () => invoke<string[]>("get_window_titles_for_segment", { segmentId }),
+    queryFn: async () => {
+      const result = await invoke<[string, number][]>("get_window_titles_for_segment", { segmentId });
+      return result.map(([title, durationSecs]) => ({ title, durationSecs })) as WindowTitleWithDuration[];
+    },
     enabled: !!segmentId, // Only fetch when segmentId is provided
     staleTime: 300_000, // Consider fresh for 5 minutes (window titles rarely change)
   });
