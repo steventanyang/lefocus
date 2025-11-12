@@ -281,10 +281,10 @@ impl TimerController {
             {
                 Ok(readings) => match segment_session(readings, &SegmentationConfig::default()) {
                     Ok((segments, interruptions)) => {
-                        if let Err(e) = self.db.insert_segments(&session_id, &segments).await {
-                            error!("Failed to insert segments: {}", e);
-                        } else if let Err(e) = self.db.insert_interruptions(&interruptions).await {
-                            error!("Failed to insert interruptions: {}", e);
+                        // Insert segments and interruptions atomically in a single transaction
+                        // This prevents race conditions where segments might be deleted before interruptions are inserted
+                        if let Err(e) = self.db.insert_segments_and_interruptions(&session_id, &segments, &interruptions).await {
+                            error!("Failed to insert segments and interruptions: {}", e);
                         } else {
                             // Update context_readings with segment_ids
                             let segment_tuples: Vec<(String, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)> = segments
