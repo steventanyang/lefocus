@@ -99,11 +99,11 @@ export function StatsView({ onNavigate }: StatsViewProps) {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-light tracking-wide">Stats</h1>
         <button
-          className="text-base font-light text-gray-600 hover:opacity-70 transition-opacity flex items-center gap-2"
+          className="text-base font-light text-gray-600 flex items-center gap-2 group"
           onClick={() => onNavigate("timer")}
         >
-          <KeyboardShortcut keyLetter="t" />
-          <span>View Timer</span>
+          <KeyboardShortcut keyLetter="t" hovered={false} />
+          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">View Timer</span>
         </button>
       </div>
 
@@ -144,24 +144,24 @@ export function StatsView({ onNavigate }: StatsViewProps) {
               <div className="flex gap-2">
                 <button
                   onClick={() => setTimeWindow("day")}
-                  className="text-base font-light flex items-center gap-2 flex-1 justify-center"
+                  className="text-base font-light flex items-center gap-2 flex-1 justify-center group"
                 >
-                  <KeyBox selected={timeWindow === "day"}>D</KeyBox>
-                  <span>Day</span>
+                  <KeyBox selected={timeWindow === "day"} hovered={false}>D</KeyBox>
+                  <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Day</span>
                 </button>
                 <button
                   onClick={() => setTimeWindow("week")}
-                  className="text-base font-light flex items-center gap-2 flex-1 justify-center"
+                  className="text-base font-light flex items-center gap-2 flex-1 justify-center group"
                 >
-                  <KeyBox selected={timeWindow === "week"}>W</KeyBox>
-                  <span>Week</span>
+                  <KeyBox selected={timeWindow === "week"} hovered={false}>W</KeyBox>
+                  <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Week</span>
                 </button>
                 <button
                   onClick={() => setTimeWindow("month")}
-                  className="text-base font-light flex items-center gap-2 flex-1 justify-center"
+                  className="text-base font-light flex items-center gap-2 flex-1 justify-center group"
                 >
-                  <KeyBox selected={timeWindow === "month"}>M</KeyBox>
-                  <span>Month</span>
+                  <KeyBox selected={timeWindow === "month"} hovered={false}>M</KeyBox>
+                  <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Month</span>
                 </button>
               </div>
             }

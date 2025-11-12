@@ -108,11 +108,11 @@ export function SessionResults({
   
   const backButton = (
     <button
-      className="text-base font-light text-gray-600 hover:opacity-70 transition-opacity flex items-center gap-2"
+      className="text-base font-light text-gray-600 flex items-center gap-2 group"
       onClick={onBack}
     >
-      <KeyboardShortcut keyLetter={shortcutKey} />
-      <span>{backButtonText}</span>
+      <KeyboardShortcut keyLetter={shortcutKey} hovered={false} />
+      <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">{backButtonText}</span>
     </button>
   );
 

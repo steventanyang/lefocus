@@ -19,6 +19,7 @@ interface TimerContentProps {
   onStart: () => void;
   onEnd: () => void;
   onCancel: () => void;
+  controlsVisible?: boolean;
 }
 
 export function TimerContent({
@@ -36,6 +37,7 @@ export function TimerContent({
   onStart,
   onEnd,
   onCancel,
+  controlsVisible = true,
 }: TimerContentProps) {
 
   return (
@@ -58,27 +60,25 @@ export function TimerContent({
       </div>
 
       {/* Always reserve space to prevent clock shifting */}
-      {isIdle && (
-        <div className="flex flex-col items-center w-full">
-          <div className="mt-4 mb-4 min-h-[48px]">
-            {selectedMode === "countdown" && (
-              <DurationPicker
-                selectedDuration={selectedDuration}
-                onSelect={onDurationChange}
-              />
-            )}
-            {selectedMode === "break" && (
-              <BreakDurationPicker
-                selectedDuration={selectedBreakDuration}
-                onSelect={onBreakDurationChange}
-              />
-            )}
-            {selectedMode === "stopwatch" && (
-              <div aria-hidden="true" />
-            )}
-          </div>
+      <div className="flex flex-col items-center w-full">
+        <div className="mt-4 mb-4 min-h-[48px]">
+          {isIdle && selectedMode === "countdown" && (
+            <DurationPicker
+              selectedDuration={selectedDuration}
+              onSelect={onDurationChange}
+            />
+          )}
+          {isIdle && selectedMode === "break" && (
+            <BreakDurationPicker
+              selectedDuration={selectedBreakDuration}
+              onSelect={onBreakDurationChange}
+            />
+          )}
+          {isIdle && selectedMode === "stopwatch" && (
+            <div aria-hidden="true" />
+          )}
         </div>
-      )}
+      </div>
 
       <TimerControls
         status={isIdle ? "idle" : isRunning ? "running" : "stopped"}
@@ -87,6 +87,7 @@ export function TimerContent({
         onEnd={onEnd}
         onCancel={onCancel}
         startDisabled={startDisabled}
+        controlsVisible={controlsVisible}
       />
     </>
   );

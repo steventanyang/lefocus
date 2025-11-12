@@ -13,7 +13,7 @@ interface UseKeyboardShortcutsOptions {
  * Keyboard shortcuts hook for timer view
  *
  * Shortcuts:
- * - Space: Start timer (only when idle and not disabled)
+ * - Return/Enter: Start timer (only when idle and not disabled)
  * - S: Switch to stopwatch mode (only when idle)
  * - T: Switch to timer/countdown mode (only when idle)
  * - B: Switch to break mode (only when idle)
@@ -36,8 +36,8 @@ export function useKeyboardShortcuts({
 
       const isModifierPressed = isMac() ? event.metaKey : event.ctrlKey;
 
-      // Space: Start timer
-      if (event.key === " " && isIdle && !startDisabled) {
+      // Return/Enter: Start timer
+      if (event.key === "Enter" && isIdle && !startDisabled) {
         event.preventDefault();
         onStart();
         return;
