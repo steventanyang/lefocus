@@ -34,6 +34,18 @@ export function SegmentDetailsModal({
     segment.id
   );
 
+  // Deduplicate interruptions by bundle_id - combine durations and keep first occurrence
+  const deduplicatedInterruptions = interruptions.reduce((acc, interruption) => {
+    const existing = acc.find((i) => i.bundleId === interruption.bundleId);
+    if (existing) {
+      // Combine durations and keep the first timestamp
+      existing.durationSecs += interruption.durationSecs;
+    } else {
+      acc.push({ ...interruption });
+    }
+    return acc;
+  }, [] as typeof interruptions);
+
   // Handle ESC key to close modal
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -51,7 +63,7 @@ export function SegmentDetailsModal({
   // Calculate total duration for percentage calculations
   // Sum of window title durations + interruption durations should equal segment duration
   const totalWindowTitleDuration = windowTitles.reduce((sum, wt) => sum + wt.durationSecs, 0);
-  const totalInterruptionDuration = interruptions.reduce((sum, i) => sum + i.durationSecs, 0);
+  const totalInterruptionDuration = deduplicatedInterruptions.reduce((sum, i) => sum + i.durationSecs, 0);
   const totalDuration = totalWindowTitleDuration + totalInterruptionDuration;
   
   // Calculate percentages for window titles
@@ -186,7 +198,7 @@ export function SegmentDetailsModal({
           )}
 
           {/* Interruptions List */}
-          {interruptions.length > 0 && (
+          {deduplicatedInterruptions.length > 0 && (
             <div className="flex flex-col gap-4">
               <h3 className="text-sm font-normal tracking-wide text-gray-800">
                 Interruptions
@@ -197,8 +209,10 @@ export function SegmentDetailsModal({
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {interruptions.map((interruption) => {
-                    const interruptionColor = getAppColor(interruption.bundleId, {});
+                  {deduplicatedInterruptions.map((interruption) => {
+                    const interruptionColor = getAppColor(interruption.bundleId, {
+                      iconColor: interruption.iconColor,
+                    });
                     return (
                       <div
                         key={interruption.id}
@@ -209,6 +223,13 @@ export function SegmentDetailsModal({
                           <div className="flex-shrink-0 flex items-center justify-center text-gray-800" style={{ height: '1.25rem' }}>
                             <AppleLogo className="w-4 h-4" />
                           </div>
+                        ) : interruption.iconDataUrl ? (
+                          <img
+                            src={interruption.iconDataUrl}
+                            alt={interruption.appName || interruption.bundleId}
+                            className="flex-shrink-0"
+                            style={{ height: '1.25rem', width: '1.25rem' }}
+                          />
                         ) : (
                           <div
                             className="flex-shrink-0 border border-black"

@@ -48,6 +48,8 @@ fn row_to_interruption(row: &Row) -> Result<Interruption, rusqlite::Error> {
         timestamp: parse_datetime(&timestamp_str, "timestamp")
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))))?,
         duration_secs: row.get("duration_secs")?,
+        icon_data_url: row.get("icon_data_url").ok(),
+        icon_color: row.get("icon_color").ok(),
     })
 }
 
@@ -377,6 +379,7 @@ impl Database {
     }
 
     /// Get interruptions for a specific segment.
+    /// Includes icon data from the apps table via LEFT JOIN.
     pub async fn get_interruptions_for_segment(
         &self,
         segment_id: &str,
@@ -385,15 +388,18 @@ impl Database {
         self.execute(move |conn| {
             let mut stmt = conn.prepare(
                 "SELECT 
-                    id,
-                    segment_id,
-                    bundle_id,
-                    app_name,
-                    timestamp,
-                    duration_secs
+                    interruptions.id,
+                    interruptions.segment_id,
+                    interruptions.bundle_id,
+                    interruptions.app_name,
+                    interruptions.timestamp,
+                    interruptions.duration_secs,
+                    apps.icon_data_url,
+                    apps.icon_color
                 FROM interruptions
-                WHERE segment_id = ?1
-                ORDER BY timestamp ASC",
+                LEFT JOIN apps ON interruptions.bundle_id = apps.bundle_id
+                WHERE interruptions.segment_id = ?1
+                ORDER BY interruptions.timestamp ASC",
             )?;
 
             let interruptions_iter = stmt.query_map(params![segment_id], |row| {
