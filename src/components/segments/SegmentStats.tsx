@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { SegmentStats as Stats, Segment } from "@/types/segment";
-import { getAppColor } from "@/constants/appColors";
+import { getAppColor, getConfidenceLabel } from "@/constants/appColors";
 import { AppleLogo, shouldShowAppleLogo } from "@/utils/appUtils";
+import { useSessionResultsKeyboard } from "@/hooks/useSessionResultsKeyboard";
 
 interface SegmentStatsProps {
   stats: Stats;
@@ -62,6 +63,10 @@ export function SegmentStats({
   dateTime,
 }: SegmentStatsProps) {
   const [selectedBundleId, setSelectedBundleId] = useState<string | null>(null);
+  const [timelineSelectedIndex, setTimelineSelectedIndex] = useState<number | null>(0); // Start on timeline
+  const [listHoverIndex, setListHoverIndex] = useState<number | null>(null);
+  const timelineContainerRef = useRef<HTMLDivElement>(null);
+  const segmentRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   // Filter segments based on selected app
   const filteredSegments = selectedBundleId
@@ -74,10 +79,96 @@ export function SegmentStats({
     0
   );
 
+  // Derive valid timeline index during render (not in effect)
+  // This ensures the index is always valid without using effects to adjust state
+  // When listHoverIndex is set, we're on the list, so timeline should not show selection
+  const validTimelineSelectedIndex = (() => {
+    if (filteredSegments.length === 0) return null;
+    // If we're on the list (listHoverIndex is not null), don't show timeline selection
+    if (listHoverIndex !== null) return null;
+    if (timelineSelectedIndex === null) return 0; // Initialize to first segment
+    if (timelineSelectedIndex >= filteredSegments.length) return 0; // Reset if out of bounds
+    return timelineSelectedIndex;
+  })();
+
+  // Calculate pill position based on actual rendered segment positions
+  // This is a valid use of useEffect: synchronizing with DOM (external system)
+  const [pillPosition, setPillPosition] = useState<{
+    left: number;
+    width: number;
+    color: string;
+  } | null>(null);
+
+  // Update pill position when selection or segments change
+  // This is a valid use of useEffect: synchronizing with DOM (external system)
+  useEffect(() => {
+    if (validTimelineSelectedIndex === null || filteredSegments.length === 0 || !timelineContainerRef.current) {
+      setPillPosition(null);
+      return;
+    }
+
+    const selectedSegment = filteredSegments[validTimelineSelectedIndex];
+    if (!selectedSegment) {
+      setPillPosition(null);
+      return;
+    }
+
+    // Use requestAnimationFrame to ensure DOM has fully rendered
+    requestAnimationFrame(() => {
+      const container = timelineContainerRef.current;
+      const selectedButton = segmentRefs.current[validTimelineSelectedIndex];
+      
+      if (!container || !selectedButton) {
+        setPillPosition(null);
+        return;
+      }
+
+      // Get actual rendered positions
+      const containerRect = container.getBoundingClientRect();
+      const buttonRect = selectedButton.getBoundingClientRect();
+      
+      // Calculate position relative to container
+      const left = ((buttonRect.left - containerRect.left) / containerRect.width) * 100;
+      const width = (buttonRect.width / containerRect.width) * 100;
+
+      // Get color of selected segment
+      const selectedColor = getAppColor(selectedSegment.bundleId, {
+        iconColor: selectedSegment.iconColor,
+        confidence: selectedSegment.confidence,
+      });
+
+      setPillPosition({
+        left,
+        width,
+        color: selectedColor,
+      });
+    });
+  }, [filteredSegments, validTimelineSelectedIndex]);
+
   // Toggle selection handler
   const handleAppClick = (bundleId: string) => {
     setSelectedBundleId((prev) => (prev === bundleId ? null : bundleId));
   };
+
+  // Handle Enter key to toggle list selection
+  const handleListToggle = (bundleId: string) => {
+    handleAppClick(bundleId);
+  };
+
+  // Keyboard navigation
+  // Pass raw timelineSelectedIndex so hook can detect when we're on list vs timeline
+  // The hook needs to know the actual state, not the derived valid index
+  useSessionResultsKeyboard({
+    segments: filteredSegments,
+    topApps: stats.topApps,
+    timelineSelectedIndex: timelineSelectedIndex, // Use raw state, not derived
+    listHoverIndex,
+    selectedBundleId,
+    onSetTimelineSelectedIndex: setTimelineSelectedIndex,
+    onSetListHoverIndex: setListHoverIndex,
+    onTimelineClick: onSegmentClick,
+    onListToggle: handleListToggle,
+  });
 
   return (
     <div className="p-6 flex flex-col gap-6">
@@ -99,8 +190,24 @@ export function SegmentStats({
 
       {/* Timeline embedded here */}
       {filteredSegments.length > 0 ? (
-        <div className="flex h-[60px] gap-[3px] overflow-hidden">
-          {filteredSegments.map((segment) => {
+        <div className="relative">
+          {/* Dynamic pill indicator */}
+          {pillPosition && (
+            <div
+              className="absolute h-1 rounded-full transition-all duration-300 ease-in-out z-10"
+              style={{
+                left: `${pillPosition.left}%`,
+                width: `${pillPosition.width}%`,
+                backgroundColor: pillPosition.color,
+                top: '-8px',
+              }}
+            />
+          )}
+          <div 
+            ref={timelineContainerRef}
+            className="flex h-[60px] gap-[3px] overflow-hidden"
+          >
+          {filteredSegments.map((segment, index) => {
             const widthPercent = totalDuration > 0 
               ? (segment.durationSecs / totalDuration) * 100 
               : 0;
@@ -108,10 +215,16 @@ export function SegmentStats({
               iconColor: segment.iconColor,
               confidence: segment.confidence,
             });
+            const isSelected = validTimelineSelectedIndex === index;
             return (
               <button
                 key={segment.id}
-                className="rounded p-0 cursor-pointer transition-opacity duration-200 hover:opacity-70"
+                ref={(el) => {
+                  segmentRefs.current[index] = el;
+                }}
+                className={`p-0 cursor-pointer ${
+                  isSelected ? "opacity-80" : "hover:opacity-70 transition-opacity duration-200"
+                }`}
                 style={{
                   width: `${widthPercent}%`,
                   backgroundColor,
@@ -119,10 +232,11 @@ export function SegmentStats({
                 onClick={() => onSegmentClick(segment)}
                 title={`${segment.appName || segment.bundleId} - ${formatDuration(
                   segment.durationSecs
-                )}`}
+                )} (${getConfidenceLabel(segment.confidence)})`}
               />
             );
           })}
+          </div>
         </div>
       ) : selectedBundleId ? (
         <div className="flex h-[60px] items-center justify-center text-sm text-gray-500">
@@ -135,18 +249,19 @@ export function SegmentStats({
           <h3 className="text-sm font-normal tracking-wide text-gray-800">
             Top Applications
           </h3>
-          {stats.topApps.map((app) => {
+          {stats.topApps.map((app, index) => {
             const isSelected = selectedBundleId === app.bundleId;
+            const isHovered = listHoverIndex === index;
             const appColor = getAppColor(app.bundleId, { iconColor: app.iconColor });
-            const lightBgColor = isSelected ? hexToRgba(appColor, 0.15) : undefined;
+            const lightBgColor = isSelected ? hexToRgba(appColor, 0.22) : undefined;
+            const hoverBgColor = isHovered && !isSelected ? hexToRgba(appColor, 0.08) : undefined;
             return (
               <button
                 key={app.bundleId}
                 onClick={() => handleAppClick(app.bundleId)}
-                className={`flex items-center gap-3 w-full text-left transition-all duration-200 rounded p-2 -m-2 ${
-                  !isSelected ? "hover:bg-gray-50" : ""
-                }`}
-                style={isSelected ? { backgroundColor: lightBgColor } : undefined}
+                className="flex items-center gap-3 w-full text-left transition-all duration-200 p-2 -m-2"
+                style={isSelected ? { backgroundColor: lightBgColor } : isHovered ? { backgroundColor: hoverBgColor } : undefined}
+                onMouseEnter={() => setListHoverIndex(index)}
               >
                 {/* Icon on left */}
                 {shouldShowAppleLogo(app.bundleId, app.appName) ? (

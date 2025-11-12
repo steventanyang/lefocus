@@ -73,7 +73,7 @@ export const SessionCard = forwardRef<HTMLButtonElement, SessionCardProps>(
         ref={ref}
         onClick={() => onClick(session)}
         className={`w-full border p-4 flex flex-col gap-4 hover:bg-gray-50 cursor-pointer transition-colors text-left relative ${
-          isSelected ? "border-black" : "border-gray-300"
+          isSelected ? "bg-gray-100 border-gray-500" : "border-gray-300"
         }`}
       >
       {/* Duration on top left */}
