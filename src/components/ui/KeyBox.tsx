@@ -13,8 +13,8 @@ export function KeyBox({ children, className = "", selected = false }: KeyBoxPro
     <span
       className={`text-xs border border-gray-400 rounded w-5 h-5 flex items-center justify-center leading-none font-medium ${
         selected 
-          ? "bg-gray-600 text-white" 
-          : "text-gray-600"
+          ? "bg-gray-700 text-white" 
+          : "text-gray-400"
       } ${className}`}
     >
       {children}
