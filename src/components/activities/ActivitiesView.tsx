@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSessionsList, useSegmentsForSessions } from "@/hooks/queries";
 import { SessionCard } from "@/components/session/SessionCard";
 import { BlockView } from "@/components/activities/BlockView";
 import { SessionResults } from "@/components/session/SessionResults";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import { KeyBox } from "@/components/ui/KeyBox";
-import { isUserTyping } from "@/utils/keyboardUtils";
+import { useActivitiesKeyboard } from "@/hooks/useActivitiesKeyboard";
 import type { SessionSummary } from "@/types/timer";
 
 interface ActivitiesViewProps {
@@ -18,48 +18,13 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
 
   const [selectedSession, setSelectedSession] = useState<SessionSummary | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "block">("list");
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const scrollPositionRef = useRef<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
-
-  // Handle keyboard shortcuts for view mode selection (b/l)
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Ignore shortcuts when user is typing
-      if (isUserTyping()) {
-        return;
-      }
-
-      // Only handle b/l when no modifier keys are pressed
-      const isModifierPressed = event.metaKey || event.ctrlKey || event.altKey || event.shiftKey;
-      if (isModifierPressed) {
-        return;
-      }
-
-      // b: block view, l: list view
-      if (event.key === "b" || event.key === "B") {
-        event.preventDefault();
-        setViewMode("block");
-        return;
-      }
-      if (event.key === "l" || event.key === "L") {
-        event.preventDefault();
-        setViewMode("list");
-        return;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
-
-  // Fetch segments for all sessions in parallel with automatic caching and deduplication
-  const { segmentsBySession } = useSegmentsForSessions(sessions);
+  const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   // Find the scrollable parent container (the main element)
-  const getScrollContainer = (): HTMLElement | null => {
+  const getScrollContainer = useCallback((): HTMLElement | null => {
     if (!containerRef.current) return null;
     let element: HTMLElement | null = containerRef.current.parentElement;
     while (element) {
@@ -70,7 +35,52 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
       element = element.parentElement;
     }
     return null;
-  };
+  }, []);
+
+  // Save scroll position before navigating to session
+  const handleSessionClick = useCallback((session: SessionSummary) => {
+    // Find the index of the clicked session
+    const clickedIndex = sessions.findIndex((s) => s.id === session.id);
+    if (clickedIndex !== -1) {
+      setSelectedIndex(clickedIndex);
+    }
+    
+    const scrollContainer = getScrollContainer();
+    if (scrollContainer) {
+      scrollPositionRef.current = scrollContainer.scrollTop;
+    }
+    setSelectedSession(session);
+  }, [getScrollContainer, sessions]);
+
+  // Handle keyboard shortcuts for navigation and view mode selection
+  useActivitiesKeyboard({
+    sessions,
+    selectedIndex,
+    viewMode,
+    selectedSession,
+    onSetViewMode: setViewMode,
+    onSetSelectedIndex: setSelectedIndex,
+    onSessionClick: handleSessionClick,
+  });
+
+  // Fetch segments for all sessions in parallel with automatic caching and deduplication
+  const { segmentsBySession } = useSegmentsForSessions(sessions);
+
+  // Initialize selected index when sessions load
+  useEffect(() => {
+    if (sessions.length > 0 && selectedIndex === null) {
+      setSelectedIndex(0);
+    } else if (sessions.length === 0) {
+      setSelectedIndex(null);
+    }
+  }, [sessions.length, selectedIndex]);
+
+  // Reset selected index when switching views
+  useEffect(() => {
+    if (sessions.length > 0) {
+      setSelectedIndex(0);
+    }
+  }, [viewMode, sessions.length]);
 
   // Restore scroll position when coming back from session
   // This is a valid use of useEffect: synchronizing with DOM (external system)
@@ -89,14 +99,33 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
     }
   }, [selectedSession]);
 
-  // Save scroll position before navigating to session
-  const handleSessionClick = (session: SessionSummary) => {
-    const scrollContainer = getScrollContainer();
-    if (scrollContainer) {
-      scrollPositionRef.current = scrollContainer.scrollTop;
+  // Scroll selected item into view
+  useEffect(() => {
+    if (selectedIndex !== null && cardRefs.current[selectedIndex]) {
+      requestAnimationFrame(() => {
+        const selectedCard = cardRefs.current[selectedIndex];
+        if (!selectedCard) return;
+
+        const scrollContainer = getScrollContainer();
+        if (!scrollContainer) return;
+
+        // If we're at the top (index 0), ensure header is visible
+        if (selectedIndex === 0) {
+          // Scroll container to top to show header
+          scrollContainer.scrollTo({
+            top: 0,
+            behavior: "smooth",
+          });
+        } else {
+          // Center the selected item
+          selectedCard.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        }
+      });
     }
-    setSelectedSession(session);
-  };
+  }, [selectedIndex, viewMode, getScrollContainer]);
 
   // Restore scroll position when coming back from session
   const handleBack = () => {
@@ -104,7 +133,7 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
   };
 
   const buttonPrimaryClass =
-    "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-black hover:text-white";
+    "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-gray-300 hover:text-black";
 
   // Show expanded session modal
   if (selectedSession) {
@@ -128,21 +157,21 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setViewMode("list")}
-              className="text-base font-light flex items-center gap-2"
+              className="text-base font-light text-gray-600 flex items-center gap-2"
             >
               <KeyBox selected={viewMode === "list"}>L</KeyBox>
               <span>List</span>
             </button>
             <button
               onClick={() => setViewMode("block")}
-              className="text-base font-light flex items-center gap-2"
+              className="text-base font-light text-gray-600 flex items-center gap-2"
             >
               <KeyBox selected={viewMode === "block"}>B</KeyBox>
               <span>Block</span>
             </button>
           </div>
           <button
-            className="text-base font-light hover:opacity-70 transition-opacity flex items-center gap-2"
+            className="text-base font-light text-gray-600 hover:opacity-70 transition-opacity flex items-center gap-2"
             onClick={() => onNavigate("timer")}
           >
             <KeyboardShortcut keyLetter="t" />
@@ -186,12 +215,16 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
         <>
           {viewMode === "list" ? (
             <div className="flex flex-col gap-4">
-              {sessions.map((session) => (
+              {sessions.map((session, index) => (
                 <SessionCard
                   key={session.id}
+                  ref={(el) => {
+                    cardRefs.current[index] = el;
+                  }}
                   session={session}
                   segments={segmentsBySession[session.id]}
                   onClick={handleSessionClick}
+                  isSelected={selectedIndex === index}
                 />
               ))}
             </div>
@@ -199,6 +232,8 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
             <BlockView
               sessions={sessions}
               onClick={handleSessionClick}
+              selectedIndex={selectedIndex}
+              cardRefs={cardRefs}
             />
           )}
         </>

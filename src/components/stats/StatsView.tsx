@@ -91,7 +91,7 @@ export function StatsView({ onNavigate }: StatsViewProps) {
   const timeWindowLabel = getTimeWindowLabel(timeWindow);
 
   const buttonPrimaryClass =
-    "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-black hover:text-white";
+    "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-gray-300 hover:text-black";
 
   return (
     <div className="w-full max-w-3xl flex flex-col gap-8">
@@ -99,7 +99,7 @@ export function StatsView({ onNavigate }: StatsViewProps) {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-light tracking-wide">Stats</h1>
         <button
-          className="text-base font-light hover:opacity-70 transition-opacity flex items-center gap-2"
+          className="text-base font-light text-gray-600 hover:opacity-70 transition-opacity flex items-center gap-2"
           onClick={() => onNavigate("timer")}
         >
           <KeyboardShortcut keyLetter="t" />

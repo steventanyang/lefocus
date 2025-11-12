@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { SessionSummary } from "@/types/timer";
 import { getAppColor } from "@/constants/appColors";
 import { AppleLogo, shouldShowAppleLogo } from "@/utils/appUtils"; // Updated to .tsx
@@ -5,6 +6,7 @@ import { AppleLogo, shouldShowAppleLogo } from "@/utils/appUtils"; // Updated to
 interface BlockSessionCardProps {
   session: SessionSummary;
   onClick: (session: SessionSummary) => void;
+  isSelected?: boolean;
 }
 
 function formatDuration(seconds: number): string {
@@ -45,18 +47,22 @@ function getStatusBadge(status: string): { text: string; className: string } {
   }
 }
 
-export function BlockSessionCard({ session, onClick }: BlockSessionCardProps) {
-  const totalDurationSecs = Math.floor(session.activeMs / 1000);
-  const statusBadge = getStatusBadge(session.status);
-  const topApp = session.topApps.length > 0 ? session.topApps[0] : null;
-  const iconDataUrl = topApp ? session.appIcons[topApp.bundleId] : null;
-  const iconColor = topApp ? session.appColors[topApp.bundleId] : null;
+export const BlockSessionCard = forwardRef<HTMLButtonElement, BlockSessionCardProps>(
+  ({ session, onClick, isSelected = false }, ref) => {
+    const totalDurationSecs = Math.floor(session.activeMs / 1000);
+    const statusBadge = getStatusBadge(session.status);
+    const topApp = session.topApps.length > 0 ? session.topApps[0] : null;
+    const iconDataUrl = topApp ? session.appIcons[topApp.bundleId] : null;
+    const iconColor = topApp ? session.appColors[topApp.bundleId] : null;
 
-  return (
-    <button
-      onClick={() => onClick(session)}
-      className="w-full aspect-[3/1.2] border border-gray-300 rounded-lg p-3 py-4 hover:bg-gray-50 cursor-pointer transition-colors text-left relative"
-    >
+    return (
+      <button
+        ref={ref}
+        onClick={() => onClick(session)}
+        className={`w-full aspect-[3/1.2] border p-3 py-4 hover:bg-gray-50 cursor-pointer transition-colors text-left relative ${
+          isSelected ? "border-black" : "border-gray-300"
+        }`}
+      >
       {/* Top-left: Duration */}
       <div className="absolute top-3 left-3">
         <span className="text-lg font-semibold tabular-nums">
@@ -67,7 +73,7 @@ export function BlockSessionCard({ session, onClick }: BlockSessionCardProps) {
       {/* Top-right: Status badge */}
       <div className="absolute top-3 right-3">
         <span
-          className={`text-xs px-2 py-0.5 border rounded ${statusBadge.className} font-normal`}
+          className={`text-xs px-2 py-0.5 border ${statusBadge.className} font-normal`}
         >
           {statusBadge.text}
         </span>
@@ -104,7 +110,10 @@ export function BlockSessionCard({ session, onClick }: BlockSessionCardProps) {
           {formatDateTime(session.startedAt)}
         </span>
       </div>
-    </button>
-  );
-}
+      </button>
+    );
+  }
+);
+
+BlockSessionCard.displayName = "BlockSessionCard";
 

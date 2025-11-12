@@ -80,7 +80,7 @@ export function SessionResults({
     ? { ...stats, totalDurationSecs: sessionDurationSecs }
     : stats;
 
-  const buttonPrimaryClass = "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-black hover:text-white";
+  const buttonPrimaryClass = "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-gray-300 hover:text-black";
 
   if (loading && segments.length === 0) {
     return (
@@ -108,7 +108,7 @@ export function SessionResults({
   
   const backButton = (
     <button
-      className="text-base font-light hover:opacity-70 transition-opacity flex items-center gap-2"
+      className="text-base font-light text-gray-600 hover:opacity-70 transition-opacity flex items-center gap-2"
       onClick={onBack}
     >
       <KeyboardShortcut keyLetter={shortcutKey} />
