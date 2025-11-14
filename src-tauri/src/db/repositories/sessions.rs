@@ -150,6 +150,8 @@ impl Database {
         .await
     }
 
+    /// @deprecated Use list_sessions_paginated for better performance with large datasets.
+    /// Kept for backward compatibility.
     pub async fn list_sessions(&self) -> Result<Vec<Session>> {
         self.execute(|conn| {
             let mut stmt = conn.prepare(
@@ -160,6 +162,29 @@ impl Database {
             )?;
 
             let mut rows = stmt.query([])?;
+            let mut sessions = Vec::new();
+            while let Some(row) = rows.next()? {
+                sessions.push(row_to_session(row)?);
+            }
+
+            Ok(sessions)
+        })
+        .await
+    }
+
+    pub async fn list_sessions_paginated(&self, limit: usize, offset: usize) -> Result<Vec<Session>> {
+        let limit = limit as i64;
+        let offset = offset as i64;
+        self.execute(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, started_at, stopped_at, status, target_ms, active_ms, created_at, updated_at
+                 FROM sessions
+                 WHERE status IN ('Completed', 'Interrupted')
+                 ORDER BY started_at DESC
+                 LIMIT ?1 OFFSET ?2",
+            )?;
+
+            let mut rows = stmt.query(params![limit, offset])?;
             let mut sessions = Vec::new();
             while let Some(row) = rows.next()? {
                 sessions.push(row_to_session(row)?);
