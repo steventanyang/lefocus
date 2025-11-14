@@ -21,6 +21,7 @@ final class IslandView: NSView {
     var trackInfo: TrackInfo?
     var isAudioPlaying: Bool = false
     var waveformBars: [CGFloat] = []
+    private var hasTimerFinished: Bool = false
     private var trackingArea: NSTrackingArea?
     var isExpanded: Bool = false
     var isHovered: Bool = false
@@ -59,6 +60,7 @@ final class IslandView: NSView {
     // MARK: - Public API
 
     func update(displayMs: Int64, mode: IslandMode?, idle: Bool? = nil) {
+        self.hasTimerFinished = displayMs <= 0 && !(idle ?? self.isIdle)
         self.displayMs = displayMs
         if let mode {
             self.mode = mode
@@ -88,9 +90,6 @@ final class IslandView: NSView {
     }
 
     func updateAudio(track: TrackInfo?, waveformBars: [CGFloat]?) {
-        let hadArtwork = self.trackInfo?.artwork != nil
-        let hasArtwork = track?.artwork != nil
-
         self.trackInfo = track
         self.isAudioPlaying = track?.isPlaying ?? false
         if let bars = waveformBars, track != nil {
@@ -163,8 +162,7 @@ final class IslandView: NSView {
             drawBreakLabel()
         } else {
             // Compact layout: timer and audio indicator
-            drawTimerText()
-            drawAudioMetadataIfNeeded()
+            drawCompactLayout()
         }
     }
 
@@ -311,5 +309,45 @@ final class IslandView: NSView {
 
     private func easeOutQuad(_ t: CGFloat) -> CGFloat {
         return t * (2.0 - t)
+    }
+
+    private enum CompactLayoutState {
+        case audioOnly
+        case timerActive
+        case idle
+    }
+
+    private var compactLayoutState: CompactLayoutState {
+        if isIdle {
+            return trackInfo == nil ? .idle : .audioOnly
+        }
+        return .timerActive
+    }
+
+    private func drawCompactLayout() {
+        switch compactLayoutState {
+        case .audioOnly:
+            drawCompactWaveform(startX: 18.0, centerY: bounds.midY)
+            drawCompactArtworkOnRight()
+        case .timerActive:
+            drawTimerText()
+            if trackInfo != nil {
+                drawCompactWaveform(startX: 18.0, centerY: bounds.midY)
+            }
+        case .idle:
+            drawCompactWaveform(startX: 18.0, centerY: bounds.midY)
+        }
+    }
+
+    private func drawCompactArtworkOnRight() {
+        guard let track = trackInfo else { return }
+        let size = AudioArtworkLayout.compactSize
+        let rect = NSRect(
+            x: bounds.maxX - size - 12.0,
+            y: bounds.midY - size / 2.0,
+            width: size,
+            height: size
+        )
+        drawArtworkImage(track.artwork, in: rect, cornerRadius: size / 2.0, emphasize: false)
     }
 }

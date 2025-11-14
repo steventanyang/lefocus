@@ -190,22 +190,20 @@ final class IslandWindowManager {
 
         if let notch = screen.lf_notchRect {
             // Calculate where the compact island's top edge would be
-            let compactHeight = configuration.compactSize.height
             let compactTopEdge = notch.maxY + islandVerticalInset(for: screen)
-            
+
             // Keep the top edge aligned when expanding - only grow downward
             let originY = compactTopEdge - size.height
-            
+
             return NSRect(x: originX, y: originY, width: size.width, height: size.height)
         }
 
         // For screens without notch, use similar logic
-        let compactHeight = configuration.compactSize.height
         let compactTopEdge = screen.frame.maxY - 8.0
-        
+
         // Keep the top edge aligned when expanding - only grow downward
         let originY = compactTopEdge - size.height
-        
+
         return NSRect(x: originX, y: originY, width: size.width, height: size.height)
     }
 

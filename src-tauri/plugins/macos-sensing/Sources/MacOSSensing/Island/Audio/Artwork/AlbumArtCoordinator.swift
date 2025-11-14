@@ -192,7 +192,7 @@ final class AlbumArtCoordinator {
         guard let url = cacheURL(for: key),
               let data = image.pngData() else { return }
         diskQueue.async { [weak self] in
-            guard let self else { return }
+            guard self != nil else { return }
             try? data.write(to: url, options: .atomic)
         }
     }

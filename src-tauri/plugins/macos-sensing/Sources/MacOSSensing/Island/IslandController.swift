@@ -32,10 +32,10 @@ public final class IslandController {
 
     private init() {
         let configuration = IslandWindowConfiguration(
-            compactSize: NSSize(width: 300.0, height: 36.0),
-            expandedSize: NSSize(width: 380.0, height: 130.0),
-            hoverDelta: NSSize(width: 20.0, height: 4.0),
-            expandedVerticalOffset: 12.0
+            compactSize: NSSize(width: 320.0, height: 38.0),
+            expandedSize: NSSize(width: 420.0, height: 150.0),
+            hoverDelta: NSSize(width: 22.0, height: 5.0),
+            expandedVerticalOffset: 14.0
         )
         windowManager = IslandWindowManager(configuration: configuration)
         windowManager.delegate = self

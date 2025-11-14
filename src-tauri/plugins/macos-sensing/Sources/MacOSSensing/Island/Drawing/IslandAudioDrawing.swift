@@ -1,8 +1,8 @@
 import Cocoa
 
-private enum AudioArtworkLayout {
+public enum AudioArtworkLayout {
     static let expandedSize: CGFloat = 40.0
-    static let compactSize: CGFloat = 20.0
+    static let compactSize: CGFloat = 18.0
 }
 
 extension IslandView {
@@ -12,12 +12,7 @@ extension IslandView {
         guard let track = trackInfo else { return }
 
         if !isExpanded {
-            let thumbRect = compactArtworkRect()
-            drawArtworkImage(track.artwork, in: thumbRect, cornerRadius: thumbRect.height / 2.0, emphasize: false)
-            drawCompactWaveform(
-                startX: thumbRect.maxX + 8.0,
-                centerY: bounds.midY
-            )
+            // Compact layout handled elsewhere
             return
         }
 
@@ -46,16 +41,15 @@ extension IslandView {
 
         let maxContentWidth: CGFloat
         if isIdle {
-            maxContentWidth = bounds.width - textStartX - 16.0
+            maxContentWidth = bounds.width - textStartX - 24.0
         } else {
-            maxContentWidth = max(80.0, bounds.width * 0.45 - textStartX)
+            maxContentWidth = max(120.0, bounds.width * 0.5 - textStartX)
         }
 
-        let lineSpacing: CGFloat = 2.0
+        let lineSpacing: CGFloat = 4.0
         let titleHeight = titleFont.ascender - titleFont.descender
         let artistHeight = artistFont.ascender - artistFont.descender
-        let blockHeight = titleHeight + artistHeight + lineSpacing
-        let blockTop = artworkRect.midY + blockHeight / 2.0 - 2.0
+        let blockTop = bounds.height - 40.0
 
         let titleRect = NSRect(
             x: textStartX,
@@ -94,7 +88,7 @@ extension IslandView {
         let spacing: CGFloat = 3.0
         let pillWidth = (totalWidth - spacing * 3.0) / 4.0
         let pillHeight: CGFloat = 12.0
-        let startX = customStartX ?? (compactArtworkRect().maxX + 8.0)
+        let startX = customStartX ?? 12.0
         let centerY = customCenterY ?? bounds.midY
 
         for (index, value) in waveformBars.enumerated() {
@@ -133,7 +127,7 @@ extension IslandView {
         let spacing: CGFloat = 3.0
         let pillWidth = (totalWidth - spacing * 3.0) / 4.0
         let pillHeight: CGFloat = 12.0
-        let baseY: CGFloat = bounds.height - 20.0 // Near the top
+        let baseY: CGFloat = expandedArtworkRect().maxY + 8.0
 
         // Always position waveform just above text block (to the right of artwork)
         let startX: CGFloat = expandedArtworkRect().maxX + 12.0
@@ -220,19 +214,19 @@ extension IslandView {
             return
         }
 
-        let buttonSize = CGSize(width: 36.0, height: 36.0)
-        let spacing: CGFloat = 12.0
-        let bottomY: CGFloat = 14.0 // Aligned with timer control buttons
+        let buttonSize = CGSize(width: 42.0, height: 42.0)
+        let spacing: CGFloat = 18.0
+        let bottomY: CGFloat = bounds.height - 90.0
 
         // Position based on timer state
         let startX: CGFloat
+        let buttonsWidth = buttonSize.width * 3.0 + spacing * 2.0
+        let leftAlignment = expandedArtworkRect().minX
         if isIdle {
             // No timer: center the playback buttons
-            let totalButtonsWidth = buttonSize.width * 3.0 + spacing * 2.0
-            startX = (bounds.width - totalButtonsWidth) / 2.0
+            startX = (bounds.width - buttonsWidth) / 2.0
         } else {
-            // Timer active: left side, aligned with track info
-            startX = expandedArtworkRect().maxX + 12.0
+            startX = leftAlignment
         }
 
         previousButton.rect = NSRect(
@@ -257,17 +251,12 @@ extension IslandView {
 
     // MARK: - Artwork helpers
 
-    private func compactArtworkRect() -> NSRect {
-        let size = AudioArtworkLayout.compactSize
-        return NSRect(x: 12.0, y: bounds.midY - size / 2.0, width: size, height: size)
-    }
-
     private func expandedArtworkRect() -> NSRect {
         let size = AudioArtworkLayout.expandedSize
-        return NSRect(x: 16.0, y: bounds.midY - size / 2.0, width: size, height: size)
+        return NSRect(x: 28.0, y: bounds.height - size - 28.0, width: size, height: size)
     }
 
-    private func drawArtworkImage(_ image: NSImage?, in rect: NSRect, cornerRadius: CGFloat, emphasize: Bool) {
+    func drawArtworkImage(_ image: NSImage?, in rect: NSRect, cornerRadius: CGFloat, emphasize: Bool) {
         let path = NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
         NSGraphicsContext.saveGraphicsState()
         path.addClip()
@@ -297,7 +286,7 @@ extension IslandView {
         }
     }
 
-    private func drawArtworkPlaceholder(in rect: NSRect, emphasize: Bool) {
+    func drawArtworkPlaceholder(in rect: NSRect, emphasize: Bool) {
         let baseAlpha: CGFloat = emphasize ? 0.85 : 0.75
         let fillColor = NSColor(calibratedWhite: 0.03, alpha: baseAlpha)
         fillColor.setFill()
