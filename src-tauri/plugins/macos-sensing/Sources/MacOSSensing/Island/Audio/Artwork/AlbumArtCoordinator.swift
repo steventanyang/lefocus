@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import Foundation
 
 enum ArtworkHint: Hashable {
@@ -8,10 +9,18 @@ enum ArtworkHint: Hashable {
     var cacheComponent: String {
         switch self {
         case let .spotify(url):
-            return "spotify-\(url.absoluteString)"
-        case .appleMusicBase64:
-            return "music"
+            return "spotify-\(ArtworkHint.hashedComponent(for: url.absoluteString))"
+        case let .appleMusicBase64(base64):
+            return "music-\(ArtworkHint.hashedComponent(for: base64))"
         }
+    }
+
+    private static func hashedComponent(for string: String) -> String {
+        guard let data = string.data(using: .utf8) else {
+            return UUID().uuidString
+        }
+        let digest = SHA256.hash(data: data)
+        return digest.prefix(12).map { String(format: "%02x", $0) }.joined()
     }
 }
 
@@ -56,7 +65,7 @@ final class AlbumArtCoordinator {
     private let memoryCache = NSCache<NSString, NSImage>()
     private let fetchQueue: OperationQueue
     private let diskQueue = DispatchQueue(label: "com.lefocus.albumart.disk", qos: .utility)
-    private let stateQueue = DispatchQueue(label: "com.lefocus.albumart.state", qos: .utility)
+    private let pendingRequestsQueue = DispatchQueue(label: "com.lefocus.albumart.pending", qos: .utility)
     private let fileManager = FileManager.default
     private let diskDirectory: URL?
 
@@ -87,7 +96,7 @@ final class AlbumArtCoordinator {
         }
 
         var shouldStartFetch = false
-        stateQueue.sync {
+        pendingRequestsQueue.sync {
             if pendingRequests[key] != nil {
                 pendingRequests[key]?.append(completionWrapper)
             } else {
@@ -198,7 +207,7 @@ final class AlbumArtCoordinator {
     }
 
     private func finishRequest(forKey key: String, image: NSImage?) {
-        let completions: [Completion]? = stateQueue.sync {
+        let completions: [Completion]? = pendingRequestsQueue.sync {
             let handlers = pendingRequests[key]
             pendingRequests[key] = nil
             return handlers

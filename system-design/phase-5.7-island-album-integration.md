@@ -107,8 +107,8 @@ If AppleScript hints are missing or fail, `nowPlayingSnapshot()` continues to pr
 
 ### 5.1 AlbumArtCoordinator
 
-- **Deduplication:** `pendingRequests` dictionary batches multiple callbacks per cache key.
-- **Cache key:** `source|title|artist|hint.cacheComponent` base64 sanitized (URL-safe) to avoid filesystem issues.
+- **Deduplication:** `pendingRequests` dictionary batches multiple callbacks per cache key. Access to this dictionary is confined to a dedicated serial `DispatchQueue`, ensuring request inserts/removals and completion fan-out never race with the metadata polling timer or operation queue callbacks.
+- **Cache key:** `source|title|artist|hint.cacheComponent` base64 sanitized (URL-safe) to avoid filesystem issues. For Spotify we hash the artwork URL (SHA-256 truncated to 12 bytes) and for Apple Music we hash the raw base64 blob before concatenation so the resulting filename never exceeds the HFS+ 255-byte limit while still deduping identical art across tracks.
 - **Memory cache:** `NSCache` limit 20 entries (~1.5 MB for 96² RGBA images).
 - **Disk cache:** Optional; files stored as PNG with atomic writes on a background `diskQueue`.
 - **Fetch queue:** `OperationQueue` (QoS `.utility`, concurrency 2) to cap network churn.
