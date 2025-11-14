@@ -50,13 +50,17 @@ export function SegmentDetailsModal({
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         onClose();
       }
     };
 
-    document.addEventListener("keydown", handleEscape);
+    // Use capture phase to catch the event before other handlers (like fullscreen)
+    document.addEventListener("keydown", handleEscape, true);
     return () => {
-      document.removeEventListener("keydown", handleEscape);
+      document.removeEventListener("keydown", handleEscape, true);
     };
   }, [onClose]);
 

@@ -7,6 +7,7 @@ interface UseKeyboardShortcutsOptions {
   onSwitchMode: (mode: "countdown" | "stopwatch" | "break") => void;
   isIdle: boolean;
   startDisabled: boolean;
+  isSessionResultsDisplayed?: boolean; // Prevent shortcuts when session results are shown
 }
 
 /**
@@ -26,11 +27,17 @@ export function useKeyboardShortcuts({
   onSwitchMode,
   isIdle,
   startDisabled,
+  isSessionResultsDisplayed = false,
 }: UseKeyboardShortcutsOptions): void {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Ignore shortcuts when user is typing
       if (isUserTyping()) {
+        return;
+      }
+
+      // Don't handle shortcuts when session results are displayed
+      if (isSessionResultsDisplayed) {
         return;
       }
 
@@ -78,7 +85,7 @@ export function useKeyboardShortcuts({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onStart, onSwitchMode, isIdle, startDisabled]);
+  }, [onStart, onSwitchMode, isIdle, startDisabled, isSessionResultsDisplayed]);
 }
 
 /**

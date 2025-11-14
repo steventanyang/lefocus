@@ -164,6 +164,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     onSwitchMode: handleModeChange,
     isIdle,
     startDisabled,
+    isSessionResultsDisplayed: !!displayedSession,
   });
 
   // Handle keyboard shortcuts for arrow keys and h key
@@ -171,6 +172,13 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Ignore shortcuts when user is typing
       if (isUserTyping()) {
+        return;
+      }
+
+      // Don't handle arrow keys when SessionResults is displayed
+      // Let SessionResults handle its own keyboard navigation
+      const hasDisplayedSession = completedSession && completedSession.id !== dismissedSessionId;
+      if (hasDisplayedSession && (event.key === "ArrowLeft" || event.key === "ArrowRight" || event.key === "ArrowUp" || event.key === "ArrowDown")) {
         return;
       }
 
@@ -222,7 +230,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [isIdle, selectedMode, cyclePreset, adjustTime]);
+  }, [isIdle, selectedMode, cyclePreset, adjustTime, completedSession, dismissedSessionId]);
 
   if (!timerState) {
     return (
