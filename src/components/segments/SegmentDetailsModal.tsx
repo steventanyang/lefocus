@@ -38,7 +38,7 @@ export function SegmentDetailsModal({
   );
   const [showAllTitles, setShowAllTitles] = useState(false);
 
-  const buttonPrimaryClass = "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-black hover:text-white";
+  const buttonPrimaryClass = "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-gray-300 hover:text-black";
   
   // Check if there are multiple unique window titles
   const hasMultipleTitles = windowTitles.length > 1;

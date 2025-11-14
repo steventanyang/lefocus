@@ -37,6 +37,7 @@ export function TimerDisplayRenderer({
   const isLeadingZero4 = isEditing && minDigits[0] === "0" && minDigits[1] === "0" && secDigits[0] === "0" && secDigits[1] === "0";
 
   // Colon should be grey until we have 3 numbers (editableValue >= 100) - only when editing
+  // Use same opacity as leading zeros (opacity-20) to match the light grey color
   const colonGrey = editableValueForColon !== undefined && editableValueForColon < 100;
 
   if (shouldHideMinutes) {
@@ -48,8 +49,8 @@ export function TimerDisplayRenderer({
     }
     return (
       <>
-        <span className={isLeadingZero3 ? "opacity-40" : ""}>{secDigits[0]}</span>
-        <span className={isLeadingZero4 ? "opacity-40" : ""}>{secDigits[1]}</span>
+        <span className={isLeadingZero3 ? "opacity-20" : ""}>{secDigits[0]}</span>
+        <span className={isLeadingZero4 ? "opacity-20" : ""}>{secDigits[1]}</span>
       </>
     );
   }
@@ -68,11 +69,11 @@ export function TimerDisplayRenderer({
 
   return (
     <>
-      <span className={isLeadingZero1 ? "opacity-40" : ""}>{minDigits[0]}</span>
-      <span className={isLeadingZero2 ? "opacity-40" : ""}>{minDigits[1]}</span>
-      <span className={colonGrey ? "opacity-40" : ""}>:</span>
-      <span className={isLeadingZero3 ? "opacity-40" : ""}>{secDigits[0]}</span>
-      <span className={isLeadingZero4 ? "opacity-40" : ""}>{secDigits[1]}</span>
+      <span className={isLeadingZero1 ? "opacity-20" : ""}>{minDigits[0]}</span>
+      <span className={isLeadingZero2 ? "opacity-20" : ""}>{minDigits[1]}</span>
+      <span className={colonGrey ? "opacity-20" : ""}>:</span>
+      <span className={isLeadingZero3 ? "opacity-20" : ""}>{secDigits[0]}</span>
+      <span className={isLeadingZero4 ? "opacity-20" : ""}>{secDigits[1]}</span>
     </>
   );
 }

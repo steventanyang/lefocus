@@ -13,7 +13,7 @@ interface UseKeyboardShortcutsOptions {
  * Keyboard shortcuts hook for timer view
  *
  * Shortcuts:
- * - Enter: Start timer (only when idle and not disabled)
+ * - Space: Start timer (only when idle and not disabled)
  * - S: Switch to stopwatch mode (only when idle)
  * - T: Switch to timer/countdown mode (only when idle)
  * - B: Switch to break mode (only when idle)
@@ -36,8 +36,8 @@ export function useKeyboardShortcuts({
 
       const isModifierPressed = isMac() ? event.metaKey : event.ctrlKey;
 
-      // Enter: Start timer
-      if (event.key === "Enter" && isIdle && !startDisabled) {
+      // Space: Start timer
+      if (event.key === " " && isIdle && !startDisabled) {
         event.preventDefault();
         onStart();
         return;
@@ -87,11 +87,14 @@ export function useKeyboardShortcuts({
  * Shortcuts:
  * - Cmd+A (Mac) / Ctrl+A (non-Mac): Navigate to activities
  * - Cmd+T (Mac) / Ctrl+T (non-Mac): Navigate to timer
+ * - Cmd+S (Mac) / Ctrl+S (non-Mac): Navigate to stats
+ * - Cmd+W (Mac) / Ctrl+W (non-Mac): Prevent window close (blocked)
  * - Cmd+F (Mac) / Ctrl+F (non-Mac): Toggle fullscreen
  */
 export function useGlobalNavigationShortcuts(
   onNavigateActivities: () => void,
-  onNavigateTimer: () => void
+  onNavigateTimer: () => void,
+  onNavigateStats: () => void
 ): void {
   useEffect(() => {
     const handleKeyDown = async (event: KeyboardEvent) => {
@@ -116,6 +119,20 @@ export function useGlobalNavigationShortcuts(
         return;
       }
 
+      // Cmd+S (Mac) or Ctrl+S (non-Mac): Navigate to stats
+      if (event.key === "s" && isModifierPressed) {
+        event.preventDefault(); // Prevent browser "Save"
+        onNavigateStats();
+        return;
+      }
+
+      // Cmd+W (Mac) or Ctrl+W (non-Mac): Prevent window close
+      if (event.key === "w" && isModifierPressed) {
+        event.preventDefault(); // Prevent window close
+        event.stopPropagation();
+        return;
+      }
+
       // Cmd+F (Mac) or Ctrl+F (non-Mac): Toggle fullscreen
       if ((event.key === "f" || event.key === "F") && isModifierPressed) {
         event.preventDefault();
@@ -137,5 +154,5 @@ export function useGlobalNavigationShortcuts(
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [onNavigateActivities, onNavigateTimer]);
+  }, [onNavigateActivities, onNavigateTimer, onNavigateStats]);
 }

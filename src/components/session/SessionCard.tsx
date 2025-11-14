@@ -1,35 +1,14 @@
+import { forwardRef } from "react";
 import { SessionSummary } from "@/types/timer";
 import { Segment } from "@/types/segment";
 import { getAppColor } from "@/constants/appColors";
-
-// Apple logo SVG component
-function AppleLogo({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
-    </svg>
-  );
-}
-
-// Check if app should show Apple logo
-function shouldShowAppleLogo(bundleId: string, appName: string | null): boolean {
-  return (
-    bundleId === "com.apple.system" ||
-    appName === "System UI" ||
-    appName === "Login Window" ||
-    bundleId.toLowerCase().includes("loginwindow")
-  );
-}
+import { AppleLogo, shouldShowAppleLogo } from "@/utils/appUtils";
 
 interface SessionCardProps {
   session: SessionSummary;
   segments?: Segment[];
   onClick: (session: SessionSummary) => void;
+  isSelected?: boolean;
 }
 
 function formatDuration(seconds: number): string {
@@ -69,30 +48,34 @@ function getStatusBadge(status: string): { text: string; className: string } {
     case "completed":
       return {
         text: "Completed",
-        className: "bg-green-100 text-green-800 border-green-500 rounded",
+        className: "bg-green-100 text-green-800 border-green-500",
       };
     case "interrupted":
       return {
         text: "Interrupted",
-        className: "bg-amber-100 text-amber-800 border-amber-300 rounded",
+        className: "bg-amber-100 text-amber-800 border-amber-300",
       };
     default:
       return {
         text: status,
-        className: "bg-gray-100 text-gray-800 border-gray-300 rounded",
+        className: "bg-gray-100 text-gray-800 border-gray-300",
       };
   }
 }
 
-export function SessionCard({ session, segments, onClick }: SessionCardProps) {
-  const totalDurationSecs = Math.floor(session.activeMs / 1000);
-  const statusBadge = getStatusBadge(session.status);
+export const SessionCard = forwardRef<HTMLButtonElement, SessionCardProps>(
+  ({ session, segments, onClick, isSelected = false }, ref) => {
+    const totalDurationSecs = Math.floor(session.activeMs / 1000);
+    const statusBadge = getStatusBadge(session.status);
 
-  return (
-    <button
-      onClick={() => onClick(session)}
-      className="w-full border border-gray-300 rounded-lg p-4 flex flex-col gap-4 hover:bg-gray-50 cursor-pointer transition-colors text-left relative"
-    >
+    return (
+      <button
+        ref={ref}
+        onClick={() => onClick(session)}
+        className={`w-full border p-4 flex flex-col gap-4 hover:bg-gray-50 cursor-pointer transition-colors text-left relative ${
+          isSelected ? "bg-gray-100 border-gray-500" : "border-gray-300"
+        }`}
+      >
       {/* Duration on top left */}
       <span className="text-2xl font-semibold tabular-nums">
         {formatDuration(totalDurationSecs)}
@@ -120,24 +103,15 @@ export function SessionCard({ session, segments, onClick }: SessionCardProps) {
             );
             if (totalDuration === 0) return null;
             
-            return segments.map((segment, index) => {
+            return segments.map((segment) => {
               const backgroundColor = getAppColor(segment.bundleId, {
                 iconColor: segment.iconColor,
                 confidence: segment.confidence,
               });
-              const isFirst = index === 0;
-              const isLast = index === segments.length - 1;
-              const roundedClass = isFirst && isLast 
-                ? "rounded" 
-                : isFirst 
-                ? "rounded-l" 
-                : isLast 
-                ? "rounded-r" 
-                : "";
               return (
                 <div
                   key={segment.id}
-                  className={`flex-shrink-0 ${roundedClass}`}
+                  className="flex-shrink-0"
                   style={{
                     flexGrow: segment.durationSecs,
                     flexBasis: 0,
@@ -153,22 +127,13 @@ export function SessionCard({ session, segments, onClick }: SessionCardProps) {
         </div>
       ) : session.topApps && session.topApps.length > 0 ? (
         <div className="flex h-8 w-full overflow-hidden">
-          {session.topApps.map((app, index) => {
+          {session.topApps.map((app) => {
             const iconColor = session.appColors[app.bundleId];
             const backgroundColor = getAppColor(app.bundleId, { iconColor });
-            const isFirst = index === 0;
-            const isLast = index === session.topApps.length - 1;
-            const roundedClass = isFirst && isLast 
-              ? "rounded" 
-              : isFirst 
-              ? "rounded-l" 
-              : isLast 
-              ? "rounded-r" 
-              : "";
             return (
               <div
                 key={app.bundleId}
-                className={`flex-shrink-0 ${roundedClass}`}
+                className="flex-shrink-0"
                 style={{
                   flexGrow: app.durationSecs,
                   flexBasis: 0,
@@ -224,6 +189,9 @@ export function SessionCard({ session, segments, onClick }: SessionCardProps) {
           No apps tracked
         </div>
       )}
-    </button>
-  );
-}
+      </button>
+    );
+  }
+);
+
+SessionCard.displayName = "SessionCard";

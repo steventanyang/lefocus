@@ -91,7 +91,7 @@ export function TimerDisplay({
         onKeyDown={handleKeyDown}
         onClick={handleClick}
         onBlur={handleBlur}
-        className="text-[6rem] font-semibold leading-none text-center tracking-tight tabular-nums cursor-text outline-none focus:outline-none"
+        className="text-[6rem] font-semibold leading-none text-center tracking-tight tabular-nums cursor-text outline-none focus:outline-none text-black"
       >
         <TimerDisplayRenderer timeStr={timeStr} editableValueForColon={editableValue} />
       </div>
@@ -104,7 +104,7 @@ export function TimerDisplay({
   // - Hide leading zero in minutes when >= 1 minute (e.g., "2:46" instead of "02:46")
   const hideLeadingZeros = isRunning;
   return (
-    <div className="text-[6rem] font-semibold leading-none text-center tracking-tight tabular-nums">
+    <div className="text-[6rem] font-semibold leading-none text-center tracking-tight tabular-nums text-black">
       <TimerDisplayRenderer timeStr={timeStr} hideLeadingZerosWhenRunning={hideLeadingZeros} />
     </div>
   );

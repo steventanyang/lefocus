@@ -17,18 +17,13 @@ export function TimerControls({
   onCancel,
   startDisabled = false,
 }: TimerControlsProps) {
-  const buttonClass = "bg-transparent border border-black text-black px-8 py-3.5 text-base font-normal cursor-pointer transition-all duration-200 min-w-[120px] hover:bg-black hover:text-white disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-black";
+  const buttonClass = "bg-transparent border border-black text-black px-8 py-3.5 text-base font-normal cursor-pointer transition-all duration-200 min-w-[120px] hover:bg-gray-300 hover:text-black disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-black";
   const primaryClass = `${buttonClass} font-semibold`;
   const secondaryClass = `${buttonClass} font-light`;
 
   if (status === "idle") {
-    return (
-      <div className="flex gap-4 justify-center">
-        <button onClick={onStart} disabled={startDisabled} className={primaryClass}>
-          Start
-        </button>
-      </div>
-    );
+    // Start button is rendered separately in TimerView (bottom right)
+    return null;
   }
 
   if (status === "running") {

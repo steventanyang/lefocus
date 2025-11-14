@@ -23,8 +23,8 @@ export function ModeSelector({ selectedMode, onSelect }: ModeSelectorProps) {
               onClick={() => onSelect(mode.value)}
               className={
                 isSelected
-                  ? "bg-black border border-black text-white px-6 py-3 text-base font-semibold cursor-pointer transition-all duration-200"
-                  : "bg-transparent border border-black text-black px-6 py-3 text-base font-normal cursor-pointer transition-all duration-200 hover:bg-black hover:text-white"
+                  ? "bg-gray-700 border border-gray-700 text-white px-6 py-3 text-base font-semibold cursor-pointer transition-all duration-200"
+                  : "bg-transparent border border-black text-black px-6 py-3 text-base font-normal cursor-pointer transition-all duration-200 hover:bg-gray-300 hover:text-black"
               }
             >
               {mode.label}
