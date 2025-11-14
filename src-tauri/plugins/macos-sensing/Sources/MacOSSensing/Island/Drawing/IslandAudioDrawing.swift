@@ -20,7 +20,7 @@ extension IslandView {
         let baseAlpha: CGFloat = isAudioPlaying ? 0.95 : 0.9
 
         let artworkRect = expandedArtworkRect()
-        drawArtworkImage(track.artwork, in: artworkRect, cornerRadius: 12.0, emphasize: true)
+        drawArtworkImage(track.artwork, in: artworkRect, cornerRadius: 6.0, emphasize: true)
 
         // Left-aligned layout: title and artist stacked next to artwork
         let title = track.title.isEmpty ? "Unknown" : track.title
@@ -46,10 +46,11 @@ extension IslandView {
             maxContentWidth = max(120.0, bounds.width * 0.5 - textStartX)
         }
 
-        let lineSpacing: CGFloat = 4.0
+        let lineSpacing: CGFloat = 2.0
         let titleHeight = titleFont.ascender - titleFont.descender
         let artistHeight = artistFont.ascender - artistFont.descender
-        let blockTop = bounds.height - 40.0
+        // Position metadata block lower to avoid notch (around 50px from top)
+        let blockTop = bounds.height - 50.0
 
         let titleRect = NSRect(
             x: textStartX,
@@ -63,9 +64,11 @@ extension IslandView {
             attributes: titleAttrs
         )
 
+        // Artist positioning: always use consistent spacing below title
+        let artistY = blockTop - titleHeight - lineSpacing - artistHeight
         let artistRect = NSRect(
             x: textStartX,
-            y: blockTop - titleHeight - lineSpacing - artistHeight,
+            y: artistY,
             width: maxContentWidth,
             height: artistHeight
         )
@@ -127,10 +130,11 @@ extension IslandView {
         let spacing: CGFloat = 3.0
         let pillWidth = (totalWidth - spacing * 3.0) / 4.0
         let pillHeight: CGFloat = 12.0
-        let baseY: CGFloat = expandedArtworkRect().maxY + 8.0
-
-        // Always position waveform just above text block (to the right of artwork)
-        let startX: CGFloat = expandedArtworkRect().maxX + 12.0
+        
+        // Position waveform at top left (around 28px from top) - stays fixed regardless of title/artist position
+        let waveformCenterY = bounds.height - 28.0
+        // Position waveform left edge aligned with album cover left edge (28px from left)
+        let startX: CGFloat = 28.0
 
         for (index, value) in waveformBars.enumerated() {
             let height: CGFloat
@@ -145,7 +149,7 @@ extension IslandView {
 
             let rect = NSRect(
                 x: startX + CGFloat(index) * (pillWidth + spacing),
-                y: baseY - height / 2.0,
+                y: waveformCenterY - height / 2.0,
                 width: pillWidth,
                 height: height
             )
@@ -216,16 +220,21 @@ extension IslandView {
 
         let buttonSize = CGSize(width: 42.0, height: 42.0)
         let spacing: CGFloat = 18.0
-        let bottomY: CGFloat = bounds.height - 90.0
-
+        
         // Position based on timer state
+        let bottomY: CGFloat
         let startX: CGFloat
         let buttonsWidth = buttonSize.width * 3.0 + spacing * 2.0
         let leftAlignment = expandedArtworkRect().minX
         if isIdle {
-            // No timer: center the playback buttons
+            // No timer: center the playback buttons horizontally, position them lower
+            // Place them in the lower portion of the expanded view (around 10px from bottom)
+            bottomY = 10.0
             startX = (bounds.width - buttonsWidth) / 2.0
         } else {
+            // Timer running: align playback buttons under metadata, lower in the view
+            // Position them around 10px from bottom to match idle state
+            bottomY = 10.0
             startX = leftAlignment
         }
 
@@ -253,7 +262,25 @@ extension IslandView {
 
     private func expandedArtworkRect() -> NSRect {
         let size = AudioArtworkLayout.expandedSize
-        return NSRect(x: 28.0, y: bounds.height - size - 28.0, width: size, height: size)
+        // Align artwork center with title/artist block center (which is at blockTop = bounds.height - 50.0)
+        let blockTop = bounds.height - 50.0
+        let titleFont = NSFont.systemFont(ofSize: 14, weight: .semibold)
+        let titleHeight = titleFont.ascender - titleFont.descender
+        let artistFont = NSFont.systemFont(ofSize: 12, weight: .regular)
+        let artistHeight = artistFont.ascender - artistFont.descender
+        let lineSpacing: CGFloat = 2.0
+        // Calculate gap between title and artist
+        // Title bottom is at blockTop - titleHeight
+        // Artist top is at blockTop - titleHeight - lineSpacing
+        // Gap center is halfway between them
+        let titleBottom = blockTop - titleHeight
+        let artistTop = titleBottom - lineSpacing
+        let gapCenter = (titleBottom + artistTop) / 2.0
+        // Center artwork vertically with the gap between title and artist
+        let artworkCenterY = gapCenter
+        let yPosition = artworkCenterY - size / 2.0
+        let xPosition: CGFloat = 28.0
+        return NSRect(x: xPosition, y: yPosition, width: size, height: size)
     }
 
     func drawArtworkImage(_ image: NSImage?, in rect: NSRect, cornerRadius: CGFloat, emphasize: Bool) {

@@ -348,6 +348,7 @@ final class IslandView: NSView {
             width: size,
             height: size
         )
-        drawArtworkImage(track.artwork, in: rect, cornerRadius: size / 2.0, emphasize: false)
+        // Use rounded corners (3px) instead of circle (size/2) for square shape
+        drawArtworkImage(track.artwork, in: rect, cornerRadius: 3.0, emphasize: false)
     }
 }

@@ -10,6 +10,12 @@ struct IslandWindowConfiguration {
     let expandedSize: NSSize
     let hoverDelta: NSSize
     let expandedVerticalOffset: CGFloat
+    
+    // Widths for different states
+    let compactIdleWidth: CGFloat      // No timer
+    let compactTimerWidth: CGFloat     // Timer active
+    let expandedIdleWidth: CGFloat     // No timer
+    let expandedTimerWidth: CGFloat    // Timer active
 }
 
 /// Owns the NSPanel hierarchy and handles screen observation + sizing animations.
@@ -29,6 +35,7 @@ final class IslandWindowManager {
 
     private var isExpanded: Bool = false
     private var isHovering: Bool = false
+    private var isTimerIdle: Bool = true
 
     init(configuration: IslandWindowConfiguration) {
         self.configuration = configuration
@@ -140,6 +147,13 @@ final class IslandWindowManager {
         self.isHovering = isHovering
         updateIslandWindowSize(animated: animated, duration: isExpanded ? 0.25 : 0.15)
     }
+    
+    func updateTimerState(isIdle: Bool, animated: Bool = true) {
+        guard isTimerIdle != isIdle else { return }
+        isTimerIdle = isIdle
+        // Update window size for both compact and expanded states
+        updateIslandWindowSize(animated: animated, duration: isExpanded ? 0.25 : 0.15)
+    }
 
     func repositionForCurrentScreen() {
         guard let panel = parentWindow else { return }
@@ -174,15 +188,22 @@ final class IslandWindowManager {
 
     private func currentIslandSize() -> NSSize {
         if isExpanded {
-            return configuration.expandedSize
+            // Use configured widths based on timer state
+            let expandedWidth: CGFloat = isTimerIdle ? configuration.expandedIdleWidth : configuration.expandedTimerWidth
+            return NSSize(width: expandedWidth, height: configuration.expandedSize.height)
         }
+        
+        // Use configured widths based on timer state
+        let baseWidth: CGFloat = isTimerIdle ? configuration.compactIdleWidth : configuration.compactTimerWidth
+        let baseHeight = configuration.compactSize.height
+        
         if isHovering {
             return NSSize(
-                width: configuration.compactSize.width + configuration.hoverDelta.width,
-                height: configuration.compactSize.height + configuration.hoverDelta.height
+                width: baseWidth + configuration.hoverDelta.width,
+                height: baseHeight + configuration.hoverDelta.height
             )
         }
-        return configuration.compactSize
+        return NSSize(width: baseWidth, height: baseHeight)
     }
 
     private func islandFrame(for screen: NSScreen, size: NSSize) -> NSRect {

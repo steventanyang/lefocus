@@ -42,8 +42,8 @@ extension IslandView {
         guard !isIdle else { return }
         let timeString = formatTime(ms: displayMs)
 
-        // Smaller font for better fit (28pt instead of 36pt)
-        guard let timerFont = IslandView.monospacedFont(size: 24, weight: .semibold) else {
+        // Larger font for expanded view with timer
+        guard let timerFont = IslandView.monospacedFont(size: 28, weight: .semibold) else {
             return
         }
 
@@ -122,10 +122,11 @@ extension IslandView {
         }
 
         // Timer control buttons centered below the timer in the right section
+        // Align bottom edge with audio controls (which are at 10px from bottom)
         let buttonWidth: CGFloat = 64.0
         let buttonHeight: CGFloat = 26.0
         let spacing: CGFloat = 10.0
-        let bottomY: CGFloat = 24.0
+        let bottomY: CGFloat = 18.0
 
         // Calculate right section center (same as timer positioning)
         // Mirror left section: starts at 50% + 16px, ends at right edge - 16px
