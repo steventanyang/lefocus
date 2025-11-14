@@ -20,4 +20,6 @@ pub struct ContextReading {
     pub ocr_text: Option<String>,
     pub ocr_confidence: Option<f64>,
     pub ocr_word_count: Option<u64>,
+    /// Segment ID that this reading belongs to (set after segmentation)
+    pub segment_id: Option<String>,
 }

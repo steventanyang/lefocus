@@ -3,6 +3,7 @@ import Foundation
 public enum IslandMode: String {
     case countdown
     case stopwatch
+    case `break`
 }
 
 public struct IslandStartPayload {

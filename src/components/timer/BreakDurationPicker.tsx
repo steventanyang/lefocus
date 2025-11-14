@@ -1,20 +1,19 @@
-interface DurationPickerProps {
+interface BreakDurationPickerProps {
   onSelect: (durationMs: number) => void;
   selectedDuration: number | null;
 }
 
-const PRESETS = [
+const BREAK_PRESETS = [
   { label: "30 sec", ms: 30 * 1000 },
-  { label: "1 min", ms: 1 * 60 * 1000 },
+  { label: "5 min", ms: 5 * 60 * 1000 },
+  { label: "10 min", ms: 10 * 60 * 1000 },
   { label: "15 min", ms: 15 * 60 * 1000 },
-  { label: "25 min", ms: 25 * 60 * 1000 },
-  { label: "45 min", ms: 45 * 60 * 1000 },
 ];
 
-export function DurationPicker({ onSelect, selectedDuration }: DurationPickerProps) {
+export function BreakDurationPicker({ onSelect, selectedDuration }: BreakDurationPickerProps) {
   return (
     <div className="flex gap-4 justify-center">
-      {PRESETS.map((preset) => {
+      {BREAK_PRESETS.map((preset) => {
         // Compare with small tolerance to handle any rounding differences
         const isSelected = selectedDuration !== null && Math.abs(selectedDuration - preset.ms) < 100;
         return (
@@ -34,3 +33,4 @@ export function DurationPicker({ onSelect, selectedDuration }: DurationPickerPro
     </div>
   );
 }
+

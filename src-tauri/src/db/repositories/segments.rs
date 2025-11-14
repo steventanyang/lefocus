@@ -33,6 +33,7 @@ fn row_to_segment(row: &Row) -> Result<Segment, rusqlite::Error> {
         unique_phash_count: row.get("unique_phash_count")?,
         segment_summary: row.get("segment_summary")?,
         icon_data_url: row.get("icon_data_url").ok(),
+        icon_color: row.get("icon_color").ok(),
     })
 }
 
@@ -57,19 +58,42 @@ fn spawn_icon_fetch_task(db: Database, bundle_ids: HashSet<String>) {
         return;
     }
 
+    // Filter out synthetic bundle IDs that we know won't have icons
+    let bundle_ids_to_fetch: Vec<String> = bundle_ids
+        .into_iter()
+        .filter(|bid| {
+            // Skip synthetic system bundle ID
+            if bid == "com.apple.system" {
+                log::debug!("Skipping icon fetch for synthetic bundle ID: {}", bid);
+                false
+            } else {
+                true
+            }
+        })
+        .collect();
+
+    if bundle_ids_to_fetch.is_empty() {
+        return;
+    }
+
     log::info!(
-        "Fetching icons for {} apps in background",
-        bundle_ids.len()
+        "Fetching icons for {} apps at session end (apps that weren't pre-fetched during session)",
+        bundle_ids_to_fetch.len()
     );
 
     tokio::spawn(async move {
-        for bundle_id in bundle_ids {
-            match crate::macos_bridge::get_app_icon_data(&bundle_id) {
-                Some(icon_data_url) => {
-                    if let Err(e) = db.update_app_icon(&bundle_id, &icon_data_url).await {
+        for bundle_id in bundle_ids_to_fetch {
+            match crate::macos_bridge::get_app_icon_and_color(&bundle_id) {
+                Some((icon_data_url, icon_color)) => {
+                    let color_opt = if icon_color.is_empty() {
+                        None
+                    } else {
+                        Some(icon_color.as_str())
+                    };
+                    if let Err(e) = db.update_app_icon(&bundle_id, &icon_data_url, color_opt).await {
                         log::warn!("Failed to store icon for {}: {}", bundle_id, e);
                     } else {
-                        log::debug!("Stored icon for {}", bundle_id);
+                        log::debug!("Stored icon and color for {}", bundle_id);
                     }
                 }
                 None => {
@@ -224,7 +248,8 @@ impl Database {
                     segments.reading_count,
                     segments.unique_phash_count,
                     segments.segment_summary,
-                    apps.icon_data_url
+                    apps.icon_data_url,
+                    apps.icon_color
                 FROM segments
                 LEFT JOIN apps ON segments.bundle_id = apps.bundle_id
                 WHERE segments.session_id = ?1

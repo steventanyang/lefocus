@@ -1,6 +1,7 @@
 import { Segment } from "@/types/segment";
-import { useInterruptions } from "@/hooks/queries";
+import { useInterruptions, useWindowTitles } from "@/hooks/queries";
 import { getAppColor } from "@/constants/appColors";
+import { useState } from "react";
 
 interface SegmentDetailsModalProps {
   segment: Segment;
@@ -32,8 +33,15 @@ export function SegmentDetailsModal({
   const { data: interruptions = [], isLoading: interruptionsLoading } = useInterruptions(
     segment.id
   );
+  const { data: windowTitles = [], isLoading: windowTitlesLoading } = useWindowTitles(
+    segment.id
+  );
+  const [showAllTitles, setShowAllTitles] = useState(false);
 
   const buttonPrimaryClass = "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-black hover:text-white";
+  
+  // Check if there are multiple unique window titles
+  const hasMultipleTitles = windowTitles.length > 1;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[1000] p-8" onClick={onClose}>
@@ -55,7 +63,7 @@ export function SegmentDetailsModal({
               <div className="flex items-center gap-2">
                 <span
                   className="w-3 h-3 border border-black flex-shrink-0"
-                  style={{ backgroundColor: getAppColor(segment.bundleId, segment.confidence) }}
+                  style={{ backgroundColor: getAppColor(segment.bundleId, { iconColor: segment.iconColor, confidence: segment.confidence }) }}
                 />
                 <span className="text-sm font-normal text-right max-w-[60%] break-words">
                   {segment.appName || segment.bundleId}
@@ -69,6 +77,42 @@ export function SegmentDetailsModal({
                 <span className="text-sm font-normal text-right max-w-[60%] break-words">
                   {segment.windowTitle}
                 </span>
+              </div>
+            )}
+
+            {hasMultipleTitles && (
+              <div className="flex flex-col gap-2 py-2 border-b border-gray-200">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-light">
+                    All Window Titles ({windowTitles.length})
+                  </span>
+                  <button
+                    className="text-xs font-light underline cursor-pointer hover:no-underline"
+                    onClick={() => setShowAllTitles(!showAllTitles)}
+                  >
+                    {showAllTitles ? "Hide" : "Show all"}
+                  </button>
+                </div>
+                {showAllTitles && (
+                  <div className="flex flex-col gap-1 mt-2">
+                    {windowTitlesLoading ? (
+                      <span className="text-xs font-light text-gray-500">Loading...</span>
+                    ) : (
+                      windowTitles.map((title, index) => (
+                        <span
+                          key={index}
+                          className={`text-xs font-normal break-words ${
+                            title === segment.windowTitle
+                              ? "font-semibold"
+                              : "text-gray-600"
+                          }`}
+                        >
+                          {title}
+                        </span>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -151,7 +195,7 @@ export function SegmentDetailsModal({
                       <div className="flex items-center gap-2 flex-1">
                         <span
                           className="w-2 h-2 border border-black flex-shrink-0"
-                          style={{ backgroundColor: getAppColor(interruption.bundleId) }}
+                          style={{ backgroundColor: getAppColor(interruption.bundleId, {}) }}
                         />
                         <span className="text-sm font-normal">
                           {interruption.appName || interruption.bundleId}

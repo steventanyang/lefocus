@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { useSessionsList, useSegmentsForSessions } from "@/hooks/queries";
-import { useNavigationShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { SessionCard } from "@/components/session/SessionCard";
 import { SessionResults } from "@/components/session/SessionResults";
+import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import type { SessionSummary } from "@/types/timer";
 
 interface ActivitiesViewProps {
@@ -18,9 +18,6 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
   // Fetch segments for all sessions in parallel with automatic caching and deduplication
   const { segmentsBySession } = useSegmentsForSessions(sessions);
 
-  // Set up keyboard shortcuts
-  useNavigationShortcuts(() => onNavigate("timer"));
-
   const buttonPrimaryClass =
     "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-black hover:text-white";
 
@@ -31,7 +28,7 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
         sessionId={selectedSession.id}
         session={selectedSession}
         onBack={() => setSelectedSession(null)}
-        backButtonText="Back to Activities"
+        backButtonText="View Activities"
       />
     );
   }
@@ -42,10 +39,11 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-light tracking-wide">Activities</h1>
         <button
-          className="text-sm font-light border border-black px-3 py-1 hover:bg-black hover:text-white transition-colors"
+          className="text-base font-light hover:opacity-70 transition-opacity flex items-center gap-2"
           onClick={() => onNavigate("timer")}
         >
-          ← Back to Timer
+          <KeyboardShortcut keyLetter="t" />
+          <span>View Timer</span>
         </button>
       </div>
 

@@ -1,34 +1,12 @@
 import { useEffect } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { isUserTyping, isMac } from "@/utils/keyboardUtils";
 
 interface UseKeyboardShortcutsOptions {
   onStart: () => void;
-  onNavigateActivities: () => void;
-  onSwitchMode: (mode: "countdown" | "stopwatch") => void;
+  onSwitchMode: (mode: "countdown" | "stopwatch" | "break") => void;
   isIdle: boolean;
   startDisabled: boolean;
-}
-
-/**
- * Check if user is currently typing in an input field
- */
-function isUserTyping(): boolean {
-  const activeElement = document.activeElement;
-  if (!activeElement) return false;
-
-  const tagName = activeElement.tagName.toLowerCase();
-  const isInput = tagName === "input";
-  const isTextarea = tagName === "textarea";
-  const isContentEditable =
-    activeElement.getAttribute("contenteditable") === "true";
-
-  return isInput || isTextarea || isContentEditable;
-}
-
-/**
- * Check if running on Mac (for Cmd vs Ctrl)
- */
-function isMac(): boolean {
-  return navigator.platform.toUpperCase().indexOf("MAC") >= 0;
 }
 
 /**
@@ -36,13 +14,15 @@ function isMac(): boolean {
  *
  * Shortcuts:
  * - Enter: Start timer (only when idle and not disabled)
- * - Cmd+A (Mac) / Ctrl+A (non-Mac): Navigate to activities
  * - S: Switch to stopwatch mode (only when idle)
  * - T: Switch to timer/countdown mode (only when idle)
+ * - B: Switch to break mode (only when idle)
+ * - Cmd+B: Switch to break mode (only when idle)
+ * 
+ * Note: Cmd+A and Cmd+T are handled globally via useGlobalNavigationShortcuts
  */
 export function useKeyboardShortcuts({
   onStart,
-  onNavigateActivities,
   onSwitchMode,
   isIdle,
   startDisabled,
@@ -63,13 +43,6 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      // Cmd+A (Mac) or Ctrl+A (non-Mac): Navigate to activities
-      if (event.key === "a" && isModifierPressed) {
-        event.preventDefault(); // Prevent browser "Select All"
-        onNavigateActivities();
-        return;
-      }
-
       // S: Switch to stopwatch mode (only when idle)
       if (event.key === "s" && isIdle && !isModifierPressed) {
         event.preventDefault();
@@ -77,10 +50,25 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      // T: Switch to timer/countdown mode (only when idle)
+      // T: Switch to timer/countdown mode (only when idle, without modifier)
+      // Note: Cmd+T is handled globally for navigation
       if (event.key === "t" && isIdle && !isModifierPressed) {
         event.preventDefault();
         onSwitchMode("countdown");
+        return;
+      }
+
+      // B: Switch to break mode (only when idle, without modifier)
+      if (event.key === "b" && isIdle && !isModifierPressed) {
+        event.preventDefault();
+        onSwitchMode("break");
+        return;
+      }
+
+      // Cmd+B (Mac) or Ctrl+B (non-Mac): Switch to break mode (only when idle)
+      if (event.key === "b" && isIdle && isModifierPressed) {
+        event.preventDefault();
+        onSwitchMode("break");
         return;
       }
     };
@@ -90,18 +78,23 @@ export function useKeyboardShortcuts({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onStart, onNavigateActivities, onSwitchMode, isIdle, startDisabled]);
+  }, [onStart, onSwitchMode, isIdle, startDisabled]);
 }
 
 /**
- * Simple hook for navigation shortcuts (used in ActivitiesView)
+ * Global navigation shortcuts hook (works from anywhere in the app)
  *
  * Shortcuts:
+ * - Cmd+A (Mac) / Ctrl+A (non-Mac): Navigate to activities
  * - Cmd+T (Mac) / Ctrl+T (non-Mac): Navigate to timer
+ * - Cmd+F (Mac) / Ctrl+F (non-Mac): Toggle fullscreen
  */
-export function useNavigationShortcuts(onNavigateTimer: () => void): void {
+export function useGlobalNavigationShortcuts(
+  onNavigateActivities: () => void,
+  onNavigateTimer: () => void
+): void {
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = async (event: KeyboardEvent) => {
       // Ignore shortcuts when user is typing
       if (isUserTyping()) {
         return;
@@ -109,18 +102,40 @@ export function useNavigationShortcuts(onNavigateTimer: () => void): void {
 
       const isModifierPressed = isMac() ? event.metaKey : event.ctrlKey;
 
+      // Cmd+A (Mac) or Ctrl+A (non-Mac): Navigate to activities
+      if (event.key === "a" && isModifierPressed) {
+        event.preventDefault(); // Prevent browser "Select All"
+        onNavigateActivities();
+        return;
+      }
+
       // Cmd+T (Mac) or Ctrl+T (non-Mac): Navigate to timer
       if (event.key === "t" && isModifierPressed) {
         event.preventDefault(); // Prevent browser "New Tab"
         onNavigateTimer();
         return;
       }
+
+      // Cmd+F (Mac) or Ctrl+F (non-Mac): Toggle fullscreen
+      if ((event.key === "f" || event.key === "F") && isModifierPressed) {
+        event.preventDefault();
+        event.stopPropagation();
+        try {
+          const window = getCurrentWindow();
+          const isFullscreen = await window.isFullscreen();
+          await window.setFullscreen(!isFullscreen);
+        } catch (err) {
+          console.error("Failed to toggle fullscreen:", err);
+        }
+        return;
+      }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
+    // Use capture phase to ensure we catch the event before other handlers
+    window.addEventListener("keydown", handleKeyDown, true);
 
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [onNavigateTimer]);
+  }, [onNavigateActivities, onNavigateTimer]);
 }

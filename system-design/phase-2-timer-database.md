@@ -35,6 +35,11 @@ This document provides detailed implementation specifications for **Phase 2** of
 7. [Frontend Components](#7-frontend-components)
 8. [Implementation Guide](#8-implementation-guide)
 9. [Testing & Acceptance Criteria](#9-testing--acceptance-criteria)
+10. [Open Questions & Decisions](#10-open-questions--decisions)
+11. [Dependencies](#11-dependencies)
+12. [Stopwatch Mode Extension](#12-stopwatch-mode-extension)
+13. [Break Timer Mode Extension](#13-break-timer-mode-extension)
+14. [File Checklist](#14-file-checklist)
 
 ---
 
@@ -1000,7 +1005,62 @@ Added dual-mode timer support: **Countdown** (original Pomodoro) and **Stopwatch
 
 ---
 
-## 13. File Checklist
+## 13. Break Timer Mode Extension
+
+### 13.1 Overview
+
+Added a third timer mode: **Break** - a lightweight countdown timer that doesn't persist sessions or track context. Designed for short breaks (5-15 minutes) without polluting the session history.
+
+### 13.2 Implementation Changes
+
+**Backend (Rust):**
+- Added `Break` variant to `TimerMode` enum
+- Modified `start_timer()` to skip DB insert and sensing start for Break mode
+- Modified `end_timer()` and `cancel_timer()` to skip DB updates for Break mode
+- Break mode uses same countdown logic as Countdown mode (counts down from target_ms to 0)
+- Auto-stops at 0 but requires manual "End" click to return to idle (no results modal)
+
+**Frontend (React):**
+- Added Break button in top-left navigation (KeyBox "B")
+- Created `BreakDurationPicker` component with 5/10/15 min presets
+- Added Cmd+B and B key handlers for break mode switching
+- Break mode shows only "Cancel" button when running (like countdown)
+- When break ends, returns directly to idle state (no SessionResults modal)
+
+**Dynamic Island (Swift):**
+- Added `.break` case to `IslandMode` enum
+- Added `drawBreakLabel()` function to display subtle "Break" text in top-right corner
+- Break label only visible in expanded view, aligned with waveform
+- Uses reduced opacity (0.25-0.3 alpha) for minimal visual prominence
+
+### 13.3 User Experience
+
+**Break Mode:**
+1. Press B or Cmd+B (or click Break button) to switch to break mode
+2. Select duration (5/10/15 min)
+3. Click "Start" → Timer counts down
+4. Auto-stops at 0:00 → Shows "End" button
+5. Click "End" → Returns to idle (no session saved, no results shown)
+6. "Cancel" available while running
+
+**Key Differences from Countdown:**
+- No database persistence (sessions not saved)
+- No context sensing (no app/window tracking)
+- No results modal on completion
+- Subtle "Break" label in Dynamic Island
+- Faster workflow for short breaks
+
+### 13.4 Technical Details
+
+**State Management:** Break mode uses the same `TimerState` structure and state machine as other modes, but handlers skip persistence operations.
+
+**Island Integration:** Break mode passes "break" mode string to `island_start()`, which displays the break label in expanded view only.
+
+**Event Handling:** Break mode emits `timer-state-changed` events normally, but skips `session-completed` event emission.
+
+---
+
+## 14. File Checklist
 
 **New Files to Create:**
 
@@ -1024,10 +1084,12 @@ src-tauri/src/
 
 src/
 ├── components/
-│   ├── TimerView.tsx       # Main timer component
-│   ├── TimerDisplay.tsx    # MM:SS display
-│   ├── TimerControls.tsx   # Buttons
-│   ├── DurationPicker.tsx  # Preset selector
+│   ├── timer/
+│   │   ├── TimerView.tsx       # Main timer component
+│   │   ├── TimerDisplay.tsx    # MM:SS display
+│   │   ├── TimerControls.tsx   # Buttons
+│   │   ├── DurationPicker.tsx  # Preset selector (countdown)
+│   │   └── BreakDurationPicker.tsx  # Break duration selector
 │   └── archived/
 │       ├── AudioView.tsx   # Move from components/
 │       └── TestView.tsx    # Move from components/
@@ -1066,6 +1128,6 @@ ORDER BY started_at DESC;
 
 **End of Phase 2 System Design**
 
-**Total sections:** 12
+**Total sections:** 13
 **Estimated implementation time:** 1-2 weeks
 **Ready for implementation:** ✅

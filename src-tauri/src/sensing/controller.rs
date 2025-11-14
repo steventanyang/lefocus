@@ -6,6 +6,7 @@ use tokio_util::sync::CancellationToken;
 use crate::db::Database;
 use crate::macos_bridge;
 
+use super::icon_manager::IconManager;
 use super::loop_worker::sensing_loop;
 
 pub struct SensingController {
@@ -31,10 +32,14 @@ impl SensingController {
         info!("Clearing macOS sensing cache before starting new session");
         macos_bridge::clear_cache();
 
+        // Create icon manager for pre-fetching icons during the session
+        let icon_manager = IconManager::new(db.clone());
+        icon_manager.clear().await; // Clear any previous session's cache
+
         let cancel_token = CancellationToken::new();
         let token_clone = cancel_token.clone();
 
-        let handle = tokio::spawn(sensing_loop(session_id, db, token_clone));
+        let handle = tokio::spawn(sensing_loop(session_id, db, icon_manager, token_clone));
 
         self.handle = Some(handle);
         self.cancel_token = Some(cancel_token);

@@ -164,6 +164,7 @@ final class IslandView: NSView {
             drawTimerTextCompact()
             drawTimerControlButtonsIfNeeded()
             drawWaveformIfNeeded()
+            drawBreakLabel()
         } else {
             // Compact layout: timer and audio indicator
             drawTimerText()

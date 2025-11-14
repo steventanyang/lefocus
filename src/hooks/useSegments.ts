@@ -27,7 +27,7 @@ export function calculateSegmentStats(segments: Segment[]): SegmentStats {
   );
 
   // Group segments by app
-  const appDurations = new Map<string, { bundleId: string; appName: string | null; durationSecs: number; iconDataUrl?: string | null }>();
+  const appDurations = new Map<string, { bundleId: string; appName: string | null; durationSecs: number; iconDataUrl?: string | null; iconColor?: string | null }>();
 
   for (const segment of segments) {
     const existing = appDurations.get(segment.bundleId);
@@ -37,12 +37,17 @@ export function calculateSegmentStats(segments: Segment[]): SegmentStats {
       if (!existing.iconDataUrl && segment.iconDataUrl) {
         existing.iconDataUrl = segment.iconDataUrl;
       }
+      // Keep first non-null iconColor we encounter
+      if (!existing.iconColor && segment.iconColor) {
+        existing.iconColor = segment.iconColor;
+      }
     } else {
       appDurations.set(segment.bundleId, {
         bundleId: segment.bundleId,
         appName: segment.appName,
         durationSecs: segment.durationSecs,
         iconDataUrl: segment.iconDataUrl,
+        iconColor: segment.iconColor,
       });
     }
   }

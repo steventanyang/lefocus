@@ -1,5 +1,6 @@
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::ffi::{c_char, CStr, CString};
 use std::sync::OnceLock;
 use tauri::{AppHandle, Manager};
@@ -60,7 +61,8 @@ extern "C" {
     fn macos_sensing_set_timer_cancel_callback(callback: extern "C" fn());
 
     // App icon fetching
-    fn macos_sensing_swift_get_app_icon(bundle_id: *const c_char) -> *mut c_char;
+    // fn macos_sensing_swift_get_app_icon(bundle_id: *const c_char) -> *mut c_char; // Unused - replaced by get_app_icon_and_color
+    fn macos_sensing_swift_get_app_icon_and_color(bundle_id: *const c_char) -> *mut c_char;
     fn macos_sensing_swift_free_string(ptr: *mut c_char);
 }
 
@@ -300,22 +302,58 @@ pub fn setup_timer_callbacks() {
     }
 }
 
-/// Get app icon as base64-encoded PNG data URL
-/// Returns None if the app is not found or icon cannot be fetched
-pub fn get_app_icon_data(bundle_id: &str) -> Option<String> {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct IconAndColor {
+    icon: String,
+    color: String,
+}
+
+// Unused - replaced by get_app_icon_and_color() which also extracts dominant color
+// /// Get app icon as base64-encoded PNG data URL
+// /// Returns None if the app is not found or icon cannot be fetched
+// pub fn get_app_icon_data(bundle_id: &str) -> Option<String> {
+//     unsafe {
+//         let c_bundle_id = CString::new(bundle_id).ok()?;
+//         let ptr = macos_sensing_swift_get_app_icon(c_bundle_id.as_ptr());
+//
+//         if ptr.is_null() {
+//             return None;
+//         }
+//
+//         let c_str = CStr::from_ptr(ptr);
+//         let result = c_str.to_str().ok().map(String::from);
+//
+//         macos_sensing_swift_free_string(ptr);
+//
+//         result
+//     }
+// }
+
+/// Get app icon and dominant color
+/// Returns tuple of (icon_data_url, icon_color) where color may be empty string if extraction failed
+pub fn get_app_icon_and_color(bundle_id: &str) -> Option<(String, String)> {
     unsafe {
         let c_bundle_id = CString::new(bundle_id).ok()?;
-        let ptr = macos_sensing_swift_get_app_icon(c_bundle_id.as_ptr());
+        let ptr = macos_sensing_swift_get_app_icon_and_color(c_bundle_id.as_ptr());
 
         if ptr.is_null() {
             return None;
         }
 
         let c_str = CStr::from_ptr(ptr);
-        let result = c_str.to_str().ok().map(String::from);
+        let json_str = c_str.to_str().ok()?;
+        
+        // Parse JSON response
+        let icon_and_color: IconAndColor = match serde_json::from_str(json_str) {
+            Ok(data) => data,
+            Err(_) => {
+                macos_sensing_swift_free_string(ptr);
+                return None;
+            }
+        };
 
         macos_sensing_swift_free_string(ptr);
 
-        result
+        Some((icon_and_color.icon, icon_and_color.color))
     }
 }
