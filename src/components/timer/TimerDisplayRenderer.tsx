@@ -16,15 +16,30 @@ export function TimerDisplayRenderer({
   editableValueForColon,
   hideLeadingZerosWhenRunning,
 }: TimerDisplayRendererProps) {
-  const [minutes, seconds] = timeStr.split(":");
+  // Check if format is HH:MM:SS (has 3 parts) or MM:SS (has 2 parts)
+  const parts = timeStr.split(":");
+  const isHoursFormat = parts.length === 3;
+  
+  let hours = "";
+  let minutes = "";
+  let seconds = "";
+  
+  if (isHoursFormat) {
+    [hours, minutes, seconds] = parts;
+  } else {
+    [minutes, seconds] = parts;
+  }
+  
   const minDigits = minutes.split("");
   const secDigits = seconds.split("");
+  const hourDigits = hours ? hours.split("") : [];
 
-  // When running and minutes are 00, hide the "00:" part and show only seconds
-  const shouldHideMinutes = hideLeadingZerosWhenRunning && minutes === "00";
+  // When running and minutes are 00, hide the "00:" part and show only seconds (only for MM:SS format)
+  const shouldHideMinutes = !isHoursFormat && hideLeadingZerosWhenRunning && minutes === "00";
   
   // When running and minutes are not 00, hide the leading zero in minutes (e.g., "2:46" instead of "02:46")
-  const shouldHideLeadingMinuteZero = hideLeadingZerosWhenRunning && minutes !== "00" && minDigits[0] === "0";
+  // Only applies to MM:SS format, not HH:MM:SS
+  const shouldHideLeadingMinuteZero = !isHoursFormat && hideLeadingZerosWhenRunning && minutes !== "00" && minDigits[0] === "0";
 
   // Only apply leading zero styling when editing (editableValueForColon is provided)
   // When running, all digits should be displayed at full opacity
@@ -39,6 +54,21 @@ export function TimerDisplayRenderer({
   // Colon should be grey until we have 3 numbers (editableValue >= 100) - only when editing
   // Use same opacity as leading zeros (opacity-20) to match the light grey color
   const colonGrey = editableValueForColon !== undefined && editableValueForColon < 100;
+
+  // Handle HH:MM:SS format
+  if (isHoursFormat) {
+    return (
+      <>
+        <span>{hours}</span>
+        <span>:</span>
+        <span>{minDigits[0]}</span>
+        <span>{minDigits[1]}</span>
+        <span>:</span>
+        <span>{secDigits[0]}</span>
+        <span>{secDigits[1]}</span>
+      </>
+    );
+  }
 
   if (shouldHideMinutes) {
     // Show only seconds when running and minutes are 00

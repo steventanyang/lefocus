@@ -24,23 +24,46 @@ export function mmssToMs(mmss: number): number {
 }
 
 /**
- * Format milliseconds as MM:SS string
+ * Format milliseconds as MM:SS or HH:MM:SS string
+ * - MM:SS format when < 60 minutes (3600 seconds)
+ * - HH:MM:SS format when >= 60 minutes
  * Example: 1500000ms -> "25:00"
+ * Example: 3600000ms -> "1:00:00"
  */
 export function formatTime(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  
+  // Switch to HH:MM:SS format when >= 60 minutes (3600 seconds)
+  if (totalSeconds >= 3600) {
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 /**
- * Format 4-digit MMSS number as MM:SS string
+ * Format 4-digit MMSS number as MM:SS or HH:MM:SS string
+ * - MM:SS format when < 60 minutes
+ * - HH:MM:SS format when >= 60 minutes
  * Example: 2500 -> "25:00"
+ * Example: 6000 -> "1:00:00" (60 minutes = 1 hour)
  */
 export function formatEditableTime(mmss: number): string {
   const minutes = Math.floor(mmss / 100);
   const seconds = mmss % 100;
+  
+  // Switch to HH:MM:SS format when >= 60 minutes
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return `${hours}:${String(remainingMinutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 

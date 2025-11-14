@@ -130,26 +130,28 @@ export function TimerView({ onNavigate }: TimerViewProps) {
       event.stopPropagation();
     }
     const fiveMinutesMs = 5 * 60 * 1000;
-    const maxDurationMs = 100 * 60 * 1000; // 100 minutes
+    // Maximum duration for countdown/break: 3 hours (3:00:00)
+    const maxDurationMs = 3 * 60 * 60 * 1000; // 10800000ms = 3 hours
     const adjustment = direction === "up" ? fiveMinutesMs : -fiveMinutesMs;
     
     if (selectedMode === "break") {
       let newDuration = (selectedBreakDuration || 0) + adjustment;
       if (newDuration < 0) {
         newDuration = 0;
-      } else if (newDuration >= maxDurationMs) {
-        newDuration = 0; // Wrap to 00:00 when hitting 100 minutes
+      } else if (newDuration > maxDurationMs) {
+        newDuration = 0; // Wrap to 00:00 when exceeding 3 hours
       }
       setSelectedBreakDuration(newDuration);
     } else if (selectedMode === "countdown") {
       let newDuration = (selectedDuration || 0) + adjustment;
       if (newDuration < 0) {
         newDuration = 0;
-      } else if (newDuration >= maxDurationMs) {
-        newDuration = 0; // Wrap to 00:00 when hitting 100 minutes
+      } else if (newDuration > maxDurationMs) {
+        newDuration = 0; // Wrap to 00:00 when exceeding 3 hours
       }
       setSelectedDuration(newDuration);
     }
+    // Stopwatch mode doesn't use adjustTime - it starts at 0 and can run up to 99:59:59
   }, [selectedMode, selectedDuration, selectedBreakDuration]);
 
   // Calculate displayed session during render (no effect needed)
@@ -282,24 +284,24 @@ export function TimerView({ onNavigate }: TimerViewProps) {
             <>
               <button
                 onClick={() => handleModeChange("countdown")}
-                className="text-base font-light text-gray-600 flex items-center gap-2 group"
+                className="text-base font-light text-gray-600 dark:text-stone-400 flex items-center gap-2 group"
               >
                 <KeyBox selected={selectedMode === "countdown"} hovered={false}>T</KeyBox>
-                <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Timer</span>
+                <span className="group-hover:text-black dark:group-hover:text-stone-50 transition-colors duration-200 group-hover:transition-none">Timer</span>
               </button>
               <button
                 onClick={() => handleModeChange("stopwatch")}
-                className="text-base font-light text-gray-600 flex items-center gap-2 group"
+                className="text-base font-light text-gray-600 dark:text-stone-400 flex items-center gap-2 group"
               >
                 <KeyBox selected={selectedMode === "stopwatch"} hovered={false}>S</KeyBox>
-                <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Stopwatch</span>
+                <span className="group-hover:text-black dark:group-hover:text-stone-50 transition-colors duration-200 group-hover:transition-none">Stopwatch</span>
               </button>
               <button
                 onClick={() => handleModeChange("break")}
-                className="text-base font-light text-gray-600 flex items-center gap-2 group"
+                className="text-base font-light text-gray-600 dark:text-stone-400 flex items-center gap-2 group"
               >
                 <KeyBox selected={selectedMode === "break"} hovered={false}>B</KeyBox>
-                <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Break</span>
+                <span className="group-hover:text-black dark:group-hover:text-stone-50 transition-colors duration-200 group-hover:transition-none">Break</span>
               </button>
             </>
           )}
