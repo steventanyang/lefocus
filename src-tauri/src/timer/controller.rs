@@ -285,6 +285,13 @@ impl TimerController {
                         // This prevents race conditions where segments might be deleted before interruptions are inserted
                         if let Err(e) = self.db.insert_segments_and_interruptions(&session_id, &segments, &interruptions).await {
                             error!("Failed to insert segments and interruptions: {}", e);
+                            error!("Segments count: {}, Interruptions count: {}", segments.len(), interruptions.len());
+                            if !segments.is_empty() {
+                                error!("Segment IDs: {:?}", segments.iter().map(|s| &s.id).collect::<Vec<_>>());
+                            }
+                            if !interruptions.is_empty() {
+                                error!("Interruption segment_ids: {:?}", interruptions.iter().map(|i| &i.segment_id).collect::<Vec<_>>());
+                            }
                         } else {
                             // Update context_readings with segment_ids
                             let segment_tuples: Vec<(String, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)> = segments

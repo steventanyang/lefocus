@@ -298,7 +298,26 @@ impl Database {
             }
 
             // Insert interruptions (now guaranteed to have valid segment_id references)
+            // First, collect all segment IDs to validate interruption references
+            let segment_ids: std::collections::HashSet<String> = segments.iter()
+                .map(|s| s.id.clone())
+                .collect();
+            
+            let mut skipped_count = 0;
             for interruption in &interruptions {
+                // Validate that the segment_id exists in the segments we're inserting
+                if !segment_ids.contains(&interruption.segment_id) {
+                    // Skip invalid interruption and log warning instead of failing entire transaction
+                    // TODO: remove after validation
+                    log::warn!(
+                        "Skipping interruption {} - references segment_id {} which does not exist in segments being inserted",
+                        interruption.id,
+                        interruption.segment_id
+                    );
+                    skipped_count += 1;
+                    continue;
+                }
+                
                 tx.execute(
                     "INSERT INTO interruptions (
                         id,
@@ -317,6 +336,10 @@ impl Database {
                         interruption.duration_secs,
                     ],
                 )?;
+            }
+            
+            if skipped_count > 0 {
+                log::warn!("Skipped {} invalid interruption(s) during insertion", skipped_count);
             }
 
             tx.commit()?;
