@@ -51,7 +51,7 @@ export function useSessionResultsKeyboard({
       }
 
       // Determine current navigation mode
-      const isOnTimeline = timelineSelectedIndex !== null;
+      const isOnTimeline = timelineSelectedIndex !== null && segments.length > 0;
       const isOnList = listHoverIndex !== null;
 
       // Timeline navigation (left/right)
@@ -129,10 +129,11 @@ export function useSessionResultsKeyboard({
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
+    // Use capture phase to ensure we catch events before other handlers (like TimerView)
+    window.addEventListener("keydown", handleKeyDown, true);
 
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown, true);
     };
   }, [
     segments,

@@ -96,9 +96,10 @@ export function useTimerKeyboard({
         return;
       }
 
-      // Don't interfere with mode switching shortcuts (T, S, B) or Space
+      // Don't interfere with mode switching shortcuts (T, S, B), Enter (start), or Space (end)
       const isModifierPressed = event.metaKey || event.ctrlKey;
       if (
+        event.key === "Enter" ||
         event.key === " " ||
         (event.key === "t" && !isModifierPressed) ||
         (event.key === "s" && !isModifierPressed) ||

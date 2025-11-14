@@ -7,18 +7,19 @@ import { KeyBox } from "@/components/ui/KeyBox";
 interface KeyboardShortcutProps {
   keyLetter: string;
   className?: string;
+  hovered?: boolean;
 }
 
-export function KeyboardShortcut({ keyLetter, className = "" }: KeyboardShortcutProps) {
+export function KeyboardShortcut({ keyLetter, className = "", hovered = false }: KeyboardShortcutProps) {
   const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
   const modifier = isMac ? "⌘" : "Ctrl";
   
   return (
     <span className={`inline-flex items-center gap-1 ${className}`}>
-      <KeyBox className="text-gray-400 font-medium">
+      <KeyBox hovered={hovered} className={isMac ? "cmd-icon" : ""}>
         {modifier}
       </KeyBox>
-      <KeyBox className="text-gray-400 font-medium">
+      <KeyBox hovered={hovered}>
         {keyLetter.toUpperCase()}
       </KeyBox>
     </span>

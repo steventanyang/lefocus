@@ -69,7 +69,7 @@ pub async fn get_interruptions_for_segment(
 pub async fn get_window_titles_for_segment(
     state: State<'_, AppState>,
     segment_id: String,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<(String, i64)>, String> {
     let db = &state.db;
     db.get_unique_window_titles_for_segment(&segment_id)
         .await

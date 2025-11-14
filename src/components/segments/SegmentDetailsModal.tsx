@@ -1,11 +1,18 @@
 import { Segment } from "@/types/segment";
 import { useInterruptions, useWindowTitles } from "@/hooks/queries";
 import { getAppColor } from "@/constants/appColors";
-import { useState } from "react";
+import { AppleLogo, shouldShowAppleLogo } from "@/utils/appUtils";
+import { KeyBox } from "@/components/ui/KeyBox";
+import { useEffect } from "react";
 
 interface SegmentDetailsModalProps {
   segment: Segment;
   onClose: () => void;
+}
+
+function formatTime(isoString: string): string {
+  const date = new Date(isoString);
+  return date.toLocaleTimeString();
 }
 
 function formatDuration(seconds: number): string {
@@ -14,16 +21,6 @@ function formatDuration(seconds: number): string {
   if (mins === 0) return `${secs}s`;
   if (secs === 0) return `${mins}m`;
   return `${mins}m ${secs}s`;
-}
-
-function formatTime(isoString: string): string {
-  const date = new Date(isoString);
-  return date.toLocaleTimeString();
-}
-
-function formatConfidence(value: number | null): string {
-  if (value === null) return "N/A";
-  return `${(value * 100).toFixed(0)}%`;
 }
 
 export function SegmentDetailsModal({
@@ -36,198 +33,227 @@ export function SegmentDetailsModal({
   const { data: windowTitles = [], isLoading: windowTitlesLoading } = useWindowTitles(
     segment.id
   );
-  const [showAllTitles, setShowAllTitles] = useState(false);
 
-  const buttonPrimaryClass = "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-gray-300 hover:text-black";
+  // Deduplicate interruptions by bundle_id - combine durations and keep first occurrence
+  const deduplicatedInterruptions = interruptions.reduce((acc, interruption) => {
+    const existing = acc.find((i) => i.bundleId === interruption.bundleId);
+    if (existing) {
+      // Combine durations and keep the first timestamp
+      existing.durationSecs += interruption.durationSecs;
+    } else {
+      acc.push({ ...interruption });
+    }
+    return acc;
+  }, [] as typeof interruptions);
+
+  // Handle ESC key to close modal
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        onClose();
+      }
+    };
+
+    // Use capture phase to catch the event before other handlers (like fullscreen)
+    document.addEventListener("keydown", handleEscape, true);
+    return () => {
+      document.removeEventListener("keydown", handleEscape, true);
+    };
+  }, [onClose]);
+
+  // Calculate total duration for percentage calculations
+  // Sum of window title durations + interruption durations should equal segment duration
+  const totalWindowTitleDuration = windowTitles.reduce((sum, wt) => sum + wt.durationSecs, 0);
+  const totalInterruptionDuration = deduplicatedInterruptions.reduce((sum, i) => sum + i.durationSecs, 0);
+  const totalDuration = totalWindowTitleDuration + totalInterruptionDuration;
   
-  // Check if there are multiple unique window titles
-  const hasMultipleTitles = windowTitles.length > 1;
+  // Calculate percentages for window titles
+  const windowTitlesWithPercentages = windowTitles.map((wt) => ({
+    ...wt,
+    percentage: totalDuration > 0 ? (wt.durationSecs / totalDuration) * 100 : 0,
+  }));
+
+  // Get app color for bars
+  const appColor = getAppColor(segment.bundleId, {
+    iconColor: segment.iconColor,
+    confidence: segment.confidence,
+  });
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[1000] p-8" onClick={onClose}>
-      <div className="bg-white border-2 border-black max-w-[600px] w-full max-h-[90vh] overflow-y-auto flex flex-col" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-center p-6 border-b border-black">
-          <h2 className="text-xl font-normal m-0">Segment Details</h2>
-          <button
-            className="bg-transparent border-none text-[2rem] leading-none cursor-pointer p-0 w-8 h-8 flex items-center justify-center transition-opacity duration-200 hover:opacity-70"
-            onClick={onClose}
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="p-6 flex flex-col gap-8">
-          <div className="flex flex-col gap-4">
-            <div className="flex justify-between items-baseline py-2 border-b border-gray-200">
-              <span className="text-sm font-light">Application</span>
-              <div className="flex items-center gap-2">
-                <span
-                  className="w-3 h-3 border border-black flex-shrink-0"
-                  style={{ backgroundColor: getAppColor(segment.bundleId, { iconColor: segment.iconColor, confidence: segment.confidence }) }}
-                />
-                <span className="text-sm font-normal text-right max-w-[60%] break-words">
-                  {segment.appName || segment.bundleId}
-                </span>
+    <div className="fixed inset-0 backdrop-blur-md flex items-center justify-center z-[1000] p-8" onClick={onClose}>
+      <div className="bg-white max-w-[600px] w-full max-h-[90vh] overflow-y-auto flex flex-col shadow-lg" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex justify-between items-start p-6">
+          <div className="flex items-start gap-4 flex-1 min-w-0">
+            {/* App Icon - bigger to match app name + time height */}
+            {shouldShowAppleLogo(segment.bundleId, segment.appName) ? (
+              <div className="w-14 h-14 flex-shrink-0 flex items-center justify-center text-gray-800">
+                <AppleLogo className="w-12 h-12" />
               </div>
-            </div>
-
-            {segment.windowTitle && (
-              <div className="flex justify-between items-baseline py-2 border-b border-gray-200">
-                <span className="text-sm font-light">Window Title</span>
-                <span className="text-sm font-normal text-right max-w-[60%] break-words">
-                  {segment.windowTitle}
-                </span>
-              </div>
+            ) : segment.iconDataUrl ? (
+              <img
+                src={segment.iconDataUrl}
+                alt={segment.appName || segment.bundleId}
+                className="w-14 h-14 flex-shrink-0"
+              />
+            ) : (
+              <div
+                className="w-14 h-14 border border-black flex-shrink-0"
+                style={{ backgroundColor: appColor }}
+              />
             )}
 
-            {hasMultipleTitles && (
-              <div className="flex flex-col gap-2 py-2 border-b border-gray-200">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-light">
-                    All Window Titles ({windowTitles.length})
-                  </span>
-                  <button
-                    className="text-xs font-light underline cursor-pointer hover:no-underline"
-                    onClick={() => setShowAllTitles(!showAllTitles)}
-                  >
-                    {showAllTitles ? "Hide" : "Show all"}
-                  </button>
-                </div>
-                {showAllTitles && (
-                  <div className="flex flex-col gap-1 mt-2">
-                    {windowTitlesLoading ? (
-                      <span className="text-xs font-light text-gray-500">Loading...</span>
-                    ) : (
-                      windowTitles.map((title, index) => (
-                        <span
-                          key={index}
-                          className={`text-xs font-normal break-words ${
-                            title === segment.windowTitle
-                              ? "font-semibold"
-                              : "text-gray-600"
-                          }`}
-                        >
-                          {title}
-                        </span>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="flex justify-between items-baseline py-2 border-b border-gray-200">
-              <span className="text-sm font-light">Duration</span>
-              <span className="text-sm font-normal text-right max-w-[60%] break-words">
+            {/* Total mins / App Name */}
+            <div className="flex flex-col gap-1 flex-1 min-w-0">
+              <span className="text-xl font-semibold break-words">
                 {formatDuration(segment.durationSecs)}
               </span>
-            </div>
-
-            <div className="flex justify-between items-baseline py-2 border-b border-gray-200">
-              <span className="text-sm font-light">Time Range</span>
-              <span className="text-sm font-normal text-right max-w-[60%] break-words">
-                {formatTime(segment.startTime)} – {formatTime(segment.endTime)}
-              </span>
-            </div>
-
-            <div className="flex justify-between items-baseline py-2 border-b border-gray-200">
-              <span className="text-sm font-light">Readings</span>
-              <span className="text-sm font-normal text-right max-w-[60%] break-words">
-                {segment.readingCount}
+              <span className="text-sm font-light text-gray-600 break-words">
+                {segment.appName || segment.bundleId}
               </span>
             </div>
           </div>
 
-          <div className="flex flex-col gap-4">
-            <h3 className="text-sm font-normal uppercase tracking-wide mb-2">
-              Confidence Breakdown
-            </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-light uppercase tracking-wide">Overall</span>
-                <span className="text-xl font-semibold tabular-nums">
-                  {formatConfidence(segment.confidence)}
-                </span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-light uppercase tracking-wide">Duration</span>
-                <span className="text-xl font-semibold tabular-nums">
-                  {formatConfidence(segment.durationScore)}
-                </span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-light uppercase tracking-wide">Stability</span>
-                <span className="text-xl font-semibold tabular-nums">
-                  {formatConfidence(segment.stabilityScore)}
-                </span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-light uppercase tracking-wide">Visual Clarity</span>
-                <span className="text-xl font-semibold tabular-nums">
-                  {formatConfidence(segment.visualClarityScore)}
-                </span>
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs font-light uppercase tracking-wide">OCR Quality</span>
-                <span className="text-xl font-semibold tabular-nums">
-                  {formatConfidence(segment.ocrQualityScore)}
-                </span>
-              </div>
-            </div>
+          {/* Close Button with ESC key box */}
+          <div className="flex items-center gap-2 ml-4">
+            <KeyBox className="w-12 h-6 py-1">esc</KeyBox>
+            <button
+              className="bg-transparent border-none text-base font-normal cursor-pointer p-0 transition-opacity duration-200 hover:opacity-70"
+              onClick={onClose}
+              aria-label="Close"
+            >
+              Close
+            </button>
           </div>
+        </div>
 
-          {interruptions.length > 0 && (
+        {/* Main Content */}
+        <div className="p-6 flex flex-col gap-6 flex-1 overflow-y-auto">
+          {/* Window List with Bar Charts */}
+          {windowTitlesLoading ? (
+            <div className="text-base font-light text-center p-8">
+              Loading window titles...
+            </div>
+          ) : windowTitlesWithPercentages.length > 0 ? (
             <div className="flex flex-col gap-4">
-              <h3 className="text-sm font-normal uppercase tracking-wide mb-2">
-                Interruptions ({interruptions.length})
+              <h3 className="text-sm font-normal tracking-wide text-gray-800">
+                Windows
+              </h3>
+              <div className="flex flex-col gap-3">
+                {windowTitlesWithPercentages.map((wt, index) => (
+                <div key={index} className="flex items-end gap-3">
+                  {/* App Icon - height matches name + bar */}
+                  {shouldShowAppleLogo(segment.bundleId, segment.appName) ? (
+                    <div className="flex-shrink-0 flex items-center justify-center text-gray-800" style={{ height: 'calc(1.25rem + 0.5rem + 0.25rem)' }}>
+                      <AppleLogo className="w-5 h-5" />
+                    </div>
+                  ) : segment.iconDataUrl ? (
+                    <img
+                      src={segment.iconDataUrl}
+                      alt={segment.appName || segment.bundleId}
+                      className="flex-shrink-0"
+                      style={{ height: 'calc(1.25rem + 0.5rem + 0.25rem)' }}
+                    />
+                  ) : (
+                    <div
+                      className="flex-shrink-0 border border-black"
+                      style={{ 
+                        height: 'calc(1.25rem + 0.5rem + 0.25rem)',
+                        width: 'calc(1.25rem + 0.5rem + 0.25rem)',
+                        backgroundColor: appColor 
+                      }}
+                    />
+                  )}
+
+                  {/* Name and bar stacked vertically */}
+                  <div className="flex-1 flex flex-col gap-1 min-w-0">
+                    {/* Window Title Name */}
+                    <span className="text-sm font-normal truncate max-w-[90%]">
+                      {wt.title}
+                    </span>
+
+                    {/* Horizontal Bar */}
+                    <div className="h-2 bg-gray-200 relative overflow-hidden">
+                      <div
+                        className="h-full transition-all duration-300"
+                        style={{
+                          width: `${wt.percentage}%`,
+                          backgroundColor: appColor,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Percentage spans full height (name + bar) */}
+                  <span className="text-2xl font-semibold tabular-nums w-16 text-right leading-none">
+                    {wt.percentage.toFixed(0)}%
+                  </span>
+                </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-base font-light text-center p-8">
+              No window titles found
+            </div>
+          )}
+
+          {/* Interruptions List */}
+          {deduplicatedInterruptions.length > 0 && (
+            <div className="flex flex-col gap-4">
+              <h3 className="text-sm font-normal tracking-wide text-gray-800">
+                Interruptions
               </h3>
               {interruptionsLoading ? (
-                <div className="text-base font-light text-center p-8">
+                <div className="text-base font-light text-center p-4">
                   Loading interruptions...
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {interruptions.map((interruption) => (
-                    <div
-                      key={interruption.id}
-                      className="flex justify-between items-center p-3 border border-gray-200 bg-transparent"
-                    >
-                      <div className="flex items-center gap-2 flex-1">
-                        <span
-                          className="w-2 h-2 border border-black flex-shrink-0"
-                          style={{ backgroundColor: getAppColor(interruption.bundleId, {}) }}
-                        />
+                  {deduplicatedInterruptions.map((interruption) => {
+                    const interruptionColor = getAppColor(interruption.bundleId, {
+                      iconColor: interruption.iconColor,
+                    });
+                    return (
+                      <div
+                        key={interruption.id}
+                        className="flex items-center gap-3"
+                      >
+                        {/* App Icon */}
+                        {shouldShowAppleLogo(interruption.bundleId, interruption.appName) ? (
+                          <div className="flex-shrink-0 flex items-center justify-center text-gray-800" style={{ height: '1.25rem' }}>
+                            <AppleLogo className="w-4 h-4" />
+                          </div>
+                        ) : interruption.iconDataUrl ? (
+                          <img
+                            src={interruption.iconDataUrl}
+                            alt={interruption.appName || interruption.bundleId}
+                            className="flex-shrink-0"
+                            style={{ height: '1.25rem', width: '1.25rem' }}
+                          />
+                        ) : (
+                          <div
+                            className="flex-shrink-0 border border-black"
+                            style={{ 
+                              height: '1.25rem',
+                              width: '1.25rem',
+                              backgroundColor: interruptionColor 
+                            }}
+                          />
+                        )}
                         <span className="text-sm font-normal">
                           {interruption.appName || interruption.bundleId}
                         </span>
                       </div>
-                      <span className="text-sm font-semibold tabular-nums mx-4">
-                        {formatDuration(interruption.durationSecs)}
-                      </span>
-                      <span className="text-xs font-light text-gray-600">
-                        at {formatTime(interruption.timestamp)}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
           )}
-
-          {segment.segmentSummary && (
-            <div className="flex flex-col gap-4">
-              <h3 className="text-sm font-normal uppercase tracking-wide mb-2">Summary</h3>
-              <p className="text-sm font-light leading-relaxed">
-                {segment.segmentSummary}
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div className="flex gap-4 justify-end p-6 border-t border-black">
-          <button className={buttonPrimaryClass} onClick={onClose}>
-            Close
-          </button>
         </div>
       </div>
     </div>

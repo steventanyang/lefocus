@@ -28,6 +28,13 @@ export interface Interruption {
   appName: string | null;
   timestamp: string; // ISO 8601 datetime
   durationSecs: number;
+  iconDataUrl?: string | null; // App icon from apps table (base64 PNG data URL)
+  iconColor?: string | null; // App icon dominant color from apps table (hex like "#AABBCC")
+}
+
+export interface WindowTitleWithDuration {
+  title: string;
+  durationSecs: number;
 }
 
 export interface AppDuration {

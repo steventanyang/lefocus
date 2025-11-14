@@ -52,6 +52,12 @@ pub struct Interruption {
     pub app_name: Option<String>,
     pub timestamp: DateTime<Utc>,
     pub duration_secs: i64,
+    /// App icon data URL from apps table (populated by JOIN)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon_data_url: Option<String>,
+    /// App icon dominant color from apps table (populated by JOIN)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub icon_color: Option<String>,
 }
 
 impl Interruption {

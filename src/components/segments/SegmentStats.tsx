@@ -155,6 +155,21 @@ export function SegmentStats({
     handleAppClick(bundleId);
   };
 
+  // Ensure timeline index is properly initialized when segments load
+  useEffect(() => {
+    if (filteredSegments.length > 0) {
+      // If we're not on the list and timeline index is null or out of bounds, reset to 0
+      if (listHoverIndex === null && (timelineSelectedIndex === null || timelineSelectedIndex >= filteredSegments.length)) {
+        setTimelineSelectedIndex(0);
+      }
+    } else {
+      // If segments are empty, reset to null
+      if (timelineSelectedIndex !== null) {
+        setTimelineSelectedIndex(null);
+      }
+    }
+  }, [filteredSegments.length, listHoverIndex, timelineSelectedIndex]);
+
   // Keyboard navigation
   // Pass raw timelineSelectedIndex so hook can detect when we're on list vs timeline
   // The hook needs to know the actual state, not the derived valid index

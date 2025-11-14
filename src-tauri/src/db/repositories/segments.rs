@@ -48,6 +48,8 @@ fn row_to_interruption(row: &Row) -> Result<Interruption, rusqlite::Error> {
         timestamp: parse_datetime(&timestamp_str, "timestamp")
             .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))))?,
         duration_secs: row.get("duration_secs")?,
+        icon_data_url: row.get("icon_data_url").ok(),
+        icon_color: row.get("icon_color").ok(),
     })
 }
 
@@ -107,19 +109,139 @@ fn spawn_icon_fetch_task(db: Database, bundle_ids: HashSet<String>) {
 impl Database {
     /// Batch insert segments for a session.
     /// After segments are inserted, spawns background tasks to fetch missing app icons.
-    pub async fn insert_segments(
+    // pub async fn insert_segments(
+    //     &self,
+    //     _session_id: &str,
+    //     segments: &[Segment],
+    // ) -> Result<()> {
+    //     let segments = segments.to_vec();
+
+    //     // Execute the database transaction and collect bundle IDs that need icons
+    //     let bundles_missing_icons = self.execute(move |conn| {
+    //         let tx = conn.transaction()?;
+    //         let app_repo = AppRepository::new(&tx);
+    //         let mut bundles_missing_icons = HashSet::new();
+
+    //         for segment in &segments {
+    //             // Ensure app exists in apps table
+    //             app_repo.ensure_app_exists(
+    //                 &segment.bundle_id,
+    //                 segment.app_name.as_deref(),
+    //             )?;
+
+    //             // Insert segment
+    //             tx.execute(
+    //                 "INSERT INTO segments (
+    //                     id,
+    //                     session_id,
+    //                     start_time,
+    //                     end_time,
+    //                     duration_secs,
+    //                     bundle_id,
+    //                     app_name,
+    //                     window_title,
+    //                     confidence,
+    //                     duration_score,
+    //                     stability_score,
+    //                     visual_clarity_score,
+    //                     ocr_quality_score,
+    //                     reading_count,
+    //                     unique_phash_count,
+    //                     segment_summary
+    //                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+    //                 params![
+    //                     segment.id,
+    //                     segment.session_id,
+    //                     segment.start_time.to_rfc3339(),
+    //                     segment.end_time.to_rfc3339(),
+    //                     segment.duration_secs,
+    //                     segment.bundle_id,
+    //                     segment.app_name,
+    //                     segment.window_title,
+    //                     segment.confidence,
+    //                     segment.duration_score,
+    //                     segment.stability_score,
+    //                     segment.visual_clarity_score,
+    //                     segment.ocr_quality_score,
+    //                     segment.reading_count,
+    //                     segment.unique_phash_count,
+    //                     segment.segment_summary,
+    //                 ],
+    //             )?;
+
+    //             // Track apps with missing icons
+    //             if let Some(app) = app_repo.get_app(&segment.bundle_id)? {
+    //                 if app.icon_data_url.is_none() {
+    //                     bundles_missing_icons.insert(segment.bundle_id.clone());
+    //                 }
+    //             }
+    //         }
+
+    //         tx.commit()?;
+    //         Ok(bundles_missing_icons)
+    //     })
+    //     .await?;
+
+    //     // Spawn background task to fetch missing icons
+    //     spawn_icon_fetch_task(self.clone(), bundles_missing_icons);
+
+    //     Ok(())
+    // }
+
+    // /// Batch insert interruptions for segments.
+    // pub async fn insert_interruptions(
+    //     &self,
+    //     interruptions: &[Interruption],
+    // ) -> Result<()> {
+    //     let interruptions = interruptions.to_vec();
+    //     self.execute(move |conn| {
+    //         let tx = conn.transaction()?;
+
+    //         for interruption in &interruptions {
+    //             tx.execute(
+    //                 "INSERT INTO interruptions (
+    //                     id,
+    //                     segment_id,
+    //                     bundle_id,
+    //                     app_name,
+    //                     timestamp,
+    //                     duration_secs
+    //                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+    //                 params![
+    //                     interruption.id,
+    //                     interruption.segment_id,
+    //                     interruption.bundle_id,
+    //                     interruption.app_name,
+    //                     interruption.timestamp.to_rfc3339(),
+    //                     interruption.duration_secs,
+    //                 ],
+    //             )?;
+    //         }
+
+    //         tx.commit()?;
+    //         Ok(())
+    //     })
+    //     .await
+    // }
+
+    /// Atomically insert both segments and interruptions in a single transaction.
+    /// This prevents race conditions where segments might be deleted before interruptions are inserted.
+    pub async fn insert_segments_and_interruptions(
         &self,
         _session_id: &str,
         segments: &[Segment],
+        interruptions: &[Interruption],
     ) -> Result<()> {
         let segments = segments.to_vec();
+        let interruptions = interruptions.to_vec();
 
-        // Execute the database transaction and collect bundle IDs that need icons
+        // Execute both inserts in a single transaction
         let bundles_missing_icons = self.execute(move |conn| {
             let tx = conn.transaction()?;
             let app_repo = AppRepository::new(&tx);
             let mut bundles_missing_icons = HashSet::new();
 
+            // Insert segments first
             for segment in &segments {
                 // Ensure app exists in apps table
                 app_repo.ensure_app_exists(
@@ -175,27 +297,27 @@ impl Database {
                 }
             }
 
-            tx.commit()?;
-            Ok(bundles_missing_icons)
-        })
-        .await?;
-
-        // Spawn background task to fetch missing icons
-        spawn_icon_fetch_task(self.clone(), bundles_missing_icons);
-
-        Ok(())
-    }
-
-    /// Batch insert interruptions for segments.
-    pub async fn insert_interruptions(
-        &self,
-        interruptions: &[Interruption],
-    ) -> Result<()> {
-        let interruptions = interruptions.to_vec();
-        self.execute(move |conn| {
-            let tx = conn.transaction()?;
-
+            // Insert interruptions (now guaranteed to have valid segment_id references)
+            // First, collect all segment IDs to validate interruption references
+            let segment_ids: std::collections::HashSet<String> = segments.iter()
+                .map(|s| s.id.clone())
+                .collect();
+            
+            let mut skipped_count = 0;
             for interruption in &interruptions {
+                // Validate that the segment_id exists in the segments we're inserting
+                if !segment_ids.contains(&interruption.segment_id) {
+                    // Skip invalid interruption and log warning instead of failing entire transaction
+                    // TODO: remove after validation
+                    log::warn!(
+                        "Skipping interruption {} - references segment_id {} which does not exist in segments being inserted",
+                        interruption.id,
+                        interruption.segment_id
+                    );
+                    skipped_count += 1;
+                    continue;
+                }
+                
                 tx.execute(
                     "INSERT INTO interruptions (
                         id,
@@ -215,11 +337,20 @@ impl Database {
                     ],
                 )?;
             }
+            
+            if skipped_count > 0 {
+                log::warn!("Skipped {} invalid interruption(s) during insertion", skipped_count);
+            }
 
             tx.commit()?;
-            Ok(())
+            Ok(bundles_missing_icons)
         })
-        .await
+        .await?;
+
+        // Spawn background task to fetch missing icons
+        spawn_icon_fetch_task(self.clone(), bundles_missing_icons);
+
+        Ok(())
     }
 
     /// Load all segments for a session, ordered by start_time.
@@ -271,6 +402,7 @@ impl Database {
     }
 
     /// Get interruptions for a specific segment.
+    /// Includes icon data from the apps table via LEFT JOIN.
     pub async fn get_interruptions_for_segment(
         &self,
         segment_id: &str,
@@ -279,15 +411,18 @@ impl Database {
         self.execute(move |conn| {
             let mut stmt = conn.prepare(
                 "SELECT 
-                    id,
-                    segment_id,
-                    bundle_id,
-                    app_name,
-                    timestamp,
-                    duration_secs
+                    interruptions.id,
+                    interruptions.segment_id,
+                    interruptions.bundle_id,
+                    interruptions.app_name,
+                    interruptions.timestamp,
+                    interruptions.duration_secs,
+                    apps.icon_data_url,
+                    apps.icon_color
                 FROM interruptions
-                WHERE segment_id = ?1
-                ORDER BY timestamp ASC",
+                LEFT JOIN apps ON interruptions.bundle_id = apps.bundle_id
+                WHERE interruptions.segment_id = ?1
+                ORDER BY interruptions.timestamp ASC",
             )?;
 
             let interruptions_iter = stmt.query_map(params![segment_id], |row| {

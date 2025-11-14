@@ -51,6 +51,8 @@ pub fn sandwich_merge(
                         app_name: b.app_name.clone(),
                         timestamp: b.start_time,
                         duration_secs: b.duration_secs,
+                        icon_data_url: None, // Will be populated when fetched from database
+                        icon_color: None, // Will be populated when fetched from database
                     };
 
                     all_interruptions.push(interruption);
