@@ -1,5 +1,10 @@
 import Cocoa
 
+private enum AudioArtworkLayout {
+    static let expandedSize: CGFloat = 40.0
+    static let compactSize: CGFloat = 20.0
+}
+
 extension IslandView {
     // MARK: - Audio Drawing
 
@@ -7,17 +12,25 @@ extension IslandView {
         guard let track = trackInfo else { return }
 
         if !isExpanded {
-            // Draw 4 thicker waveform pills instead of music note emoji
-            drawCompactWaveform()
+            let thumbRect = compactArtworkRect()
+            drawArtworkImage(track.artwork, in: thumbRect, cornerRadius: thumbRect.height / 2.0, emphasize: false)
+            drawCompactWaveform(
+                startX: thumbRect.maxX + 8.0,
+                centerY: bounds.midY
+            )
             return
         }
 
         // Apply fade-in opacity to expanded content
         let baseAlpha: CGFloat = isAudioPlaying ? 0.95 : 0.9
 
-        // Left-aligned layout: title and artist stacked on left side
+        let artworkRect = expandedArtworkRect()
+        drawArtworkImage(track.artwork, in: artworkRect, cornerRadius: 12.0, emphasize: true)
+
+        // Left-aligned layout: title and artist stacked next to artwork
         let title = track.title.isEmpty ? "Unknown" : track.title
         let artist = track.artist.isEmpty ? "Unknown" : track.artist
+        let textStartX = artworkRect.maxX + 12.0
 
         let titleFont = NSFont.systemFont(ofSize: 14, weight: .semibold)
         let titleAttrs: [NSAttributedString.Key: Any] = [
@@ -31,48 +44,45 @@ extension IslandView {
             .foregroundColor: NSColor.white.withAlphaComponent(0.7 * expandedContentOpacity)
         ]
 
+        let maxContentWidth: CGFloat
         if isIdle {
-            // No timer: center the audio content
-            let maxContentWidth = bounds.width - 32.0  // Full width minus padding on both sides
-
-            let titleRect = NSRect(
-                x: 16.0,
-                y: bounds.height - 56.0,
-                width: maxContentWidth,
-                height: 18.0
-            )
-            NSString(string: title).draw(with: titleRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: titleAttrs)
-
-            let artistRect = NSRect(
-                x: 16.0,
-                y: bounds.height - 76.0,
-                width: maxContentWidth,
-                height: 16.0
-            )
-            NSString(string: artist).draw(with: artistRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: artistAttrs)
+            maxContentWidth = bounds.width - textStartX - 16.0
         } else {
-            // Timer active: left-aligned layout, truncate at 50% of island width
-            let maxTitleWidth = bounds.width * 0.5 - 16.0 // 50% minus left padding
-
-            let titleRect = NSRect(
-                x: 16.0,
-                y: bounds.height - 56.0,
-                width: maxTitleWidth,
-                height: 18.0
-            )
-            NSString(string: title).draw(with: titleRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: titleAttrs)
-
-            let artistRect = NSRect(
-                x: 16.0,
-                y: bounds.height - 76.0,
-                width: maxTitleWidth,
-                height: 16.0
-            )
-            NSString(string: artist).draw(with: artistRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: artistAttrs)
+            maxContentWidth = max(80.0, bounds.width * 0.45 - textStartX)
         }
+
+        let lineSpacing: CGFloat = 2.0
+        let titleHeight = titleFont.ascender - titleFont.descender
+        let artistHeight = artistFont.ascender - artistFont.descender
+        let blockHeight = titleHeight + artistHeight + lineSpacing
+        let blockTop = artworkRect.midY + blockHeight / 2.0 - 2.0
+
+        let titleRect = NSRect(
+            x: textStartX,
+            y: blockTop - titleHeight,
+            width: maxContentWidth,
+            height: titleHeight
+        )
+        NSString(string: title).draw(
+            with: titleRect,
+            options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
+            attributes: titleAttrs
+        )
+
+        let artistRect = NSRect(
+            x: textStartX,
+            y: blockTop - titleHeight - lineSpacing - artistHeight,
+            width: maxContentWidth,
+            height: artistHeight
+        )
+        NSString(string: artist).draw(
+            with: artistRect,
+            options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
+            attributes: artistAttrs
+        )
     }
 
-    func drawCompactWaveform() {
+    func drawCompactWaveform(startX customStartX: CGFloat? = nil, centerY customCenterY: CGFloat? = nil) {
         guard !waveformBars.isEmpty, waveformBars.count == 4 else { return }
 
         // Match the width of the music note emoji (size 11 font)
@@ -84,8 +94,8 @@ extension IslandView {
         let spacing: CGFloat = 3.0
         let pillWidth = (totalWidth - spacing * 3.0) / 4.0
         let pillHeight: CGFloat = 12.0
-        let startX = 12.0 // Left side padding
-        let centerY = bounds.midY
+        let startX = customStartX ?? (compactArtworkRect().maxX + 8.0)
+        let centerY = customCenterY ?? bounds.midY
 
         for (index, value) in waveformBars.enumerated() {
             let height: CGFloat
@@ -125,8 +135,8 @@ extension IslandView {
         let pillHeight: CGFloat = 12.0
         let baseY: CGFloat = bounds.height - 20.0 // Near the top
 
-        // Always position waveform at top-left
-        let startX: CGFloat = 16.0
+        // Always position waveform just above text block (to the right of artwork)
+        let startX: CGFloat = expandedArtworkRect().maxX + 12.0
 
         for (index, value) in waveformBars.enumerated() {
             let height: CGFloat
@@ -222,7 +232,7 @@ extension IslandView {
             startX = (bounds.width - totalButtonsWidth) / 2.0
         } else {
             // Timer active: left side, aligned with track info
-            startX = 16.0
+            startX = expandedArtworkRect().maxX + 12.0
         }
 
         previousButton.rect = NSRect(
@@ -243,5 +253,54 @@ extension IslandView {
             width: buttonSize.width,
             height: buttonSize.height
         )
+    }
+
+    // MARK: - Artwork helpers
+
+    private func compactArtworkRect() -> NSRect {
+        let size = AudioArtworkLayout.compactSize
+        return NSRect(x: 12.0, y: bounds.midY - size / 2.0, width: size, height: size)
+    }
+
+    private func expandedArtworkRect() -> NSRect {
+        let size = AudioArtworkLayout.expandedSize
+        return NSRect(x: 16.0, y: bounds.midY - size / 2.0, width: size, height: size)
+    }
+
+    private func drawArtworkImage(_ image: NSImage?, in rect: NSRect, cornerRadius: CGFloat, emphasize: Bool) {
+        let path = NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
+        NSGraphicsContext.saveGraphicsState()
+        path.addClip()
+
+        let hasImage = image != nil
+
+        if let image {
+            let opacity = emphasize ? expandedContentOpacity : 1.0
+            image.draw(
+                in: rect,
+                from: .zero,
+                operation: .sourceOver,
+                fraction: opacity,
+                respectFlipped: true,
+                hints: [.interpolation: NSImageInterpolation.high]
+            )
+        } else {
+            drawArtworkPlaceholder(in: rect, emphasize: emphasize)
+        }
+
+        NSGraphicsContext.restoreGraphicsState()
+        if hasImage {
+            let strokeAlpha: CGFloat = emphasize ? 0.18 : 0.12
+            NSColor.white.withAlphaComponent(strokeAlpha).setStroke()
+            path.lineWidth = emphasize ? 1.0 : 0.5
+            path.stroke()
+        }
+    }
+
+    private func drawArtworkPlaceholder(in rect: NSRect, emphasize: Bool) {
+        let baseAlpha: CGFloat = emphasize ? 0.85 : 0.75
+        let fillColor = NSColor(calibratedWhite: 0.03, alpha: baseAlpha)
+        fillColor.setFill()
+        rect.fill()
     }
 }

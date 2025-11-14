@@ -25,6 +25,14 @@ public struct TrackInfo: Equatable {
         self.sourceBundleID = sourceBundleID
     }
 
+    public static func == (lhs: TrackInfo, rhs: TrackInfo) -> Bool {
+        return lhs.title == rhs.title &&
+            lhs.artist == rhs.artist &&
+            lhs.isPlaying == rhs.isPlaying &&
+            lhs.sourceBundleID == rhs.sourceBundleID &&
+            TrackInfo.artwork(lhs.artwork, equals: rhs.artwork)
+    }
+
     public static var empty: TrackInfo {
         TrackInfo(
             title: "Unknown",
@@ -33,5 +41,37 @@ public struct TrackInfo: Equatable {
             isPlaying: false,
             sourceBundleID: nil
         )
+    }
+
+    public func replacingArtwork(_ newArtwork: NSImage?) -> TrackInfo {
+        TrackInfo(
+            title: title,
+            artist: artist,
+            artwork: newArtwork,
+            isPlaying: isPlaying,
+            timestamp: timestamp,
+            sourceBundleID: sourceBundleID
+        )
+    }
+
+    public func matchesIdentity(with other: TrackInfo) -> Bool {
+        return normalized(title) == normalized(other.title) &&
+            normalized(artist) == normalized(other.artist) &&
+            sourceBundleID == other.sourceBundleID
+    }
+
+    private func normalized(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+
+    private static func artwork(_ lhs: NSImage?, equals rhs: NSImage?) -> Bool {
+        switch (lhs, rhs) {
+        case (nil, nil):
+            return true
+        case let (l?, r?):
+            return l === r
+        default:
+            return false
+        }
     }
 }

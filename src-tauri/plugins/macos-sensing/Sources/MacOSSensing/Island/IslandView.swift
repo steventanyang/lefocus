@@ -99,10 +99,6 @@ final class IslandView: NSView {
             self.waveformBars = []
         }
 
-        if hasArtwork != hadArtwork {
-            NSLog("IslandView: Artwork state changed - had: \(hadArtwork), has: \(hasArtwork), track: \(track?.title ?? "nil")")
-        }
-
         needsDisplay = true
     }
 
