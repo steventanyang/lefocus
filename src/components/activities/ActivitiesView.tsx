@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useSessionsList, useSegmentsForSessions } from "@/hooks/queries";
+import { useSessionsListInfinite, useSegmentsForSessions } from "@/hooks/queries";
 import { SessionCard } from "@/components/session/SessionCard";
 import { BlockView } from "@/components/activities/BlockView";
 import { SessionResults } from "@/components/session/SessionResults";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import { KeyBox } from "@/components/ui/KeyBox";
 import { useActivitiesKeyboard } from "@/hooks/useActivitiesKeyboard";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { SessionSummary } from "@/types/timer";
 
 interface ActivitiesViewProps {
@@ -13,14 +14,25 @@ interface ActivitiesViewProps {
 }
 
 export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
-  // Fetch sessions list with automatic caching
-  const { data: sessions = [], isLoading: loading, error } = useSessionsList();
+  // Fetch paginated sessions list with infinite scroll
+  const {
+    data,
+    isLoading: loading,
+    error,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useSessionsListInfinite();
+  
+  // Flatten pages into a single array
+  const sessions = data?.pages.flat() ?? [];
 
   const [selectedSession, setSelectedSession] = useState<SessionSummary | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "block">("list");
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const scrollPositionRef = useRef<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listContainerRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   // Find the scrollable parent container (the main element)
@@ -66,6 +78,27 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
   // Fetch segments for all sessions in parallel with automatic caching and deduplication
   const { segmentsBySession } = useSegmentsForSessions(sessions);
 
+  // Virtualizer for list view
+  const virtualizer = useVirtualizer({
+    count: sessions.length,
+    getScrollElement: () => {
+      // Find the scrollable parent container
+      if (!listContainerRef.current) return null;
+      let element: HTMLElement | null = listContainerRef.current.parentElement;
+      while (element) {
+        const style = window.getComputedStyle(element);
+        if (style.overflowY === "auto" || style.overflowY === "scroll") {
+          return element;
+        }
+        element = element.parentElement;
+      }
+      return null;
+    },
+    estimateSize: () => 200, // Estimate height for each card (will be measured)
+    overscan: 5, // Render 5 extra items outside viewport for smooth scrolling
+    enabled: viewMode === "list" && sessions.length > 0,
+  });
+
   // Initialize selected index when sessions load
   useEffect(() => {
     if (sessions.length > 0 && selectedIndex === null) {
@@ -99,9 +132,76 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
     }
   }, [selectedSession]);
 
+  // Scroll detection for infinite loading
+  useEffect(() => {
+    if (viewMode !== "list" || !virtualizer || !hasNextPage || isFetchingNextPage) {
+      return;
+    }
+
+    const scrollElement = getScrollContainer();
+    if (!scrollElement) {
+      return;
+    }
+
+    const checkScrollPosition = () => {
+      const virtualItems = virtualizer.getVirtualItems();
+      if (virtualItems.length === 0) {
+        return;
+      }
+
+      // Get the last visible item index
+      const lastVisibleIndex = virtualItems[virtualItems.length - 1]?.index;
+      if (lastVisibleIndex === undefined) {
+        return;
+      }
+
+      // Trigger fetch when within 5 items of the end
+      const threshold = 5;
+      if (lastVisibleIndex >= sessions.length - threshold) {
+        fetchNextPage();
+      }
+    };
+
+    // Check immediately
+    checkScrollPosition();
+
+    // Also listen to scroll events for more responsive loading
+    scrollElement.addEventListener('scroll', checkScrollPosition, { passive: true });
+    
+    return () => {
+      scrollElement.removeEventListener('scroll', checkScrollPosition);
+    };
+  }, [viewMode, virtualizer, hasNextPage, isFetchingNextPage, sessions.length, fetchNextPage, getScrollContainer]);
+
   // Scroll selected item into view
   useEffect(() => {
-    if (selectedIndex !== null && cardRefs.current[selectedIndex]) {
+    if (selectedIndex === null) return;
+
+    if (viewMode === "list" && virtualizer) {
+      // Use virtualizer's scrollToIndex for list view
+      // Use 'auto' instead of 'smooth' because smooth doesn't work well with dynamic sizing
+      // Wait a frame to ensure the item is rendered and measured
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (selectedIndex === 0) {
+            const scrollContainer = getScrollContainer();
+            if (scrollContainer) {
+              scrollContainer.scrollTo({
+                top: 0,
+                behavior: "smooth",
+              });
+            }
+          } else {
+            // scrollToIndex will handle ensuring the item is rendered
+            virtualizer.scrollToIndex(selectedIndex, {
+              align: "center",
+              behavior: "auto", // Changed from 'smooth' to avoid dynamic size warnings
+            });
+          }
+        });
+      });
+    } else if (viewMode === "block" && cardRefs.current[selectedIndex]) {
+      // Original behavior for block view
       requestAnimationFrame(() => {
         const selectedCard = cardRefs.current[selectedIndex];
         if (!selectedCard) return;
@@ -125,7 +225,7 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
         }
       });
     }
-  }, [selectedIndex, viewMode, getScrollContainer]);
+  }, [selectedIndex, viewMode, getScrollContainer, virtualizer]);
 
   // Restore scroll position when coming back from session
   const handleBack = () => {
@@ -214,20 +314,52 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
       {sessions.length > 0 && (
         <>
           {viewMode === "list" ? (
-            <div className="flex flex-col gap-4">
-              {sessions.map((session, index) => (
-                <SessionCard
-                  key={session.id}
-                  ref={(el) => {
-                    cardRefs.current[index] = el;
-                  }}
-                  session={session}
-                  segments={segmentsBySession[session.id]}
-                  onClick={handleSessionClick}
-                  isSelected={selectedIndex === index}
-                />
-              ))}
-            </div>
+            <>
+              <div
+                ref={listContainerRef}
+                className="flex flex-col"
+                style={{
+                  height: `${virtualizer.getTotalSize()}px`,
+                  position: "relative",
+                }}
+              >
+                {virtualizer.getVirtualItems().map((virtualItem) => {
+                  const session = sessions[virtualItem.index];
+                  return (
+                    <div
+                      key={session.id}
+                      data-index={virtualItem.index}
+                      ref={virtualizer.measureElement}
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: "100%",
+                        transform: `translateY(${virtualItem.start}px)`,
+                      }}
+                    >
+                      <div className="mb-4">
+                        <SessionCard
+                          ref={(el) => {
+                            cardRefs.current[virtualItem.index] = el;
+                          }}
+                          session={session}
+                          segments={segmentsBySession[session.id]}
+                          onClick={handleSessionClick}
+                          isSelected={selectedIndex === virtualItem.index}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Loading indicator for next page */}
+              {isFetchingNextPage && (
+                <div className="text-base font-light text-center p-4">
+                  Loading more sessions...
+                </div>
+              )}
+            </>
           ) : (
             <BlockView
               sessions={sessions}

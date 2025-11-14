@@ -18,7 +18,8 @@ use tauri::State;
 use timer::{
     commands::{
         cancel_timer, end_timer, get_interruptions_for_segment, get_segments_for_session,
-        get_timer_state, get_window_titles_for_segment, list_sessions, start_timer,
+        get_timer_state, get_window_titles_for_segment, list_sessions, list_sessions_paginated,
+        start_timer,
     },
     TimerController,
 };
@@ -194,6 +195,7 @@ pub fn run() {
             get_interruptions_for_segment,
             get_window_titles_for_segment,
             list_sessions,
+            list_sessions_paginated,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
