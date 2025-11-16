@@ -5,54 +5,56 @@ extension IslandView {
 
     func createNotchPath() -> NSBezierPath {
         let rect = bounds
-        // Fixed bottom corner radius (based on compact height of 36px)
-        let bottomRadius: CGFloat = 18.0
-        // Top corners scale with height for the bulge effect
-        let topRadius = rect.height / 2.0
+        // Top corner radius - outward curve (at maxY in AppKit coordinates)
+        // Increased from 6.0 to make the curve more obvious
+        let topCornerRadius: CGFloat = 10.0
+        // Bottom corner radius - larger inward curve (at minY in AppKit coordinates)
+        let bottomCornerRadius: CGFloat = 14.0
 
         // Use Core Graphics path for more control over bezier curves
         let cgPath = CGMutablePath()
 
-        // Start from bottom-left, after the curve
-        cgPath.move(to: CGPoint(x: rect.minX + bottomRadius, y: rect.minY))
+        // Start from top-left corner (minX, maxY) - note: maxY is top in AppKit
+        cgPath.move(to: CGPoint(x: rect.minX, y: rect.maxY))
 
-        // Bottom edge to bottom-right curve
-        cgPath.addLine(to: CGPoint(x: rect.maxX - bottomRadius, y: rect.minY))
+        // Top-left corner: outward curve using quadratic bezier
+        // Control point at (minX + topRadius, maxY) creates outward curve
+        cgPath.addQuadCurve(
+            to: CGPoint(x: rect.minX + topCornerRadius, y: rect.maxY - topCornerRadius),
+            control: CGPoint(x: rect.minX + topCornerRadius, y: rect.maxY)
+        )
 
-        // Bottom-right arc (inward curve) - using fixed radius
-        cgPath.addArc(center: CGPoint(x: rect.maxX - bottomRadius, y: rect.minY + bottomRadius),
-                     radius: bottomRadius,
-                     startAngle: .pi * 1.5,  // 270 degrees
-                     endAngle: 0,
-                     clockwise: false)
+        // Left edge - go down to bottom corner
+        cgPath.addLine(to: CGPoint(x: rect.minX + topCornerRadius, y: rect.minY + bottomCornerRadius))
 
-        // Right edge - go up to where we want the bulge to start
-        cgPath.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - topRadius * 0.7))
+        // Bottom-left corner: inward curve using quadratic bezier
+        // Control point at (minX + topRadius, minY) creates inward curve
+        cgPath.addQuadCurve(
+            to: CGPoint(x: rect.minX + topCornerRadius + bottomCornerRadius, y: rect.minY),
+            control: CGPoint(x: rect.minX + topCornerRadius, y: rect.minY)
+        )
 
-        // Top-right corner: create outward bulge using quadratic bezier
-        // Control point positioned well outside to create visible outward curve
-        let bulgeAmount: CGFloat = topRadius * 4.0  // Very pronounced bulge
-        let topRightControl = CGPoint(x: rect.maxX + bulgeAmount, y: rect.maxY + bulgeAmount * 0.7)
-        let topRightEnd = CGPoint(x: rect.maxX - topRadius * 0.7, y: rect.maxY)
-        cgPath.addQuadCurve(to: topRightEnd, control: topRightControl)
+        // Bottom edge
+        cgPath.addLine(to: CGPoint(x: rect.maxX - topCornerRadius - bottomCornerRadius, y: rect.minY))
 
-        // Top edge
-        cgPath.addLine(to: CGPoint(x: rect.minX + topRadius * 0.7, y: rect.maxY))
+        // Bottom-right corner: inward curve using quadratic bezier
+        cgPath.addQuadCurve(
+            to: CGPoint(x: rect.maxX - topCornerRadius, y: rect.minY + bottomCornerRadius),
+            control: CGPoint(x: rect.maxX - topCornerRadius, y: rect.minY)
+        )
 
-        // Top-left corner: create outward bulge using quadratic bezier
-        let topLeftControl = CGPoint(x: rect.minX - bulgeAmount, y: rect.maxY + bulgeAmount * 0.7)
-        let topLeftEnd = CGPoint(x: rect.minX, y: rect.maxY - topRadius * 0.7)
-        cgPath.addQuadCurve(to: topLeftEnd, control: topLeftControl)
+        // Right edge - go up to top corner
+        cgPath.addLine(to: CGPoint(x: rect.maxX - topCornerRadius, y: rect.maxY - topCornerRadius))
 
-        // Left edge
-        cgPath.addLine(to: CGPoint(x: rect.minX, y: rect.minY + bottomRadius))
+        // Top-right corner: outward curve using quadratic bezier
+        // Control point at (maxX - topRadius, maxY) creates outward curve
+        cgPath.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: rect.maxY),
+            control: CGPoint(x: rect.maxX - topCornerRadius, y: rect.maxY)
+        )
 
-        // Bottom-left arc (inward curve) - using fixed radius
-        cgPath.addArc(center: CGPoint(x: rect.minX + bottomRadius, y: rect.minY + bottomRadius),
-                     radius: bottomRadius,
-                     startAngle: .pi,  // 180 degrees
-                     endAngle: .pi * 1.5,  // 270 degrees
-                     clockwise: false)
+        // Close path back to start
+        cgPath.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
 
         cgPath.closeSubpath()
 

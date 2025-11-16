@@ -201,7 +201,8 @@ extension IslandView {
         let spacing: CGFloat = 3.0
         let pillWidth = (totalWidth - spacing * 3.0) / 4.0
         let pillHeight: CGFloat = 12.0
-        let startX = customStartX ?? 12.0
+        // Add padding to account for notch top corner curve (10px radius)
+        let startX = customStartX ?? 22.0
         let centerY = customCenterY ?? bounds.midY
 
         for (index, value) in waveformBars.enumerated() {
@@ -243,8 +244,8 @@ extension IslandView {
         
         // Position waveform at top left (around 28px from top) - stays fixed regardless of title/artist position
         let waveformCenterY = bounds.height - 28.0
-        // Position waveform left edge aligned with album cover left edge (28px from left)
-        let startX: CGFloat = 28.0
+        // Position waveform left edge - add padding to account for notch top corner curve (10px radius)
+        let startX: CGFloat = 38.0
 
         for (index, value) in waveformBars.enumerated() {
             let height: CGFloat
@@ -389,7 +390,8 @@ extension IslandView {
         // Center artwork vertically with the gap between title and artist
         let artworkCenterY = gapCenter
         let yPosition = artworkCenterY - size / 2.0
-        let xPosition: CGFloat = 28.0
+        // Add padding to account for notch top corner curve (10px radius)
+        let xPosition: CGFloat = 38.0
         return NSRect(x: xPosition, y: yPosition, width: size, height: size)
     }
 
@@ -506,23 +508,27 @@ extension IslandView {
     func drawCompactLayout() {
         switch compactLayoutState {
         case .audioOnly:
-            drawCompactWaveform(startX: 18.0, centerY: bounds.midY)
+            // Add padding to account for notch top corner curve (10px radius)
+            drawCompactWaveform(startX: 26.0, centerY: bounds.midY)
             drawCompactArtworkOnRight()
         case .timerActive:
             drawTimerText()
             if trackInfo != nil {
-                drawCompactWaveform(startX: 18.0, centerY: bounds.midY)
+                // Add padding to account for notch top corner curve (10px radius)
+                drawCompactWaveform(startX: 26.0, centerY: bounds.midY)
             }
         case .idle:
-            drawCompactWaveform(startX: 18.0, centerY: bounds.midY)
+            // Add padding to account for notch top corner curve (10px radius)
+            drawCompactWaveform(startX: 26.0, centerY: bounds.midY)
         }
     }
 
     func drawCompactArtworkOnRight() {
         guard let track = trackInfo else { return }
         let size = AudioArtworkLayout.compactSize
+        // Add padding to account for notch top corner curve (10px radius)
         let rect = NSRect(
-            x: bounds.maxX - size - 12.0,
+            x: bounds.maxX - size - 22.0,
             y: bounds.midY - size / 2.0,
             width: size,
             height: size
