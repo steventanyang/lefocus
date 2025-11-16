@@ -45,6 +45,9 @@ final class IslandView: NSView {
         var isDragging: Bool = false
         var pendingSeekPosition: TimeInterval?
         var pendingSeekTimestamp: Date?
+        // Animation state for Apple-style progress bar
+        var animatedHeight: CGFloat = 6.0
+        var animatedOpacity: CGFloat = 0.5
     }
     var progressBarArea = ProgressBarArea()
 
@@ -55,6 +58,9 @@ final class IslandView: NSView {
     // Fade animation for expansion
     var expandedContentOpacity: CGFloat = 0.0
     private var fadeAnimationTimer: Timer?
+    
+    // Progress bar animation
+    private var progressBarAnimationTimer: Timer?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -92,6 +98,7 @@ final class IslandView: NSView {
         } else if !isExpanded {
             // Collapsing - reset opacity immediately
             stopFadeAnimation()
+            stopProgressBarAnimation()
             expandedContentOpacity = 0.0
             resetButtonAreas()
             progressBarArea = ProgressBarArea()
@@ -273,6 +280,19 @@ final class IslandView: NSView {
         let canSeek = progressBarArea.isInteractable
         progressBarArea.isHovered = canSeek && progressBarArea.barRect.contains(point)
 
+        // Handle progress bar hover animation
+        if wasHoveringProgress != progressBarArea.isHovered {
+            if progressBarArea.isHovered {
+                // Instant transition on hover enter
+                progressBarArea.animatedHeight = 7.0
+                progressBarArea.animatedOpacity = 1.0
+                stopProgressBarAnimation()
+            } else {
+                // Smooth animation on hover exit
+                startProgressBarHoverOutAnimation()
+            }
+        }
+
         if wasHoveringPlay != playPauseButton.isHovered ||
             wasHoveringPrev != previousButton.isHovered ||
             wasHoveringNext != nextButton.isHovered ||
@@ -417,6 +437,53 @@ final class IslandView: NSView {
 
     private func easeOutQuad(_ t: CGFloat) -> CGFloat {
         return t * (2.0 - t)
+    }
+    
+    // MARK: - Progress Bar Animation
+    
+    private func startProgressBarHoverOutAnimation() {
+        stopProgressBarAnimation()
+        
+        let startHeight = progressBarArea.animatedHeight
+        let startOpacity = progressBarArea.animatedOpacity
+        let targetHeight: CGFloat = 6.0
+        let targetOpacity: CGFloat = 0.5
+        
+        let duration: TimeInterval = 0.2 // 200ms animation
+        let fps: Double = 60.0
+        let frameDuration = 1.0 / fps
+        let totalFrames = Int(duration / frameDuration)
+        var currentFrame = 0
+        
+        progressBarAnimationTimer = Timer.scheduledTimer(withTimeInterval: frameDuration, repeats: true) { [weak self] timer in
+            guard let self = self else {
+                timer.invalidate()
+                return
+            }
+            
+            currentFrame += 1
+            let progress = min(1.0, CGFloat(currentFrame) / CGFloat(totalFrames))
+            let easedProgress = self.easeOutQuad(progress)
+            
+            // Interpolate height and opacity
+            self.progressBarArea.animatedHeight = startHeight + (targetHeight - startHeight) * easedProgress
+            self.progressBarArea.animatedOpacity = startOpacity + (targetOpacity - startOpacity) * easedProgress
+            
+            self.needsDisplay = true
+            
+            if currentFrame >= totalFrames {
+                self.progressBarArea.animatedHeight = targetHeight
+                self.progressBarArea.animatedOpacity = targetOpacity
+                self.needsDisplay = true
+                timer.invalidate()
+                self.progressBarAnimationTimer = nil
+            }
+        }
+    }
+    
+    private func stopProgressBarAnimation() {
+        progressBarAnimationTimer?.invalidate()
+        progressBarAnimationTimer = nil
     }
 
     private enum CompactLayoutState {

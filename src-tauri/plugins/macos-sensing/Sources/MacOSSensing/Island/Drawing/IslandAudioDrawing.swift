@@ -129,14 +129,27 @@ extension IslandView {
             return
         }
 
-        let barHeight: CGFloat = 3.0
+        // Initialize animated values if needed (first draw or reset)
+        // Default values are set in ProgressBarArea struct (6.0 height, 0.5 opacity)
+
+        // Use animated height and opacity for Apple-style progress bar
+        let barHeight = progressBarArea.animatedHeight
+        // Use hovered height (8px) for hitbox to improve interaction
+        let hitboxHeight: CGFloat = 8.0
         let barRect = NSRect(
             x: barStartX,
             y: barY - barHeight / 2.0,
             width: barWidth,
             height: barHeight
         )
-        progressBarArea.barRect = barRect
+        // Hitbox uses larger height for better click target
+        let hitboxRect = NSRect(
+            x: barStartX,
+            y: barY - hitboxHeight / 2.0,
+            width: barWidth,
+            height: hitboxHeight
+        )
+        progressBarArea.barRect = hitboxRect
         progressBarArea.isInteractable = track.canSeek
         if !track.canSeek {
             progressBarArea.isDragging = false
@@ -146,6 +159,7 @@ extension IslandView {
             progressBarArea.isHovered = false
         }
 
+        // Draw background track (unfilled portion)
         let backgroundPath = NSBezierPath(roundedRect: barRect, xRadius: barHeight / 2.0, yRadius: barHeight / 2.0)
         let backgroundAlpha: CGFloat = track.canSeek ? 0.2 : 0.1
         NSColor.white.withAlphaComponent(backgroundAlpha * expandedContentOpacity).setFill()
@@ -159,6 +173,7 @@ extension IslandView {
             renderPosition = position
         }
 
+        // Draw progress fill with animated opacity
         let rawProgress = CGFloat(renderPosition / duration)
         let clampedProgress = min(max(rawProgress, 0), 1)
         let fillRect = NSRect(
@@ -168,23 +183,10 @@ extension IslandView {
             height: barHeight
         )
         let fillPath = NSBezierPath(roundedRect: fillRect, xRadius: barHeight / 2.0, yRadius: barHeight / 2.0)
-        let fillAlpha: CGFloat = track.canSeek ? 0.8 : 0.35
-        NSColor.white.withAlphaComponent(fillAlpha * expandedContentOpacity).setFill()
+        // Use animated opacity: 0.5 normal, 1.0 hovered
+        let fillOpacity = track.canSeek ? progressBarArea.animatedOpacity : 0.35
+        NSColor.white.withAlphaComponent(fillOpacity * expandedContentOpacity).setFill()
         fillPath.fill()
-
-        if track.canSeek && progressBarArea.isHovered {
-            let scrubberRadius: CGFloat = 6.0
-            let scrubberOriginX = fillRect.maxX
-            let scrubberRect = NSRect(
-                x: scrubberOriginX - scrubberRadius,
-                y: barY - scrubberRadius,
-                width: scrubberRadius * 2.0,
-                height: scrubberRadius * 2.0
-            )
-            let scrubberPath = NSBezierPath(ovalIn: scrubberRect)
-            NSColor.white.withAlphaComponent(expandedContentOpacity).setFill()
-            scrubberPath.fill()
-        }
     }
 
     func drawCompactWaveform(startX customStartX: CGFloat? = nil, centerY customCenterY: CGFloat? = nil) {
