@@ -10,6 +10,7 @@ protocol IslandViewInteractionDelegate: AnyObject {
     func islandViewDidRequestPrevious(_ view: IslandView)
     func islandViewDidRequestEndTimer(_ view: IslandView)
     func islandViewDidRequestCancelTimer(_ view: IslandView)
+    func islandView(_ view: IslandView, didRequestSeek position: TimeInterval)
 }
 
 final class IslandView: NSView {
@@ -37,6 +38,12 @@ final class IslandView: NSView {
 
     var timerEndButton = ButtonArea()
     var timerCancelButton = ButtonArea()
+    struct ProgressBarArea {
+        var barRect: NSRect = .zero
+        var isHovered: Bool = false
+        var isInteractable: Bool = false
+    }
+    var progressBarArea = ProgressBarArea()
 
     // Debouncing for timer control buttons
     private var lastTimerButtonClickTime: TimeInterval?
@@ -84,6 +91,7 @@ final class IslandView: NSView {
             stopFadeAnimation()
             expandedContentOpacity = 0.0
             resetButtonAreas()
+            progressBarArea = ProgressBarArea()
         }
 
         needsDisplay = true
@@ -98,6 +106,23 @@ final class IslandView: NSView {
             self.waveformBars = []
         }
 
+        needsDisplay = true
+    }
+
+    func updateProgressBarOptimistically(to position: TimeInterval) {
+        guard let track = trackInfo, track.canSeek else { return }
+        let optimisticTrack = TrackInfo(
+            title: track.title,
+            artist: track.artist,
+            artwork: track.artwork,
+            isPlaying: track.isPlaying,
+            timestamp: track.timestamp,
+            sourceBundleID: track.sourceBundleID,
+            position: position,
+            duration: track.duration,
+            canSeek: track.canSeek
+        )
+        trackInfo = optimisticTrack
         needsDisplay = true
     }
 
@@ -155,6 +180,7 @@ final class IslandView: NSView {
             // Left side: audio controls (title, artist, buttons)
             // Right side: timer (top) and waveform (below)
             drawAudioMetadataIfNeeded()
+            drawProgressBarIfNeeded()
             drawPlaybackButtonsIfNeeded()
             drawTimerTextCompact()
             drawTimerControlButtonsIfNeeded()
@@ -201,18 +227,22 @@ final class IslandView: NSView {
         let wasHoveringNext = nextButton.isHovered
         let wasHoveringEnd = timerEndButton.isHovered
         let wasHoveringCancel = timerCancelButton.isHovered
+        let wasHoveringProgress = progressBarArea.isHovered
 
         playPauseButton.isHovered = playPauseButton.rect.contains(point)
         previousButton.isHovered = previousButton.rect.contains(point)
         nextButton.isHovered = nextButton.rect.contains(point)
         timerEndButton.isHovered = timerEndButton.rect.contains(point)
         timerCancelButton.isHovered = timerCancelButton.rect.contains(point)
+        let canSeek = progressBarArea.isInteractable
+        progressBarArea.isHovered = canSeek && progressBarArea.barRect.contains(point)
 
         if wasHoveringPlay != playPauseButton.isHovered ||
             wasHoveringPrev != previousButton.isHovered ||
             wasHoveringNext != nextButton.isHovered ||
             wasHoveringEnd != timerEndButton.isHovered ||
-            wasHoveringCancel != timerCancelButton.isHovered {
+            wasHoveringCancel != timerCancelButton.isHovered ||
+            wasHoveringProgress != progressBarArea.isHovered {
             needsDisplay = true
         }
     }
@@ -233,6 +263,20 @@ final class IslandView: NSView {
             }
             if nextButton.rect.contains(location) {
                 interactionDelegate?.islandViewDidRequestNext(self)
+                return
+            }
+
+            if progressBarArea.isInteractable,
+               progressBarArea.barRect.width > 0,
+               progressBarArea.barRect.contains(location),
+               let track = trackInfo,
+               let duration = track.duration,
+               duration > 0 {
+                let clickX = location.x - progressBarArea.barRect.minX
+                let progress = min(max(clickX / progressBarArea.barRect.width, 0), 1)
+                let newPosition = Double(progress) * duration
+                updateProgressBarOptimistically(to: newPosition)
+                interactionDelegate?.islandView(self, didRequestSeek: newPosition)
                 return
             }
 

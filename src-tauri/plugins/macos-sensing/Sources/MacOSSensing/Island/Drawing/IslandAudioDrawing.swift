@@ -79,6 +79,102 @@ extension IslandView {
         )
     }
 
+    func drawProgressBarIfNeeded() {
+        guard isExpanded,
+              let track = trackInfo,
+              let position = track.position,
+              let duration = track.duration,
+              duration > 0 else {
+            progressBarArea = ProgressBarArea()
+            return
+        }
+
+        let barY: CGFloat = 65.0
+        let leftX = expandedArtworkRect().minX
+        let rightMargin: CGFloat = 16.0
+
+        let currentTimeStr = formatPlaybackTime(position)
+        let durationStr = formatPlaybackTime(duration)
+        let timeFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        let timeAttrs: [NSAttributedString.Key: Any] = [
+            .font: timeFont,
+            .foregroundColor: NSColor.white.withAlphaComponent(0.7 * expandedContentOpacity)
+        ]
+
+        let currentSize = NSString(string: currentTimeStr).size(withAttributes: timeAttrs)
+        let durationSize = NSString(string: durationStr).size(withAttributes: timeAttrs)
+
+        let currentRect = NSRect(
+            x: leftX,
+            y: barY - currentSize.height / 2.0,
+            width: currentSize.width,
+            height: currentSize.height
+        )
+        NSString(string: currentTimeStr).draw(in: currentRect, withAttributes: timeAttrs)
+
+        let durationX = bounds.width - rightMargin - durationSize.width
+        let durationRect = NSRect(
+            x: durationX,
+            y: barY - durationSize.height / 2.0,
+            width: durationSize.width,
+            height: durationSize.height
+        )
+        NSString(string: durationStr).draw(in: durationRect, withAttributes: timeAttrs)
+
+        let barStartX = currentRect.maxX + 12.0
+        let barEndX = durationRect.minX - 12.0
+        let barWidth = barEndX - barStartX
+        guard barWidth > 0 else {
+            progressBarArea = ProgressBarArea()
+            return
+        }
+
+        let barHeight: CGFloat = 3.0
+        let barRect = NSRect(
+            x: barStartX,
+            y: barY - barHeight / 2.0,
+            width: barWidth,
+            height: barHeight
+        )
+        progressBarArea.barRect = barRect
+        progressBarArea.isInteractable = track.canSeek
+        if !track.canSeek {
+            progressBarArea.isHovered = false
+        }
+
+        let backgroundPath = NSBezierPath(roundedRect: barRect, xRadius: barHeight / 2.0, yRadius: barHeight / 2.0)
+        let backgroundAlpha: CGFloat = track.canSeek ? 0.2 : 0.1
+        NSColor.white.withAlphaComponent(backgroundAlpha * expandedContentOpacity).setFill()
+        backgroundPath.fill()
+
+        let rawProgress = CGFloat(position / duration)
+        let clampedProgress = min(max(rawProgress, 0), 1)
+        let fillRect = NSRect(
+            x: barStartX,
+            y: barY - barHeight / 2.0,
+            width: barWidth * clampedProgress,
+            height: barHeight
+        )
+        let fillPath = NSBezierPath(roundedRect: fillRect, xRadius: barHeight / 2.0, yRadius: barHeight / 2.0)
+        let fillAlpha: CGFloat = track.canSeek ? 0.8 : 0.35
+        NSColor.white.withAlphaComponent(fillAlpha * expandedContentOpacity).setFill()
+        fillPath.fill()
+
+        if track.canSeek && progressBarArea.isHovered {
+            let scrubberRadius: CGFloat = 6.0
+            let scrubberOriginX = fillRect.maxX
+            let scrubberRect = NSRect(
+                x: scrubberOriginX - scrubberRadius,
+                y: barY - scrubberRadius,
+                width: scrubberRadius * 2.0,
+                height: scrubberRadius * 2.0
+            )
+            let scrubberPath = NSBezierPath(ovalIn: scrubberRect)
+            NSColor.white.withAlphaComponent(expandedContentOpacity).setFill()
+            scrubberPath.fill()
+        }
+    }
+
     func drawCompactWaveform(startX customStartX: CGFloat? = nil, centerY customCenterY: CGFloat? = nil) {
         guard !waveformBars.isEmpty, waveformBars.count == 4 else { return }
 
@@ -318,5 +414,13 @@ extension IslandView {
         let fillColor = NSColor(calibratedWhite: 0.03, alpha: baseAlpha)
         fillColor.setFill()
         rect.fill()
+    }
+
+    private func formatPlaybackTime(_ seconds: TimeInterval) -> String {
+        guard seconds.isFinite else { return "0:00" }
+        let totalSeconds = max(0, Int(seconds.rounded(.down)))
+        let minutes = totalSeconds / 60
+        let remaining = totalSeconds % 60
+        return String(format: "%d:%02d", minutes, remaining)
     }
 }

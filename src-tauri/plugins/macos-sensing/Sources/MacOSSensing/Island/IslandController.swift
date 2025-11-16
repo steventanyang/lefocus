@@ -241,6 +241,10 @@ extension IslandController: IslandViewInteractionDelegate {
     func islandViewDidRequestCancelTimer(_ view: IslandView) {
         cancelTimer()
     }
+
+    func islandView(_ view: IslandView, didRequestSeek position: TimeInterval) {
+        audioController.seek(to: position)
+    }
 }
 
 // MARK: - IslandAudioControllerDelegate

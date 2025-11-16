@@ -16,6 +16,8 @@ public final class MediaMonitor {
     private let albumArtCoordinator = AlbumArtCoordinator.shared
 
     private var metadataTimer: Timer?
+    private var metadataInterval: TimeInterval = 1.0
+    private var isPolling = false
     private var currentTrack: TrackInfo?
     private var pendingArtworkTimestamp: Date?
 
@@ -25,13 +27,17 @@ public final class MediaMonitor {
 
     public func startMonitoring() {
         guard metadataTimer == nil else { return }
-        startMetadataTimer()
+        metadataInterval = 1.0
+        isPolling = false
+        ensureMetadataTimer()
         refreshMetadata()
     }
 
     public func stopMonitoring() {
         metadataTimer?.invalidate()
         metadataTimer = nil
+        metadataInterval = 1.0
+        isPolling = false
         currentTrack = nil
         activeBundleID = nil
         pendingArtworkTimestamp = nil
@@ -49,22 +55,40 @@ public final class MediaMonitor {
         controlCoordinator.skipToPrevious(for: activeBundleID)
     }
 
+    public func seek(to position: TimeInterval, bundleID: String?) {
+        controlCoordinator.seek(to: position, bundleID: bundleID)
+    }
+
     // MARK: - Polling
 
-    private func startMetadataTimer() {
-        let timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+    private func ensureMetadataTimer() {
+        guard metadataTimer == nil else { return }
+        scheduleMetadataTimer(interval: metadataInterval)
+    }
+
+    private func scheduleMetadataTimer(interval: TimeInterval) {
+        metadataTimer?.invalidate()
+        let timer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
             self?.refreshMetadata()
         }
         RunLoop.main.add(timer, forMode: .common)
         metadataTimer = timer
+        metadataInterval = interval
     }
 
     private func refreshMetadata() {
+        guard !isPolling else { return }
+        isPolling = true
         pollingQueue.async { [weak self] in
             guard let self else { return }
             let snapshot = self.captureSnapshot()
             DispatchQueue.main.async {
                 self.apply(snapshot: snapshot)
+                let desiredInterval: TimeInterval = snapshot?.track.isPlaying == true ? 0.5 : 1.0
+                if abs(desiredInterval - self.metadataInterval) > 0.01 {
+                    self.scheduleMetadataTimer(interval: desiredInterval)
+                }
+                self.isPolling = false
             }
         }
     }
@@ -86,12 +110,11 @@ public final class MediaMonitor {
             )
         }
 
-        // Fallback to MPNowPlayingInfoCenter for generic sources (must be on main thread)
-        return DispatchQueue.main.sync {
-            nowPlayingSnapshot().map {
-                MediaSnapshot(track: $0, bundleID: $0.sourceBundleID, artworkHint: nil)
-            }
+        // Fallback to MPNowPlayingInfoCenter for generic sources
+        if let nowPlaying = nowPlayingSnapshot() {
+            return MediaSnapshot(track: nowPlaying, bundleID: nowPlaying.sourceBundleID, artworkHint: nil)
         }
+        return nil
     }
 
     private func apply(snapshot: MediaSnapshot?) {
@@ -113,12 +136,29 @@ public final class MediaMonitor {
            current.matchesIdentity(with: track) {
             track = track.replacingArtwork(cachedArtwork)
         }
-        let trackChanged = track != currentTrack
+        let baseTrackChanged = track != currentTrack
+        if !baseTrackChanged, let existingTimestamp = currentTrack?.timestamp {
+            track = TrackInfo(
+                title: track.title,
+                artist: track.artist,
+                artwork: track.artwork,
+                isPlaying: track.isPlaying,
+                timestamp: existingTimestamp,
+                sourceBundleID: track.sourceBundleID,
+                position: track.position,
+                duration: track.duration,
+                canSeek: track.canSeek
+            )
+        }
+        let trackChanged = baseTrackChanged
+        let playbackChanged = currentTrack?.position != track.position ||
+            currentTrack?.duration != track.duration ||
+            currentTrack?.canSeek != track.canSeek
         let currentHasArtwork = currentTrack?.artwork != nil
         let newHasArtwork = track.artwork != nil
         let artworkPresenceChanged = currentHasArtwork != newHasArtwork
 
-        if trackChanged || artworkPresenceChanged {
+        if trackChanged || artworkPresenceChanged || playbackChanged {
             currentTrack = track
             onTrackChange?(track)
             if trackChanged {
@@ -163,14 +203,7 @@ public final class MediaMonitor {
                 return
             }
 
-            let updated = TrackInfo(
-                title: current.title,
-                artist: current.artist,
-                artwork: image,
-                isPlaying: current.isPlaying,
-                timestamp: current.timestamp,
-                sourceBundleID: current.sourceBundleID
-            )
+            let updated = current.replacingArtwork(image)
 
             self.currentTrack = updated
             self.onTrackChange?(updated)
@@ -179,11 +212,10 @@ public final class MediaMonitor {
     }
 
     private func nowPlayingSnapshot() -> TrackInfo? {
-        // Must be called on main thread
-        guard Thread.isMainThread else {
-            return nil
+        if !Thread.isMainThread {
+            return DispatchQueue.main.sync { self.nowPlayingSnapshot() }
         }
-        
+
         guard let info = nowPlayingCenter.nowPlayingInfo else { return nil }
 
         let title = (info[MPMediaItemPropertyTitle] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -198,12 +230,18 @@ public final class MediaMonitor {
             artwork = nil
         }
 
+        let position = info[MPNowPlayingInfoPropertyElapsedPlaybackTime] as? TimeInterval
+        let duration = info[MPMediaItemPropertyPlaybackDuration] as? TimeInterval
+
         return TrackInfo(
             title: title?.isEmpty == false ? title! : "Unknown",
             artist: artist?.isEmpty == false ? artist! : "Unknown",
             artwork: artwork,
             isPlaying: isPlaying,
-            sourceBundleID: nil
+            sourceBundleID: nil,
+            position: position,
+            duration: duration,
+            canSeek: false
         )
     }
 }
@@ -239,12 +277,19 @@ private struct SpotifyMetadataProbe: MediaAppProbe {
             return nil
         }
 
+        let position: TimeInterval? = components.count >= 6 ? Double(components[4]) : nil
+        let durationMs: TimeInterval? = components.count >= 6 ? Double(components[5]) : nil
+        let duration = durationMs.map { $0 / 1000.0 }
+
         let track = TrackInfo(
             title: components[0].isEmpty ? "Unknown" : components[0],
             artist: components[1].isEmpty ? "Unknown" : components[1],
             artwork: nil,
             isPlaying: isPlaying,
-            sourceBundleID: "com.spotify.client"
+            sourceBundleID: "com.spotify.client",
+            position: position,
+            duration: duration,
+            canSeek: true
         )
 
         let urlString = components.count >= 4 ? components[3].trimmingCharacters(in: .whitespacesAndNewlines) : ""
@@ -274,7 +319,9 @@ private struct SpotifyMetadataProbe: MediaAppProbe {
         try
             set artUrl to artwork url of current track
         end try
-        return trackName & separator & trackArtist & separator & trackState & separator & artUrl
+        set pos to player position as string
+        set dur to duration of current track as string
+        return trackName & separator & trackArtist & separator & trackState & separator & artUrl & separator & pos & separator & dur
     end tell
     """
 }
@@ -293,12 +340,18 @@ private struct MusicMetadataProbe: MediaAppProbe {
             return nil
         }
 
+        let position: TimeInterval? = components.count >= 6 ? Double(components[4]) : nil
+        let duration: TimeInterval? = components.count >= 6 ? Double(components[5]) : nil
+
         let track = TrackInfo(
             title: components[0].isEmpty ? "Unknown" : components[0],
             artist: components[1].isEmpty ? "Unknown" : components[1],
             artwork: nil,
             isPlaying: isPlaying,
-            sourceBundleID: "com.apple.Music"
+            sourceBundleID: "com.apple.Music",
+            position: position,
+            duration: duration,
+            canSeek: true
         )
 
         let base64Artwork = components.count >= 4 ? components[3].trimmingCharacters(in: .whitespacesAndNewlines) : ""
@@ -342,7 +395,9 @@ private struct MusicMetadataProbe: MediaAppProbe {
                 end try
             end if
         end try
-        return trackName & separator & trackArtist & separator & trackState & separator & artData
+        set pos to player position as string
+        set dur to duration of current track as string
+        return trackName & separator & trackArtist & separator & trackState & separator & artData & separator & pos & separator & dur
     end tell
     """
 }

@@ -8,6 +8,9 @@ public struct TrackInfo: Equatable {
     public let isPlaying: Bool
     public let timestamp: Date
     public let sourceBundleID: String?
+    public let position: TimeInterval?
+    public let duration: TimeInterval?
+    public let canSeek: Bool
 
     public init(
         title: String,
@@ -15,7 +18,10 @@ public struct TrackInfo: Equatable {
         artwork: NSImage?,
         isPlaying: Bool,
         timestamp: Date = Date(),
-        sourceBundleID: String?
+        sourceBundleID: String?,
+        position: TimeInterval? = nil,
+        duration: TimeInterval? = nil,
+        canSeek: Bool = false
     ) {
         self.title = title
         self.artist = artist
@@ -23,6 +29,9 @@ public struct TrackInfo: Equatable {
         self.isPlaying = isPlaying
         self.timestamp = timestamp
         self.sourceBundleID = sourceBundleID
+        self.position = position
+        self.duration = duration
+        self.canSeek = canSeek
     }
 
     public static func == (lhs: TrackInfo, rhs: TrackInfo) -> Bool {
@@ -39,7 +48,10 @@ public struct TrackInfo: Equatable {
             artist: "Unknown",
             artwork: nil,
             isPlaying: false,
-            sourceBundleID: nil
+            sourceBundleID: nil,
+            position: nil,
+            duration: nil,
+            canSeek: false
         )
     }
 
@@ -50,7 +62,10 @@ public struct TrackInfo: Equatable {
             artwork: newArtwork,
             isPlaying: isPlaying,
             timestamp: timestamp,
-            sourceBundleID: sourceBundleID
+            sourceBundleID: sourceBundleID,
+            position: position,
+            duration: duration,
+            canSeek: canSeek
         )
     }
 

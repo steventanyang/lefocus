@@ -81,5 +81,6 @@ extension IslandView {
         nextButton = ButtonArea()
         timerEndButton = ButtonArea()
         timerCancelButton = ButtonArea()
+        progressBarArea = ProgressBarArea()
     }
 }
