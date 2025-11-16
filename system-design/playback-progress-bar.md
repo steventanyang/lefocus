@@ -27,6 +27,7 @@ Positioned between the song metadata (top) and playback buttons (bottom).
 | **Seek functionality** | Click anywhere on bar to jump to that position |
 | **Live updates** | Poll position every 0.5s when playing |
 | **Multi-app support** | Spotify, Apple Music, MPNowPlayingInfoCenter |
+| **Timer-safe UI** | Hide bar when countdown view occupies expanded island |
 
 ### 1.3 Technical Feasibility
 
@@ -425,21 +426,25 @@ private func seekScript(for position: TimeInterval, bundleID: String) -> String?
 struct ProgressBarArea {
     var barRect: NSRect = .zero
     var isHovered: Bool = false
+    var isInteractable: Bool = false
+    var isDragging: Bool = false
+    var pendingSeekPosition: TimeInterval?
 }
 
 var progressBarArea = ProgressBarArea()
 
 func drawProgressBarIfNeeded() {
     guard isExpanded,
+          isIdle, // when timer UI is active we hide the progress bar entirely
           let track = trackInfo,
           let position = track.position,
           let duration = track.duration,
           duration > 0 else {
-        progressBarArea.barRect = .zero
+        progressBarArea = ProgressBarArea()
         return
     }
 
-    let barY: CGFloat = 65.0  // 65px from bottom
+    let barY: CGFloat = 75.0  // balanced padding between metadata (top) and controls (bottom)
     let leftX: CGFloat = expandedArtworkRect().minX  // Align with artwork
     let rightMargin: CGFloat = 16.0
     let barWidth = bounds.width - leftX - rightMargin
@@ -489,7 +494,13 @@ func drawProgressBarIfNeeded() {
         height: barHeight
     )
 
-    progressBarArea.barRect = track.canSeek ? barBackgroundRect : .zero
+    progressBarArea.barRect = barBackgroundRect
+    progressBarArea.isInteractable = track.canSeek
+    if !track.canSeek {
+        progressBarArea.isHovered = false
+        progressBarArea.isDragging = false
+        progressBarArea.pendingSeekPosition = nil
+    }
 
     // Draw background track
     let backgroundPath = NSBezierPath(roundedRect: barBackgroundRect, xRadius: barHeight / 2.0, yRadius: barHeight / 2.0)
@@ -498,7 +509,8 @@ func drawProgressBarIfNeeded() {
     backgroundPath.fill()
 
     // Draw progress fill
-    let rawProgress = CGFloat(position / duration)
+    let renderValue = progressBarArea.pendingSeekPosition ?? position
+    let rawProgress = CGFloat(renderValue / duration)
     let progress = min(max(rawProgress, 0), 1)
     let fillWidth = barActualWidth * progress
     let fillRect = NSRect(
@@ -606,6 +618,8 @@ func seek(to position: TimeInterval, bundleID: String) {
 }
 ```
 
+By gating on `isIdle`, the visualizer only appears when the audio layout owns the expanded island; during countdown mode the guard exits early so artworks, timers, and controls never overlap.
+
 ---
 
 ## 5. UI Design Specifications
@@ -628,10 +642,12 @@ func seek(to position: TimeInterval, bundleID: String) {
 **Hovering (seekable tracks only):**
 - Scrubber circle appears at current position
 - Cursor changes to pointer
+- Vertical hitbox extends ±8 px so slight misses still scrub
 
-**Read-only sources (`canSeek == false`):**
+**Read-only sources (`canSeek == false`) or timer expanded view:**
 - Background/fill use lower opacity
 - No scrubber or hover feedback; cursor stays default
+- When the countdown/timer UI owns the expanded island, the progress bar stays hidden with no hitbox.
 
 **Clicking:**
 - Calculate progress from click X position
@@ -641,11 +657,11 @@ func seek(to position: TimeInterval, bundleID: String) {
 ### 5.3 Layout Constraints
 
 ```
-Expanded Island: 380px × 150px
+Expanded Island: 380px × 170px
 
 Vertical Layout:
-  - Song metadata: 50px from top
-  - Progress bar: 65px from bottom (55px spacing above buttons)
+  - Song metadata: 60px from top (more breathing room)
+  - Progress bar: 75px from bottom (matches top spacing)
   - Playback buttons: 10px from bottom
 
 Horizontal Layout:
@@ -784,6 +800,7 @@ class ProgressCalculationTests: XCTestCase {
 **Edge Cases:**
 9. ✅ Track with no duration metadata → no progress bar
 10. ✅ Very long track (>60 min) → time displays correctly (e.g., "62:03")
+11. ✅ Start a timer (expanded countdown UI) → progress bar stays hidden/disabled
 
 ---
 

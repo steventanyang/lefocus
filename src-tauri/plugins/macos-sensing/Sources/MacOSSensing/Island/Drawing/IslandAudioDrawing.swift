@@ -81,6 +81,7 @@ extension IslandView {
 
     func drawProgressBarIfNeeded() {
         guard isExpanded,
+              isIdle,
               let track = trackInfo,
               let position = track.position,
               let duration = track.duration,
@@ -90,8 +91,7 @@ extension IslandView {
         }
 
         let barY: CGFloat = 65.0
-        let leftX = expandedArtworkRect().minX
-        let rightMargin: CGFloat = 16.0
+        let horizontalMargin: CGFloat = 28.0  // Consistent margin on both sides
 
         let currentTimeStr = formatPlaybackTime(position)
         let durationStr = formatPlaybackTime(duration)
@@ -105,14 +105,14 @@ extension IslandView {
         let durationSize = NSString(string: durationStr).size(withAttributes: timeAttrs)
 
         let currentRect = NSRect(
-            x: leftX,
+            x: horizontalMargin,
             y: barY - currentSize.height / 2.0,
             width: currentSize.width,
             height: currentSize.height
         )
         NSString(string: currentTimeStr).draw(in: currentRect, withAttributes: timeAttrs)
 
-        let durationX = bounds.width - rightMargin - durationSize.width
+        let durationX = bounds.width - horizontalMargin - durationSize.width
         let durationRect = NSRect(
             x: durationX,
             y: barY - durationSize.height / 2.0,

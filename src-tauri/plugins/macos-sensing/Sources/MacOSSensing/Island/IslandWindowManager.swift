@@ -16,6 +16,10 @@ struct IslandWindowConfiguration {
     let compactTimerWidth: CGFloat     // Timer active
     let expandedIdleWidth: CGFloat     // No timer
     let expandedTimerWidth: CGFloat    // Timer active
+    
+    // Heights for different states
+    let expandedIdleHeight: CGFloat    // No timer (with progress bar)
+    let expandedTimerHeight: CGFloat   // Timer active (no progress bar)
 }
 
 /// Owns the NSPanel hierarchy and handles screen observation + sizing animations.
@@ -188,9 +192,10 @@ final class IslandWindowManager {
 
     private func currentIslandSize() -> NSSize {
         if isExpanded {
-            // Use configured widths based on timer state
+            // Use configured widths and heights based on timer state
             let expandedWidth: CGFloat = isTimerIdle ? configuration.expandedIdleWidth : configuration.expandedTimerWidth
-            return NSSize(width: expandedWidth, height: configuration.expandedSize.height)
+            let expandedHeight: CGFloat = isTimerIdle ? configuration.expandedIdleHeight : configuration.expandedTimerHeight
+            return NSSize(width: expandedWidth, height: expandedHeight)
         }
         
         // Use configured widths based on timer state
