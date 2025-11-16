@@ -69,6 +69,24 @@ public struct TrackInfo: Equatable {
         )
     }
 
+    public func updatingPlayback(
+        position newPosition: TimeInterval?,
+        duration newDuration: TimeInterval? = nil,
+        canSeek newCanSeek: Bool? = nil
+    ) -> TrackInfo {
+        TrackInfo(
+            title: title,
+            artist: artist,
+            artwork: artwork,
+            isPlaying: isPlaying,
+            timestamp: timestamp,
+            sourceBundleID: sourceBundleID,
+            position: newPosition ?? position,
+            duration: newDuration ?? duration,
+            canSeek: newCanSeek ?? canSeek
+        )
+    }
+
     public func matchesIdentity(with other: TrackInfo) -> Bool {
         return normalized(title) == normalized(other.title) &&
             normalized(artist) == normalized(other.artist) &&

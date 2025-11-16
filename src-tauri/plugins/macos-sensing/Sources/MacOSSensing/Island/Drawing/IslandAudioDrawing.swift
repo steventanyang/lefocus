@@ -139,6 +139,10 @@ extension IslandView {
         progressBarArea.barRect = barRect
         progressBarArea.isInteractable = track.canSeek
         if !track.canSeek {
+            progressBarArea.isDragging = false
+            progressBarArea.pendingSeekPosition = nil
+        }
+        if !track.canSeek {
             progressBarArea.isHovered = false
         }
 
@@ -147,7 +151,15 @@ extension IslandView {
         NSColor.white.withAlphaComponent(backgroundAlpha * expandedContentOpacity).setFill()
         backgroundPath.fill()
 
-        let rawProgress = CGFloat(position / duration)
+        let renderPosition: TimeInterval
+        if let pending = progressBarArea.pendingSeekPosition,
+           (progressBarArea.isDragging || progressBarArea.pendingSeekTimestamp != nil) {
+            renderPosition = pending
+        } else {
+            renderPosition = position
+        }
+
+        let rawProgress = CGFloat(renderPosition / duration)
         let clampedProgress = min(max(rawProgress, 0), 1)
         let fillRect = NSRect(
             x: barStartX,

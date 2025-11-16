@@ -42,6 +42,9 @@ final class IslandView: NSView {
         var barRect: NSRect = .zero
         var isHovered: Bool = false
         var isInteractable: Bool = false
+        var isDragging: Bool = false
+        var pendingSeekPosition: TimeInterval?
+        var pendingSeekTimestamp: Date?
     }
     var progressBarArea = ProgressBarArea()
 
@@ -98,11 +101,13 @@ final class IslandView: NSView {
     }
 
     func updateAudio(track: TrackInfo?, waveformBars: [CGFloat]?) {
-        self.trackInfo = track
-        self.isAudioPlaying = track?.isPlaying ?? false
-        if let bars = waveformBars, track != nil {
+        let finalTrack = applyPendingSeekIfNeeded(to: track)
+
+        self.trackInfo = finalTrack
+        self.isAudioPlaying = finalTrack?.isPlaying ?? false
+        if let bars = waveformBars, finalTrack != nil {
             self.waveformBars = bars
-        } else if track == nil {
+        } else if finalTrack == nil {
             self.waveformBars = []
         }
 
@@ -111,19 +116,50 @@ final class IslandView: NSView {
 
     func updateProgressBarOptimistically(to position: TimeInterval) {
         guard let track = trackInfo, track.canSeek else { return }
-        let optimisticTrack = TrackInfo(
-            title: track.title,
-            artist: track.artist,
-            artwork: track.artwork,
-            isPlaying: track.isPlaying,
-            timestamp: track.timestamp,
-            sourceBundleID: track.sourceBundleID,
-            position: position,
-            duration: track.duration,
-            canSeek: track.canSeek
-        )
-        trackInfo = optimisticTrack
+        progressBarArea.pendingSeekPosition = position
+        if !progressBarArea.isDragging {
+            progressBarArea.pendingSeekTimestamp = Date()
+        }
+        trackInfo = track.updatingPlayback(position: position)
         needsDisplay = true
+    }
+
+    private func seekPosition(for x: CGFloat, duration: TimeInterval) -> TimeInterval {
+        let clampedX = min(max(x, progressBarArea.barRect.minX), progressBarArea.barRect.maxX)
+        let relative = (clampedX - progressBarArea.barRect.minX) / progressBarArea.barRect.width
+        let progress = min(max(Double(relative), 0.0), 1.0)
+        return progress * duration
+    }
+
+    private func applyPendingSeekIfNeeded(to track: TrackInfo?) -> TrackInfo? {
+        guard let track else {
+            progressBarArea.pendingSeekPosition = nil
+            progressBarArea.pendingSeekTimestamp = nil
+            return nil
+        }
+        guard track.canSeek else {
+            progressBarArea.pendingSeekPosition = nil
+            progressBarArea.pendingSeekTimestamp = nil
+            return track
+        }
+
+        guard let pending = progressBarArea.pendingSeekPosition else {
+            return track
+        }
+
+        if let actual = track.position,
+           !progressBarArea.isDragging {
+            let delta = abs(actual - pending)
+            let matched = delta < 0.25
+            let expired = progressBarArea.pendingSeekTimestamp.map { Date().timeIntervalSince($0) > 1.5 } ?? false
+            if matched || expired {
+                progressBarArea.pendingSeekPosition = nil
+                progressBarArea.pendingSeekTimestamp = nil
+                return track
+            }
+        }
+
+        return track.updatingPlayback(position: pending)
     }
 
     // MARK: - View lifecycle
@@ -266,17 +302,18 @@ final class IslandView: NSView {
                 return
             }
 
+            let extendedHitbox = progressBarArea.barRect.insetBy(dx: 0, dy: -8)
             if progressBarArea.isInteractable,
                progressBarArea.barRect.width > 0,
-               progressBarArea.barRect.contains(location),
+               extendedHitbox.contains(location),
                let track = trackInfo,
                let duration = track.duration,
                duration > 0 {
-                let clickX = location.x - progressBarArea.barRect.minX
-                let progress = min(max(clickX / progressBarArea.barRect.width, 0), 1)
-                let newPosition = Double(progress) * duration
+                let newPosition = seekPosition(for: location.x, duration: duration)
+                progressBarArea.isDragging = true
+                progressBarArea.pendingSeekTimestamp = nil
+                progressBarArea.pendingSeekPosition = newPosition
                 updateProgressBarOptimistically(to: newPosition)
-                interactionDelegate?.islandView(self, didRequestSeek: newPosition)
                 return
             }
 
@@ -300,6 +337,33 @@ final class IslandView: NSView {
             }
         }
         interactionDelegate?.islandViewDidRequestToggleExpansion(self)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard isExpanded,
+              progressBarArea.isDragging,
+              progressBarArea.barRect.width > 0,
+              let duration = trackInfo?.duration,
+              duration > 0 else {
+            return
+        }
+        let location = convert(event.locationInWindow, from: nil)
+        let newPosition = seekPosition(for: location.x, duration: duration)
+        progressBarArea.pendingSeekPosition = newPosition
+        progressBarArea.pendingSeekTimestamp = nil
+        updateProgressBarOptimistically(to: newPosition)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        if progressBarArea.isDragging {
+            progressBarArea.isDragging = false
+            if let position = progressBarArea.pendingSeekPosition {
+                progressBarArea.pendingSeekTimestamp = Date()
+                interactionDelegate?.islandView(self, didRequestSeek: position)
+            }
+            return
+        }
+        super.mouseUp(with: event)
     }
 
     // MARK: - Private helpers
