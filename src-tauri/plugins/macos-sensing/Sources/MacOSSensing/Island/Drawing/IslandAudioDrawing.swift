@@ -437,4 +437,97 @@ extension IslandView {
         let remaining = totalSeconds % 60
         return String(format: "%d:%02d", minutes, remaining)
     }
+    
+    // MARK: - Progress Bar Interaction
+    
+    func updateProgressBarOptimistically(to position: TimeInterval) {
+        guard let track = trackInfo, track.canSeek else { return }
+        progressBarArea.pendingSeekPosition = position
+        if !progressBarArea.isDragging {
+            progressBarArea.pendingSeekTimestamp = Date()
+        }
+        trackInfo = track.updatingPlayback(position: position)
+        needsDisplay = true
+    }
+
+    func seekPosition(for x: CGFloat, duration: TimeInterval) -> TimeInterval {
+        let clampedX = min(max(x, progressBarArea.barRect.minX), progressBarArea.barRect.maxX)
+        let relative = (clampedX - progressBarArea.barRect.minX) / progressBarArea.barRect.width
+        let progress = min(max(Double(relative), 0.0), 1.0)
+        return progress * duration
+    }
+
+    func applyPendingSeekIfNeeded(to track: TrackInfo?) -> TrackInfo? {
+        guard let track else {
+            progressBarArea.pendingSeekPosition = nil
+            progressBarArea.pendingSeekTimestamp = nil
+            return nil
+        }
+        guard track.canSeek else {
+            progressBarArea.pendingSeekPosition = nil
+            progressBarArea.pendingSeekTimestamp = nil
+            return track
+        }
+
+        guard let pending = progressBarArea.pendingSeekPosition else {
+            return track
+        }
+
+        if let actual = track.position,
+           !progressBarArea.isDragging {
+            let delta = abs(actual - pending)
+            let matched = delta < 0.25
+            let expired = progressBarArea.pendingSeekTimestamp.map { Date().timeIntervalSince($0) > 1.5 } ?? false
+            if matched || expired {
+                progressBarArea.pendingSeekPosition = nil
+                progressBarArea.pendingSeekTimestamp = nil
+                return track
+            }
+        }
+
+        return track.updatingPlayback(position: pending)
+    }
+    
+    // MARK: - Compact Layout Drawing
+    
+    private enum CompactLayoutState {
+        case audioOnly
+        case timerActive
+        case idle
+    }
+
+    private var compactLayoutState: CompactLayoutState {
+        if isIdle {
+            return trackInfo == nil ? .idle : .audioOnly
+        }
+        return .timerActive
+    }
+
+    func drawCompactLayout() {
+        switch compactLayoutState {
+        case .audioOnly:
+            drawCompactWaveform(startX: 18.0, centerY: bounds.midY)
+            drawCompactArtworkOnRight()
+        case .timerActive:
+            drawTimerText()
+            if trackInfo != nil {
+                drawCompactWaveform(startX: 18.0, centerY: bounds.midY)
+            }
+        case .idle:
+            drawCompactWaveform(startX: 18.0, centerY: bounds.midY)
+        }
+    }
+
+    func drawCompactArtworkOnRight() {
+        guard let track = trackInfo else { return }
+        let size = AudioArtworkLayout.compactSize
+        let rect = NSRect(
+            x: bounds.maxX - size - 12.0,
+            y: bounds.midY - size / 2.0,
+            width: size,
+            height: size
+        )
+        // Use rounded corners (3px) instead of circle (size/2) for square shape
+        drawArtworkImage(track.artwork, in: rect, cornerRadius: 3.0, emphasize: false)
+    }
 }
