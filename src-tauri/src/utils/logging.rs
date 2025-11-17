@@ -13,7 +13,7 @@
 
 /// Macro for conditional info logging.
 /// Checks the `ENABLE_LOGS` const in the calling module.
-/// 
+///
 /// Each module that uses this macro must define:
 /// ```rust
 /// const ENABLE_LOGS: bool = true; // or false
@@ -29,7 +29,7 @@ macro_rules! log_info {
 
 /// Macro for conditional warn logging.
 /// Checks the `ENABLE_LOGS` const in the calling module.
-/// 
+///
 /// Each module that uses this macro must define:
 /// ```rust
 /// const ENABLE_LOGS: bool = true; // or false
@@ -45,7 +45,7 @@ macro_rules! log_warn {
 
 /// Macro for conditional error logging.
 /// Checks the `ENABLE_LOGS` const in the calling module.
-/// 
+///
 /// Each module that uses this macro must define:
 /// ```rust
 /// const ENABLE_LOGS: bool = true; // or false
@@ -58,4 +58,3 @@ macro_rules! log_error {
         }
     };
 }
-

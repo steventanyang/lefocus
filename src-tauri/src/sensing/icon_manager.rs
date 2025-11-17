@@ -27,7 +27,10 @@ impl IconManager {
     pub async fn ensure_icon(&self, bundle_id: &str, app_name: Option<&str>) {
         // Skip synthetic system bundle IDs that won't have icons
         if bundle_id == "com.apple.system" {
-            log::trace!("Skipping icon prefetch for synthetic bundle ID: {}", bundle_id);
+            log::trace!(
+                "Skipping icon prefetch for synthetic bundle ID: {}",
+                bundle_id
+            );
             return;
         }
 
@@ -87,13 +90,19 @@ async fn prefetch_icon_for_app(
 
     // If we have both icon and color, skip prefetch
     if has_icon && has_color {
-        log::trace!("App {} already has icon and color, skipping prefetch", bundle_id);
+        log::trace!(
+            "App {} already has icon and color, skipping prefetch",
+            bundle_id
+        );
         return Ok(());
     }
 
     // If we have icon but no color, we need to backfill the color
     if has_icon && !has_color {
-        log::debug!("App {} has icon but missing color, backfilling color", bundle_id);
+        log::debug!(
+            "App {} has icon but missing color, backfilling color",
+            bundle_id
+        );
     } else {
         log::debug!("Pre-fetching icon for {} during session", bundle_id);
     }
@@ -106,7 +115,10 @@ async fn prefetch_icon_for_app(
             } else {
                 Some(icon_color.as_str())
             };
-            if let Err(e) = db.update_app_icon(bundle_id, &icon_data_url, color_opt).await {
+            if let Err(e) = db
+                .update_app_icon(bundle_id, &icon_data_url, color_opt)
+                .await
+            {
                 log::warn!("Failed to store icon/color for {}: {}", bundle_id, e);
             } else {
                 if has_icon && !has_color {
@@ -118,7 +130,10 @@ async fn prefetch_icon_for_app(
         }
         None => {
             // Don't log as warning during prefetch - this is expected for some apps
-            log::debug!("Could not fetch icon/color for {} (app might not be installed)", bundle_id);
+            log::debug!(
+                "Could not fetch icon/color for {} (app might not be installed)",
+                bundle_id
+            );
         }
     }
 

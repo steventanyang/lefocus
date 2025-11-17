@@ -63,7 +63,12 @@ impl<'a> AppRepository<'a> {
     }
 
     /// Update app icon and color
-    pub fn update_icon(&self, bundle_id: &str, icon_data_url: &str, icon_color: Option<&str>) -> Result<()> {
+    pub fn update_icon(
+        &self,
+        bundle_id: &str,
+        icon_data_url: &str,
+        icon_color: Option<&str>,
+    ) -> Result<()> {
         let now = Utc::now().to_rfc3339();
         self.conn.execute(
             "UPDATE apps SET icon_data_url = ?1, icon_color = ?2, icon_fetched_at = ?3, updated_at = ?3
@@ -165,7 +170,12 @@ impl Database {
     }
 
     /// Update app icon and color in database
-    pub async fn update_app_icon(&self, bundle_id: &str, icon_data_url: &str, icon_color: Option<&str>) -> Result<()> {
+    pub async fn update_app_icon(
+        &self,
+        bundle_id: &str,
+        icon_data_url: &str,
+        icon_color: Option<&str>,
+    ) -> Result<()> {
         let bundle_id = bundle_id.to_string();
         let icon_data_url = icon_data_url.to_string();
         let icon_color = icon_color.map(String::from);

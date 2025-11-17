@@ -1,7 +1,10 @@
 use tauri::State;
 
 use crate::{
-    db::{models::{Interruption, Segment, SessionSummary}, SessionInfo},
+    db::{
+        models::{Interruption, Segment, SessionSummary},
+        SessionInfo,
+    },
     timer::{TimerController, TimerMode, TimerSnapshot, TimerState},
 };
 
@@ -83,16 +86,15 @@ pub async fn list_sessions(state: State<'_, AppState>) -> Result<Vec<SessionSumm
     let db = &state.db;
 
     // Get all sessions (completed + interrupted)
-    let sessions = db.list_sessions()
-        .await
-        .map_err(|e| e.to_string())?;
+    let sessions = db.list_sessions().await.map_err(|e| e.to_string())?;
 
     // For each session, get top 3 apps
     let mut summaries = Vec::new();
     let mut all_bundle_ids = HashSet::new();
 
     for session in sessions {
-        let top_apps = db.get_top_apps_for_session(&session.id, 3)
+        let top_apps = db
+            .get_top_apps_for_session(&session.id, 3)
             .await
             .map_err(|e| e.to_string())?;
 
@@ -110,13 +112,14 @@ pub async fn list_sessions(state: State<'_, AppState>) -> Result<Vec<SessionSumm
             active_ms: session.active_ms,
             label_id: session.label_id,
             top_apps,
-            app_icons: HashMap::new(), // Will be populated below
+            app_icons: HashMap::new(),  // Will be populated below
             app_colors: HashMap::new(), // Will be populated below
         });
     }
 
     // Fetch all app icons and colors in one go
-    let app_icons_and_colors = db.get_app_icons_for_bundle_ids(&all_bundle_ids.into_iter().collect::<Vec<_>>())
+    let app_icons_and_colors = db
+        .get_app_icons_for_bundle_ids(&all_bundle_ids.into_iter().collect::<Vec<_>>())
         .await
         .map_err(|e| e.to_string())?;
 
@@ -147,7 +150,8 @@ pub async fn list_sessions_paginated(
     let db = &state.db;
 
     // Get paginated sessions (completed + interrupted)
-    let sessions = db.list_sessions_paginated(limit, offset)
+    let sessions = db
+        .list_sessions_paginated(limit, offset)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -156,7 +160,8 @@ pub async fn list_sessions_paginated(
     let mut all_bundle_ids = HashSet::new();
 
     for session in sessions {
-        let top_apps = db.get_top_apps_for_session(&session.id, 3)
+        let top_apps = db
+            .get_top_apps_for_session(&session.id, 3)
             .await
             .map_err(|e| e.to_string())?;
 
@@ -174,13 +179,14 @@ pub async fn list_sessions_paginated(
             active_ms: session.active_ms,
             label_id: session.label_id,
             top_apps,
-            app_icons: HashMap::new(), // Will be populated below
+            app_icons: HashMap::new(),  // Will be populated below
             app_colors: HashMap::new(), // Will be populated below
         });
     }
 
     // Fetch all app icons and colors in one go
-    let app_icons_and_colors = db.get_app_icons_for_bundle_ids(&all_bundle_ids.into_iter().collect::<Vec<_>>())
+    let app_icons_and_colors = db
+        .get_app_icons_for_bundle_ids(&all_bundle_ids.into_iter().collect::<Vec<_>>())
         .await
         .map_err(|e| e.to_string())?;
 
