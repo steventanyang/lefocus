@@ -18,7 +18,7 @@ extension IslandView {
                 : NSColor.white.withAlphaComponent(0.4)
         }
 
-        guard let timerFont = IslandView.monospacedFont(size: 13, weight: .medium) else {
+        guard let timerFont = IslandView.monospacedFont(size: 14, weight: .semibold) else {
             return
         }
 
@@ -30,7 +30,7 @@ extension IslandView {
         let attributed = NSAttributedString(string: timeString, attributes: attributes)
         let textSize = attributed.size()
         // Right-align the text with some padding from the right edge
-        let padding: CGFloat = 12.0
+        let padding: CGFloat = 18.0
         let origin = NSPoint(
             x: bounds.maxX - textSize.width - padding,
             y: (bounds.height - textSize.height) / 2.0
@@ -42,7 +42,7 @@ extension IslandView {
         guard !isIdle else { return }
         let timeString = formatTime(ms: displayMs)
 
-        // Smaller font for better fit (28pt instead of 36pt)
+        // Larger font for expanded view with timer
         guard let timerFont = IslandView.monospacedFont(size: 28, weight: .semibold) else {
             return
         }
@@ -59,8 +59,8 @@ extension IslandView {
         // Mirror the left section padding for symmetry:
         // Left section: 16px padding on left, ends at 50% - 16px
         // Right section: starts at 50% + 16px, 16px padding on right
-        let rightSectionStartX = bounds.width * 0.5 + 16.0  // Start after center gap
-        let rightSectionEndX = bounds.maxX - 16.0  // Right padding matches left padding
+        let rightSectionStartX = bounds.width * 0.5 + 22.0
+        let rightSectionEndX = bounds.maxX - 22.0
         let availableWidth = rightSectionEndX - rightSectionStartX
 
         // Center timer in the available right section
@@ -70,7 +70,7 @@ extension IslandView {
         // Title rect is at y: bounds.height - 56.0 with height 18.0
         // Title top is at: bounds.height - 56.0 + 18.0 = bounds.height - 38.0
         // To align timer top with title top: origin.y + textSize.height = bounds.height - 38.0
-        let titleTop = bounds.height - 38.0
+        let titleTop = bounds.height - 44.0
         let timerY = titleTop - textSize.height
 
         let origin = NSPoint(
@@ -122,15 +122,16 @@ extension IslandView {
         }
 
         // Timer control buttons centered below the timer in the right section
-        let buttonWidth: CGFloat = 60.0
-        let buttonHeight: CGFloat = 24.0
-        let spacing: CGFloat = 8.0
-        let bottomY: CGFloat = 20.0
+        // Align bottom edge with audio controls (which are at 10px from bottom)
+        let buttonWidth: CGFloat = 64.0
+        let buttonHeight: CGFloat = 26.0
+        let spacing: CGFloat = 10.0
+        let bottomY: CGFloat = 18.0
 
         // Calculate right section center (same as timer positioning)
         // Mirror left section: starts at 50% + 16px, ends at right edge - 16px
-        let rightSectionStartX = bounds.width * 0.5 + 16.0
-        let rightSectionEndX = bounds.maxX - 16.0
+        let rightSectionStartX = bounds.width * 0.5 + 20.0
+        let rightSectionEndX = bounds.maxX - 20.0
         let centerX = (rightSectionStartX + rightSectionEndX) / 2.0
 
         // For stopwatch: show both End and Cancel, centered as a group

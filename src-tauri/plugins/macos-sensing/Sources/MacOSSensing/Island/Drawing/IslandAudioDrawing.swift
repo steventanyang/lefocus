@@ -1,5 +1,10 @@
 import Cocoa
 
+public enum AudioArtworkLayout {
+    static let expandedSize: CGFloat = 40.0
+    static let compactSize: CGFloat = 18.0
+}
+
 extension IslandView {
     // MARK: - Audio Drawing
 
@@ -7,17 +12,20 @@ extension IslandView {
         guard let track = trackInfo else { return }
 
         if !isExpanded {
-            // Draw 4 thicker waveform pills instead of music note emoji
-            drawCompactWaveform()
+            // Compact layout handled elsewhere
             return
         }
 
         // Apply fade-in opacity to expanded content
         let baseAlpha: CGFloat = isAudioPlaying ? 0.95 : 0.9
 
-        // Left-aligned layout: title and artist stacked on left side
+        let artworkRect = expandedArtworkRect()
+        drawArtworkImage(track.artwork, in: artworkRect, cornerRadius: 6.0, emphasize: true)
+
+        // Left-aligned layout: title and artist stacked next to artwork
         let title = track.title.isEmpty ? "Unknown" : track.title
         let artist = track.artist.isEmpty ? "Unknown" : track.artist
+        let textStartX = artworkRect.maxX + 12.0
 
         let titleFont = NSFont.systemFont(ofSize: 14, weight: .semibold)
         let titleAttrs: [NSAttributedString.Key: Any] = [
@@ -31,48 +39,157 @@ extension IslandView {
             .foregroundColor: NSColor.white.withAlphaComponent(0.7 * expandedContentOpacity)
         ]
 
+        let maxContentWidth: CGFloat
         if isIdle {
-            // No timer: center the audio content
-            let maxContentWidth = bounds.width - 32.0  // Full width minus padding on both sides
-
-            let titleRect = NSRect(
-                x: 16.0,
-                y: bounds.height - 56.0,
-                width: maxContentWidth,
-                height: 18.0
-            )
-            NSString(string: title).draw(with: titleRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: titleAttrs)
-
-            let artistRect = NSRect(
-                x: 16.0,
-                y: bounds.height - 76.0,
-                width: maxContentWidth,
-                height: 16.0
-            )
-            NSString(string: artist).draw(with: artistRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: artistAttrs)
+            maxContentWidth = bounds.width - textStartX - 24.0
         } else {
-            // Timer active: left-aligned layout, truncate at 50% of island width
-            let maxTitleWidth = bounds.width * 0.5 - 16.0 // 50% minus left padding
-
-            let titleRect = NSRect(
-                x: 16.0,
-                y: bounds.height - 56.0,
-                width: maxTitleWidth,
-                height: 18.0
-            )
-            NSString(string: title).draw(with: titleRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: titleAttrs)
-
-            let artistRect = NSRect(
-                x: 16.0,
-                y: bounds.height - 76.0,
-                width: maxTitleWidth,
-                height: 16.0
-            )
-            NSString(string: artist).draw(with: artistRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: artistAttrs)
+            maxContentWidth = max(120.0, bounds.width * 0.5 - textStartX)
         }
+
+        let lineSpacing: CGFloat = 2.0
+        let titleHeight = titleFont.ascender - titleFont.descender
+        let artistHeight = artistFont.ascender - artistFont.descender
+        // Position metadata block lower to avoid notch (around 50px from top)
+        let blockTop = bounds.height - 50.0
+
+        let titleRect = NSRect(
+            x: textStartX,
+            y: blockTop - titleHeight,
+            width: maxContentWidth,
+            height: titleHeight
+        )
+        NSString(string: title).draw(
+            with: titleRect,
+            options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
+            attributes: titleAttrs
+        )
+
+        // Artist positioning: always use consistent spacing below title
+        let artistY = blockTop - titleHeight - lineSpacing - artistHeight
+        let artistRect = NSRect(
+            x: textStartX,
+            y: artistY,
+            width: maxContentWidth,
+            height: artistHeight
+        )
+        NSString(string: artist).draw(
+            with: artistRect,
+            options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
+            attributes: artistAttrs
+        )
     }
 
-    func drawCompactWaveform() {
+    func drawProgressBarIfNeeded() {
+        guard isExpanded,
+              isIdle,
+              let track = trackInfo,
+              let position = track.position,
+              let duration = track.duration,
+              duration > 0 else {
+            progressBarArea = ProgressBarArea()
+            return
+        }
+
+        let barY: CGFloat = 65.0
+        let horizontalMargin: CGFloat = 28.0  // Consistent margin on both sides
+
+        let currentTimeStr = formatPlaybackTime(position)
+        let durationStr = formatPlaybackTime(duration)
+        let timeFont = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        let timeAttrs: [NSAttributedString.Key: Any] = [
+            .font: timeFont,
+            .foregroundColor: NSColor.white.withAlphaComponent(0.7 * expandedContentOpacity)
+        ]
+
+        let currentSize = NSString(string: currentTimeStr).size(withAttributes: timeAttrs)
+        let durationSize = NSString(string: durationStr).size(withAttributes: timeAttrs)
+
+        let currentRect = NSRect(
+            x: horizontalMargin,
+            y: barY - currentSize.height / 2.0,
+            width: currentSize.width,
+            height: currentSize.height
+        )
+        NSString(string: currentTimeStr).draw(in: currentRect, withAttributes: timeAttrs)
+
+        let durationX = bounds.width - horizontalMargin - durationSize.width
+        let durationRect = NSRect(
+            x: durationX,
+            y: barY - durationSize.height / 2.0,
+            width: durationSize.width,
+            height: durationSize.height
+        )
+        NSString(string: durationStr).draw(in: durationRect, withAttributes: timeAttrs)
+
+        let barStartX = currentRect.maxX + 12.0
+        let barEndX = durationRect.minX - 12.0
+        let barWidth = barEndX - barStartX
+        guard barWidth > 0 else {
+            progressBarArea = ProgressBarArea()
+            return
+        }
+
+        // Initialize animated values if needed (first draw or reset)
+        // Default values are set in ProgressBarArea struct (6.0 height, 0.5 opacity)
+
+        // Use animated height and opacity for Apple-style progress bar
+        let barHeight = progressBarArea.animatedHeight
+        // Use hovered height (8px) for hitbox to improve interaction
+        let hitboxHeight: CGFloat = 8.0
+        let barRect = NSRect(
+            x: barStartX,
+            y: barY - barHeight / 2.0,
+            width: barWidth,
+            height: barHeight
+        )
+        // Hitbox uses larger height for better click target
+        let hitboxRect = NSRect(
+            x: barStartX,
+            y: barY - hitboxHeight / 2.0,
+            width: barWidth,
+            height: hitboxHeight
+        )
+        progressBarArea.barRect = hitboxRect
+        progressBarArea.isInteractable = track.canSeek
+        if !track.canSeek {
+            progressBarArea.isDragging = false
+            progressBarArea.pendingSeekPosition = nil
+        }
+        if !track.canSeek {
+            progressBarArea.isHovered = false
+        }
+
+        // Draw background track (unfilled portion)
+        let backgroundPath = NSBezierPath(roundedRect: barRect, xRadius: barHeight / 2.0, yRadius: barHeight / 2.0)
+        let backgroundAlpha: CGFloat = track.canSeek ? 0.2 : 0.1
+        NSColor.white.withAlphaComponent(backgroundAlpha * expandedContentOpacity).setFill()
+        backgroundPath.fill()
+
+        let renderPosition: TimeInterval
+        if let pending = progressBarArea.pendingSeekPosition,
+           (progressBarArea.isDragging || progressBarArea.pendingSeekTimestamp != nil) {
+            renderPosition = pending
+        } else {
+            renderPosition = position
+        }
+
+        // Draw progress fill with animated opacity
+        let rawProgress = CGFloat(renderPosition / duration)
+        let clampedProgress = min(max(rawProgress, 0), 1)
+        let fillRect = NSRect(
+            x: barStartX,
+            y: barY - barHeight / 2.0,
+            width: barWidth * clampedProgress,
+            height: barHeight
+        )
+        let fillPath = NSBezierPath(roundedRect: fillRect, xRadius: barHeight / 2.0, yRadius: barHeight / 2.0)
+        // Use animated opacity: 0.5 normal, 1.0 hovered
+        let fillOpacity = track.canSeek ? progressBarArea.animatedOpacity : 0.35
+        NSColor.white.withAlphaComponent(fillOpacity * expandedContentOpacity).setFill()
+        fillPath.fill()
+    }
+
+    func drawCompactWaveform(startX customStartX: CGFloat? = nil, centerY customCenterY: CGFloat? = nil) {
         guard !waveformBars.isEmpty, waveformBars.count == 4 else { return }
 
         // Match the width of the music note emoji (size 11 font)
@@ -84,8 +201,9 @@ extension IslandView {
         let spacing: CGFloat = 3.0
         let pillWidth = (totalWidth - spacing * 3.0) / 4.0
         let pillHeight: CGFloat = 12.0
-        let startX = 12.0 // Left side padding
-        let centerY = bounds.midY
+        // Add padding to account for notch top corner curve (10px radius)
+        let startX = customStartX ?? 22.0
+        let centerY = customCenterY ?? bounds.midY
 
         for (index, value) in waveformBars.enumerated() {
             let height: CGFloat
@@ -123,10 +241,11 @@ extension IslandView {
         let spacing: CGFloat = 3.0
         let pillWidth = (totalWidth - spacing * 3.0) / 4.0
         let pillHeight: CGFloat = 12.0
-        let baseY: CGFloat = bounds.height - 20.0 // Near the top
-
-        // Always position waveform at top-left
-        let startX: CGFloat = 16.0
+        
+        // Position waveform at top left (around 28px from top) - stays fixed regardless of title/artist position
+        let waveformCenterY = bounds.height - 28.0
+        // Position waveform left edge - add padding to account for notch top corner curve (10px radius)
+        let startX: CGFloat = 38.0
 
         for (index, value) in waveformBars.enumerated() {
             let height: CGFloat
@@ -141,7 +260,7 @@ extension IslandView {
 
             let rect = NSRect(
                 x: startX + CGFloat(index) * (pillWidth + spacing),
-                y: baseY - height / 2.0,
+                y: waveformCenterY - height / 2.0,
                 width: pillWidth,
                 height: height
             )
@@ -210,19 +329,24 @@ extension IslandView {
             return
         }
 
-        let buttonSize = CGSize(width: 36.0, height: 36.0)
-        let spacing: CGFloat = 12.0
-        let bottomY: CGFloat = 14.0 // Aligned with timer control buttons
-
+        let buttonSize = CGSize(width: 42.0, height: 42.0)
+        let spacing: CGFloat = 18.0
+        
         // Position based on timer state
+        let bottomY: CGFloat
         let startX: CGFloat
+        let buttonsWidth = buttonSize.width * 3.0 + spacing * 2.0
+        let leftAlignment = expandedArtworkRect().minX
         if isIdle {
-            // No timer: center the playback buttons
-            let totalButtonsWidth = buttonSize.width * 3.0 + spacing * 2.0
-            startX = (bounds.width - totalButtonsWidth) / 2.0
+            // No timer: center the playback buttons horizontally, position them lower
+            // Place them in the lower portion of the expanded view (around 10px from bottom)
+            bottomY = 10.0
+            startX = (bounds.width - buttonsWidth) / 2.0
         } else {
-            // Timer active: left side, aligned with track info
-            startX = 16.0
+            // Timer running: align playback buttons under metadata, lower in the view
+            // Position them around 10px from bottom to match idle state
+            bottomY = 10.0
+            startX = leftAlignment
         }
 
         previousButton.rect = NSRect(
@@ -243,5 +367,173 @@ extension IslandView {
             width: buttonSize.width,
             height: buttonSize.height
         )
+    }
+
+    // MARK: - Artwork helpers
+
+    private func expandedArtworkRect() -> NSRect {
+        let size = AudioArtworkLayout.expandedSize
+        // Align artwork center with title/artist block center (which is at blockTop = bounds.height - 50.0)
+        let blockTop = bounds.height - 50.0
+        let titleFont = NSFont.systemFont(ofSize: 14, weight: .semibold)
+        let titleHeight = titleFont.ascender - titleFont.descender
+        let artistFont = NSFont.systemFont(ofSize: 12, weight: .regular)
+        let artistHeight = artistFont.ascender - artistFont.descender
+        let lineSpacing: CGFloat = 2.0
+        // Calculate gap between title and artist
+        // Title bottom is at blockTop - titleHeight
+        // Artist top is at blockTop - titleHeight - lineSpacing
+        // Gap center is halfway between them
+        let titleBottom = blockTop - titleHeight
+        let artistTop = titleBottom - lineSpacing
+        let gapCenter = (titleBottom + artistTop) / 2.0
+        // Center artwork vertically with the gap between title and artist
+        let artworkCenterY = gapCenter
+        let yPosition = artworkCenterY - size / 2.0
+        // Add padding to account for notch top corner curve (10px radius)
+        let xPosition: CGFloat = 38.0
+        return NSRect(x: xPosition, y: yPosition, width: size, height: size)
+    }
+
+    func drawArtworkImage(_ image: NSImage?, in rect: NSRect, cornerRadius: CGFloat, emphasize: Bool) {
+        let path = NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
+        NSGraphicsContext.saveGraphicsState()
+        path.addClip()
+
+        let hasImage = image != nil
+
+        if let image {
+            let opacity = emphasize ? expandedContentOpacity : 1.0
+            image.draw(
+                in: rect,
+                from: .zero,
+                operation: .sourceOver,
+                fraction: opacity,
+                respectFlipped: true,
+                hints: [.interpolation: NSImageInterpolation.high]
+            )
+        } else {
+            drawArtworkPlaceholder(in: rect, emphasize: emphasize)
+        }
+
+        NSGraphicsContext.restoreGraphicsState()
+        if hasImage {
+            let strokeAlpha: CGFloat = emphasize ? 0.18 : 0.12
+            NSColor.white.withAlphaComponent(strokeAlpha).setStroke()
+            path.lineWidth = emphasize ? 1.0 : 0.5
+            path.stroke()
+        }
+    }
+
+    func drawArtworkPlaceholder(in rect: NSRect, emphasize: Bool) {
+        let baseAlpha: CGFloat = emphasize ? 0.85 : 0.75
+        let fillColor = NSColor(calibratedWhite: 0.03, alpha: baseAlpha)
+        fillColor.setFill()
+        rect.fill()
+    }
+
+    private func formatPlaybackTime(_ seconds: TimeInterval) -> String {
+        guard seconds.isFinite else { return "0:00" }
+        let totalSeconds = max(0, Int(seconds.rounded(.down)))
+        let minutes = totalSeconds / 60
+        let remaining = totalSeconds % 60
+        return String(format: "%d:%02d", minutes, remaining)
+    }
+    
+    // MARK: - Progress Bar Interaction
+    
+    func updateProgressBarOptimistically(to position: TimeInterval) {
+        guard let track = trackInfo, track.canSeek else { return }
+        progressBarArea.pendingSeekPosition = position
+        if !progressBarArea.isDragging {
+            progressBarArea.pendingSeekTimestamp = Date()
+        }
+        trackInfo = track.updatingPlayback(position: position)
+        needsDisplay = true
+    }
+
+    func seekPosition(for x: CGFloat, duration: TimeInterval) -> TimeInterval {
+        let clampedX = min(max(x, progressBarArea.barRect.minX), progressBarArea.barRect.maxX)
+        let relative = (clampedX - progressBarArea.barRect.minX) / progressBarArea.barRect.width
+        let progress = min(max(Double(relative), 0.0), 1.0)
+        return progress * duration
+    }
+
+    func applyPendingSeekIfNeeded(to track: TrackInfo?) -> TrackInfo? {
+        guard let track else {
+            progressBarArea.pendingSeekPosition = nil
+            progressBarArea.pendingSeekTimestamp = nil
+            return nil
+        }
+        guard track.canSeek else {
+            progressBarArea.pendingSeekPosition = nil
+            progressBarArea.pendingSeekTimestamp = nil
+            return track
+        }
+
+        guard let pending = progressBarArea.pendingSeekPosition else {
+            return track
+        }
+
+        if let actual = track.position,
+           !progressBarArea.isDragging {
+            let delta = abs(actual - pending)
+            let matched = delta < 0.25
+            let expired = progressBarArea.pendingSeekTimestamp.map { Date().timeIntervalSince($0) > 1.5 } ?? false
+            if matched || expired {
+                progressBarArea.pendingSeekPosition = nil
+                progressBarArea.pendingSeekTimestamp = nil
+                return track
+            }
+        }
+
+        return track.updatingPlayback(position: pending)
+    }
+    
+    // MARK: - Compact Layout Drawing
+    
+    private enum CompactLayoutState {
+        case audioOnly
+        case timerActive
+        case idle
+    }
+
+    private var compactLayoutState: CompactLayoutState {
+        if isIdle {
+            return trackInfo == nil ? .idle : .audioOnly
+        }
+        return .timerActive
+    }
+
+    func drawCompactLayout() {
+        switch compactLayoutState {
+        case .audioOnly:
+            // Add padding to account for notch top corner curve (10px radius)
+            drawCompactWaveform(startX: 26.0, centerY: bounds.midY)
+            drawCompactArtworkOnRight()
+        case .timerActive:
+            drawTimerText()
+            if trackInfo != nil {
+                // Add padding to account for notch top corner curve (10px radius)
+                drawCompactWaveform(startX: 26.0, centerY: bounds.midY)
+            }
+        case .idle:
+            // Add padding to account for notch top corner curve (10px radius)
+            drawCompactWaveform(startX: 26.0, centerY: bounds.midY)
+        }
+    }
+
+    func drawCompactArtworkOnRight() {
+        guard let track = trackInfo else { return }
+        let size = AudioArtworkLayout.compactSize
+        // Add padding to account for notch top corner curve (10px radius)
+        let rect = NSRect(
+            x: bounds.maxX - size - 22.0,
+            y: bounds.midY - size / 2.0,
+            width: size,
+            height: size
+        )
+        // Use rounded corners (3px) instead of circle (size/2) for square shape
+        drawArtworkImage(track.artwork, in: rect, cornerRadius: 3.0, emphasize: false)
     }
 }

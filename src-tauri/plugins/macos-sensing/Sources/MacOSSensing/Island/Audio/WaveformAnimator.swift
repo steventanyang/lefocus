@@ -40,7 +40,9 @@ public final class WaveformAnimator {
     }
 
     public func stop() {
-        displayLink.map { CVDisplayLinkStop($0) }
+        if let link = displayLink {
+            CVDisplayLinkStop(link)
+        }
         displayLink = nil
     }
 

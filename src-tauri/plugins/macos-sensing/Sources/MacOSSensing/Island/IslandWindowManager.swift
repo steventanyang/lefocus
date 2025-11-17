@@ -10,6 +10,16 @@ struct IslandWindowConfiguration {
     let expandedSize: NSSize
     let hoverDelta: NSSize
     let expandedVerticalOffset: CGFloat
+    
+    // Widths for different states
+    let compactIdleWidth: CGFloat      // No timer
+    let compactTimerWidth: CGFloat     // Timer active
+    let expandedIdleWidth: CGFloat     // No timer
+    let expandedTimerWidth: CGFloat    // Timer active
+    
+    // Heights for different states
+    let expandedIdleHeight: CGFloat    // No timer (with progress bar)
+    let expandedTimerHeight: CGFloat   // Timer active (no progress bar)
 }
 
 /// Owns the NSPanel hierarchy and handles screen observation + sizing animations.
@@ -29,6 +39,7 @@ final class IslandWindowManager {
 
     private var isExpanded: Bool = false
     private var isHovering: Bool = false
+    private var isTimerIdle: Bool = true
 
     init(configuration: IslandWindowConfiguration) {
         self.configuration = configuration
@@ -140,6 +151,13 @@ final class IslandWindowManager {
         self.isHovering = isHovering
         updateIslandWindowSize(animated: animated, duration: isExpanded ? 0.25 : 0.15)
     }
+    
+    func updateTimerState(isIdle: Bool, animated: Bool = true) {
+        guard isTimerIdle != isIdle else { return }
+        isTimerIdle = isIdle
+        // Update window size for both compact and expanded states
+        updateIslandWindowSize(animated: animated, duration: isExpanded ? 0.25 : 0.15)
+    }
 
     func repositionForCurrentScreen() {
         guard let panel = parentWindow else { return }
@@ -174,15 +192,23 @@ final class IslandWindowManager {
 
     private func currentIslandSize() -> NSSize {
         if isExpanded {
-            return configuration.expandedSize
+            // Use configured widths and heights based on timer state
+            let expandedWidth: CGFloat = isTimerIdle ? configuration.expandedIdleWidth : configuration.expandedTimerWidth
+            let expandedHeight: CGFloat = isTimerIdle ? configuration.expandedIdleHeight : configuration.expandedTimerHeight
+            return NSSize(width: expandedWidth, height: expandedHeight)
         }
+        
+        // Use configured widths based on timer state
+        let baseWidth: CGFloat = isTimerIdle ? configuration.compactIdleWidth : configuration.compactTimerWidth
+        let baseHeight = configuration.compactSize.height
+        
         if isHovering {
             return NSSize(
-                width: configuration.compactSize.width + configuration.hoverDelta.width,
-                height: configuration.compactSize.height + configuration.hoverDelta.height
+                width: baseWidth + configuration.hoverDelta.width,
+                height: baseHeight + configuration.hoverDelta.height
             )
         }
-        return configuration.compactSize
+        return NSSize(width: baseWidth, height: baseHeight)
     }
 
     private func islandFrame(for screen: NSScreen, size: NSSize) -> NSRect {
@@ -190,22 +216,20 @@ final class IslandWindowManager {
 
         if let notch = screen.lf_notchRect {
             // Calculate where the compact island's top edge would be
-            let compactHeight = configuration.compactSize.height
             let compactTopEdge = notch.maxY + islandVerticalInset(for: screen)
-            
+
             // Keep the top edge aligned when expanding - only grow downward
             let originY = compactTopEdge - size.height
-            
+
             return NSRect(x: originX, y: originY, width: size.width, height: size.height)
         }
 
         // For screens without notch, use similar logic
-        let compactHeight = configuration.compactSize.height
         let compactTopEdge = screen.frame.maxY - 8.0
-        
+
         // Keep the top edge aligned when expanding - only grow downward
         let originY = compactTopEdge - size.height
-        
+
         return NSRect(x: originX, y: originY, width: size.width, height: size.height)
     }
 

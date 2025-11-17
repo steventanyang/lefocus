@@ -32,10 +32,16 @@ public final class IslandController {
 
     private init() {
         let configuration = IslandWindowConfiguration(
-            compactSize: NSSize(width: 300.0, height: 36.0),
-            expandedSize: NSSize(width: 380.0, height: 130.0),
-            hoverDelta: NSSize(width: 20.0, height: 4.0),
-            expandedVerticalOffset: 12.0
+            compactSize: NSSize(width: 320.0, height: 38.0),
+            expandedSize: NSSize(width: 420.0, height: 170.0),
+            hoverDelta: NSSize(width: 22.0, height: 5.0),
+            expandedVerticalOffset: 14.0,
+            compactIdleWidth: 280.0,
+            compactTimerWidth: 340.0,
+            expandedIdleWidth: 300.0,
+            expandedTimerWidth: 380.0,
+            expandedIdleHeight: 170.0,    // With progress bar
+            expandedTimerHeight: 150.0    // Without progress bar (timer active)
         )
         windowManager = IslandWindowManager(configuration: configuration)
         windowManager.delegate = self
@@ -45,6 +51,9 @@ public final class IslandController {
             guard let self else { return }
             self.latestTimerUpdate = update
             self.islandView?.update(displayMs: update.displayMs, mode: update.mode, idle: update.idle)
+            // Update window size based on timer state (narrower when idle)
+            // When idle is nil, assume timer is active (not idle)
+            self.windowManager.updateTimerState(isIdle: update.idle ?? false, animated: true)
         }
 
         audioController.delegate = self
@@ -126,11 +135,17 @@ public final class IslandController {
 
     private func configureIslandView(_ view: IslandView) {
         view.interactionDelegate = self
+        let isIdle: Bool
         if let update = latestTimerUpdate {
             view.update(displayMs: update.displayMs, mode: update.mode, idle: update.idle)
+            // When idle is nil, assume timer is active (not idle)
+            isIdle = update.idle ?? false
         } else {
             view.update(displayMs: 0, mode: .countdown, idle: true)
+            isIdle = true
         }
+        // Set initial timer state for window sizing
+        windowManager.updateTimerState(isIdle: isIdle, animated: false)
         updateAudioUI(for: view)
         view.updateInteractionState(isExpanded: isExpanded, isHovered: isHovering)
     }
@@ -227,6 +242,10 @@ extension IslandController: IslandViewInteractionDelegate {
 
     func islandViewDidRequestCancelTimer(_ view: IslandView) {
         cancelTimer()
+    }
+
+    func islandView(_ view: IslandView, didRequestSeek position: TimeInterval) {
+        audioController.seek(to: position)
     }
 }
 

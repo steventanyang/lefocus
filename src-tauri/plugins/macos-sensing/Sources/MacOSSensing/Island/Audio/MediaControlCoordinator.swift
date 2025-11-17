@@ -27,6 +27,11 @@ final class MediaControlCoordinator {
         if appleScriptController.perform(.previous, bundleID: bundleID) { return }
         mediaKeyController.previousTrack()
     }
+
+    func seek(to position: TimeInterval, bundleID: String?) {
+        _ = appleScriptController.seek(to: position, bundleID: bundleID)
+        // No media-key fallback for seeking; unsupported sources are ignored.
+    }
 }
 
 // MARK: - AppleScript control
@@ -34,6 +39,13 @@ final class MediaControlCoordinator {
 private final class AppleScriptMediaController {
     func perform(_ command: MediaCommand, bundleID: String?) -> Bool {
         guard let bundleID, let source = script(for: command, bundleID: bundleID) else {
+            return false
+        }
+        return AppleScriptRunner.execute(source)
+    }
+
+    func seek(to position: TimeInterval, bundleID: String?) -> Bool {
+        guard let bundleID, let source = seekScript(for: position, bundleID: bundleID) else {
             return false
         }
         return AppleScriptRunner.execute(source)
@@ -53,6 +65,27 @@ private final class AppleScriptMediaController {
             return #"tell application "Music" to next track"#
         case ("com.apple.Music", .previous):
             return #"tell application "Music" to previous track"#
+        default:
+            return nil
+        }
+    }
+
+    private func seekScript(for position: TimeInterval, bundleID: String) -> String? {
+        let clamped = max(0, position)
+        let formatted = String(format: "%.3f", clamped)
+        switch bundleID {
+        case "com.spotify.client":
+            return """
+            tell application "Spotify"
+                set player position to \(formatted)
+            end tell
+            """
+        case "com.apple.Music":
+            return """
+            tell application "Music"
+                set player position to \(formatted)
+            end tell
+            """
         default:
             return nil
         }

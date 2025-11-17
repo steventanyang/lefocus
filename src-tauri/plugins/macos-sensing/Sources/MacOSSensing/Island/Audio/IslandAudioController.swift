@@ -16,6 +16,10 @@ final class IslandAudioController {
     private var waveformBars: [CGFloat] = []
     private var monitoring = false
 
+    var activeBundleID: String? {
+        mediaMonitor.activeBundleID
+    }
+
     func startMonitoring() {
         guard !monitoring else { return }
         monitoring = true
@@ -49,6 +53,11 @@ final class IslandAudioController {
 
     func skipToPrevious() {
         mediaMonitor.skipToPrevious()
+    }
+
+    func seek(to position: TimeInterval) {
+        guard currentTrack?.canSeek == true else { return }
+        mediaMonitor.seek(to: position, bundleID: mediaMonitor.activeBundleID)
     }
 
     // MARK: - Private

@@ -10,6 +10,7 @@ protocol IslandViewInteractionDelegate: AnyObject {
     func islandViewDidRequestPrevious(_ view: IslandView)
     func islandViewDidRequestEndTimer(_ view: IslandView)
     func islandViewDidRequestCancelTimer(_ view: IslandView)
+    func islandView(_ view: IslandView, didRequestSeek position: TimeInterval)
 }
 
 final class IslandView: NSView {
@@ -21,7 +22,8 @@ final class IslandView: NSView {
     var trackInfo: TrackInfo?
     var isAudioPlaying: Bool = false
     var waveformBars: [CGFloat] = []
-    private var trackingArea: NSTrackingArea?
+    private var hasTimerFinished: Bool = false
+    var trackingArea: NSTrackingArea?
     var isExpanded: Bool = false
     var isHovered: Bool = false
 
@@ -36,14 +38,29 @@ final class IslandView: NSView {
 
     var timerEndButton = ButtonArea()
     var timerCancelButton = ButtonArea()
+    struct ProgressBarArea {
+        var barRect: NSRect = .zero
+        var isHovered: Bool = false
+        var isInteractable: Bool = false
+        var isDragging: Bool = false
+        var pendingSeekPosition: TimeInterval?
+        var pendingSeekTimestamp: Date?
+        // Animation state for Apple-style progress bar
+        var animatedHeight: CGFloat = 6.0
+        var animatedOpacity: CGFloat = 0.5
+    }
+    var progressBarArea = ProgressBarArea()
 
     // Debouncing for timer control buttons
-    private var lastTimerButtonClickTime: TimeInterval?
-    private let timerButtonDebounceInterval: TimeInterval = 0.5  // 500ms
+    var lastTimerButtonClickTime: TimeInterval?
+    let timerButtonDebounceInterval: TimeInterval = 0.5  // 500ms
 
     // Fade animation for expansion
     var expandedContentOpacity: CGFloat = 0.0
-    private var fadeAnimationTimer: Timer?
+    var fadeAnimationTimer: Timer?
+    
+    // Progress bar animation
+    var progressBarAnimationTimer: Timer?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -59,6 +76,7 @@ final class IslandView: NSView {
     // MARK: - Public API
 
     func update(displayMs: Int64, mode: IslandMode?, idle: Bool? = nil) {
+        self.hasTimerFinished = displayMs <= 0 && !(idle ?? self.isIdle)
         self.displayMs = displayMs
         if let mode {
             self.mode = mode
@@ -80,27 +98,24 @@ final class IslandView: NSView {
         } else if !isExpanded {
             // Collapsing - reset opacity immediately
             stopFadeAnimation()
+            stopProgressBarAnimation()
             expandedContentOpacity = 0.0
             resetButtonAreas()
+            progressBarArea = ProgressBarArea()
         }
 
         needsDisplay = true
     }
 
     func updateAudio(track: TrackInfo?, waveformBars: [CGFloat]?) {
-        let hadArtwork = self.trackInfo?.artwork != nil
-        let hasArtwork = track?.artwork != nil
+        let finalTrack = applyPendingSeekIfNeeded(to: track)
 
-        self.trackInfo = track
-        self.isAudioPlaying = track?.isPlaying ?? false
-        if let bars = waveformBars, track != nil {
+        self.trackInfo = finalTrack
+        self.isAudioPlaying = finalTrack?.isPlaying ?? false
+        if let bars = waveformBars, finalTrack != nil {
             self.waveformBars = bars
-        } else if track == nil {
+        } else if finalTrack == nil {
             self.waveformBars = []
-        }
-
-        if hasArtwork != hadArtwork {
-            NSLog("IslandView: Artwork state changed - had: \(hadArtwork), has: \(hasArtwork), track: \(track?.title ?? "nil")")
         }
 
         needsDisplay = true
@@ -160,6 +175,7 @@ final class IslandView: NSView {
             // Left side: audio controls (title, artist, buttons)
             // Right side: timer (top) and waveform (below)
             drawAudioMetadataIfNeeded()
+            drawProgressBarIfNeeded()
             drawPlaybackButtonsIfNeeded()
             drawTimerTextCompact()
             drawTimerControlButtonsIfNeeded()
@@ -167,8 +183,7 @@ final class IslandView: NSView {
             drawBreakLabel()
         } else {
             // Compact layout: timer and audio indicator
-            drawTimerText()
-            drawAudioMetadataIfNeeded()
+            drawCompactLayout()
         }
     }
 
@@ -178,142 +193,5 @@ final class IslandView: NSView {
             removeTrackingArea(trackingArea)
         }
         initializeTracking()
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        isHovered = true
-        interactionDelegate?.islandView(self, hoverChanged: true)
-        interactionDelegate?.islandViewDidCancelCollapseRequest(self)
-        needsDisplay = true
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        isHovered = false
-        interactionDelegate?.islandView(self, hoverChanged: false)
-        if isExpanded {
-            interactionDelegate?.islandViewDidRequestCollapse(self, delay: 0.3)
-        }
-        needsDisplay = true
-    }
-
-    override func mouseMoved(with event: NSEvent) {
-        guard isExpanded else { return }
-        let point = convert(event.locationInWindow, from: nil)
-        layoutPlaybackButtonRects()
-        layoutTimerControlButtonRects()
-
-        let wasHoveringPlay = playPauseButton.isHovered
-        let wasHoveringPrev = previousButton.isHovered
-        let wasHoveringNext = nextButton.isHovered
-        let wasHoveringEnd = timerEndButton.isHovered
-        let wasHoveringCancel = timerCancelButton.isHovered
-
-        playPauseButton.isHovered = playPauseButton.rect.contains(point)
-        previousButton.isHovered = previousButton.rect.contains(point)
-        nextButton.isHovered = nextButton.rect.contains(point)
-        timerEndButton.isHovered = timerEndButton.rect.contains(point)
-        timerCancelButton.isHovered = timerCancelButton.rect.contains(point)
-
-        if wasHoveringPlay != playPauseButton.isHovered ||
-            wasHoveringPrev != previousButton.isHovered ||
-            wasHoveringNext != nextButton.isHovered ||
-            wasHoveringEnd != timerEndButton.isHovered ||
-            wasHoveringCancel != timerCancelButton.isHovered {
-            needsDisplay = true
-        }
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        let location = convert(event.locationInWindow, from: nil)
-        if isExpanded {
-            layoutPlaybackButtonRects()
-            layoutTimerControlButtonRects()
-
-            if playPauseButton.rect.contains(location) {
-                interactionDelegate?.islandViewDidRequestPlayPause(self)
-                return
-            }
-            if previousButton.rect.contains(location) {
-                interactionDelegate?.islandViewDidRequestPrevious(self)
-                return
-            }
-            if nextButton.rect.contains(location) {
-                interactionDelegate?.islandViewDidRequestNext(self)
-                return
-            }
-
-            // Debounce timer control buttons to prevent double-click issues
-            if timerEndButton.rect.contains(location) || timerCancelButton.rect.contains(location) {
-                let now = Date().timeIntervalSince1970
-                if let lastClick = lastTimerButtonClickTime,
-                   now - lastClick < timerButtonDebounceInterval {
-                    return  // Debounce: ignore rapid clicks
-                }
-                lastTimerButtonClickTime = now
-
-                if timerEndButton.rect.contains(location) {
-                    interactionDelegate?.islandViewDidRequestEndTimer(self)
-                    return
-                }
-                if timerCancelButton.rect.contains(location) {
-                    interactionDelegate?.islandViewDidRequestCancelTimer(self)
-                    return
-                }
-            }
-        }
-        interactionDelegate?.islandViewDidRequestToggleExpansion(self)
-    }
-
-    // MARK: - Private helpers
-
-    private func initializeTracking() {
-        let options: NSTrackingArea.Options = [.mouseEnteredAndExited, .mouseMoved, .activeAlways, .inVisibleRect]
-        let area = NSTrackingArea(rect: bounds, options: options, owner: self, userInfo: nil)
-        addTrackingArea(area)
-        trackingArea = area
-    }
-
-    // MARK: - Fade Animation
-
-    private func startFadeInAnimation() {
-        stopFadeAnimation()
-        expandedContentOpacity = 0.0
-
-        let duration: TimeInterval = 0.2 // 200ms fade-in
-        let fps: Double = 60.0
-        let frameDuration = 1.0 / fps
-        let totalFrames = Int(duration / frameDuration)
-        var currentFrame = 0
-
-        fadeAnimationTimer = Timer.scheduledTimer(withTimeInterval: frameDuration, repeats: true) { [weak self] timer in
-            guard let self = self else {
-                timer.invalidate()
-                return
-            }
-
-            currentFrame += 1
-            let progress = min(1.0, CGFloat(currentFrame) / CGFloat(totalFrames))
-
-            // Ease-out animation for smoother feel
-            self.expandedContentOpacity = self.easeOutQuad(progress)
-
-            self.needsDisplay = true
-
-            if currentFrame >= totalFrames {
-                self.expandedContentOpacity = 1.0
-                self.needsDisplay = true
-                timer.invalidate()
-                self.fadeAnimationTimer = nil
-            }
-        }
-    }
-
-    private func stopFadeAnimation() {
-        fadeAnimationTimer?.invalidate()
-        fadeAnimationTimer = nil
-    }
-
-    private func easeOutQuad(_ t: CGFloat) -> CGFloat {
-        return t * (2.0 - t)
     }
 }
