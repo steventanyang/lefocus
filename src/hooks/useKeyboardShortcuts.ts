@@ -95,13 +95,15 @@ export function useKeyboardShortcuts({
  * - Cmd+A (Mac) / Ctrl+A (non-Mac): Navigate to activities
  * - Cmd+T (Mac) / Ctrl+T (non-Mac): Navigate to timer
  * - Cmd+S (Mac) / Ctrl+S (non-Mac): Navigate to stats
+ * - Cmd+P (Mac) / Ctrl+P (non-Mac): Navigate to profile
  * - Cmd+W (Mac) / Ctrl+W (non-Mac): Prevent window close (blocked)
  * - Cmd+F (Mac) / Ctrl+F (non-Mac): Toggle fullscreen
  */
 export function useGlobalNavigationShortcuts(
   onNavigateActivities: () => void,
   onNavigateTimer: () => void,
-  onNavigateStats: () => void
+  onNavigateStats: () => void,
+  onNavigateProfile: () => void
 ): void {
   useEffect(() => {
     const handleKeyDown = async (event: KeyboardEvent) => {
@@ -133,6 +135,13 @@ export function useGlobalNavigationShortcuts(
         return;
       }
 
+      // Cmd+P (Mac) or Ctrl+P (non-Mac): Navigate to profile
+      if (event.key === "p" && isModifierPressed) {
+        event.preventDefault(); // Prevent browser "Print"
+        onNavigateProfile();
+        return;
+      }
+
       // Cmd+W (Mac) or Ctrl+W (non-Mac): Prevent window close
       if (event.key === "w" && isModifierPressed) {
         event.preventDefault(); // Prevent window close
@@ -161,5 +170,5 @@ export function useGlobalNavigationShortcuts(
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [onNavigateActivities, onNavigateTimer, onNavigateStats]);
+  }, [onNavigateActivities, onNavigateTimer, onNavigateStats, onNavigateProfile]);
 }
