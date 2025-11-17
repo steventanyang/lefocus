@@ -3,10 +3,11 @@ import "./App.css";
 import { TimerView } from "@/components/timer/TimerView";
 import { ActivitiesView } from "@/components/activities/ActivitiesView";
 import { StatsView } from "@/components/stats/StatsView";
+import { ProfileView } from "@/components/profile/ProfileView";
 import { useWindowSize } from "@/hooks/useWindowSize";
 import { useGlobalNavigationShortcuts } from "@/hooks/useKeyboardShortcuts";
 
-type View = "timer" | "activities" | "stats";
+type View = "timer" | "activities" | "stats" | "profile";
 
 function App() {
   const [currentView, setCurrentView] = useState<View>("timer");
@@ -16,10 +17,11 @@ function App() {
   useGlobalNavigationShortcuts(
     () => setCurrentView("activities"),
     () => setCurrentView("timer"),
-    () => setCurrentView("stats")
+    () => setCurrentView("stats"),
+    () => setCurrentView("profile")
   );
 
-  // Timer view should be centered, activities and stats views should be scrollable from top
+  // Timer view should be centered, other views should be scrollable from top
   const isTimerView = currentView === "timer";
 
   return (
@@ -37,6 +39,12 @@ function App() {
       )}
       {currentView === "stats" && (
         <StatsView onNavigate={setCurrentView} />
+      )}
+      {currentView === "profile" && (
+        <ProfileView
+          onNavigate={setCurrentView}
+          onClose={() => setCurrentView("timer")}
+        />
       )}
     </main>
   );
