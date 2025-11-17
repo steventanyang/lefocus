@@ -130,6 +130,7 @@ impl TimerController {
                 status: SessionStatus::Running,
                 target_ms: actual_target_ms,
                 active_ms: 0,
+                label_id: None,
                 created_at: started_at,
                 updated_at: started_at,
             };
@@ -225,6 +226,7 @@ impl TimerController {
                     status: SessionStatus::Completed,
                     target_ms,
                     active_ms,
+                    label_id: None,
                     created_at: started_at,
                     updated_at: stopped_at,
                 },
@@ -255,6 +257,7 @@ impl TimerController {
                 status: SessionStatus::Completed,
                 target_ms: session_snapshot.target_ms,
                 active_ms: session_snapshot.active_ms,
+                label_id: None,
             });
         }
 

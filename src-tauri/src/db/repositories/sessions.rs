@@ -1,6 +1,6 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use rusqlite::{params, Row};
+use rusqlite::{params, OptionalExtension, Row};
 
 use crate::db::{
     connection::Database,
@@ -16,6 +16,7 @@ fn row_to_session(row: &Row) -> Result<Session> {
     let status: String = row.get("status")?;
     let target_ms: i64 = row.get("target_ms")?;
     let active_ms: i64 = row.get("active_ms")?;
+    let label_id: Option<i64> = row.get("label_id")?;
 
     Ok(Session {
         id: row.get("id")?,
@@ -24,6 +25,7 @@ fn row_to_session(row: &Row) -> Result<Session> {
         status: parse_status(&status)?,
         target_ms: to_u64(target_ms, "target_ms")?,
         active_ms: to_u64(active_ms, "active_ms")?,
+        label_id,
         created_at: parse_datetime(&created_at, "created_at")?,
         updated_at: parse_datetime(&updated_at, "updated_at")?,
     })
@@ -34,8 +36,8 @@ impl Database {
         let record = session.clone();
         self.execute(move |conn| {
             conn.execute(
-                "INSERT INTO sessions (id, started_at, stopped_at, status, target_ms, active_ms, created_at, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                "INSERT INTO sessions (id, started_at, stopped_at, status, target_ms, active_ms, label_id, created_at, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                 params![
                     record.id,
                     record.started_at.to_rfc3339(),
@@ -46,6 +48,7 @@ impl Database {
                     record.status.as_str(),
                     to_i64(record.target_ms)?,
                     to_i64(record.active_ms)?,
+                    record.label_id,
                     record.created_at.to_rfc3339(),
                     record.updated_at.to_rfc3339(),
                 ],
@@ -108,7 +111,7 @@ impl Database {
     pub async fn get_incomplete_session(&self) -> Result<Option<Session>> {
         self.execute(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT id, started_at, stopped_at, status, target_ms, active_ms, created_at, updated_at
+                "SELECT id, started_at, stopped_at, status, target_ms, active_ms, label_id, created_at, updated_at
                  FROM sessions
                  WHERE status = 'Running'
                  ORDER BY started_at DESC
@@ -155,7 +158,7 @@ impl Database {
     pub async fn list_sessions(&self) -> Result<Vec<Session>> {
         self.execute(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT id, started_at, stopped_at, status, target_ms, active_ms, created_at, updated_at
+                "SELECT id, started_at, stopped_at, status, target_ms, active_ms, label_id, created_at, updated_at
                  FROM sessions
                  WHERE status IN ('Completed', 'Interrupted')
                  ORDER BY started_at DESC",
@@ -172,12 +175,16 @@ impl Database {
         .await
     }
 
-    pub async fn list_sessions_paginated(&self, limit: usize, offset: usize) -> Result<Vec<Session>> {
+    pub async fn list_sessions_paginated(
+        &self,
+        limit: usize,
+        offset: usize,
+    ) -> Result<Vec<Session>> {
         let limit = limit as i64;
         let offset = offset as i64;
         self.execute(move |conn| {
             let mut stmt = conn.prepare(
-                "SELECT id, started_at, stopped_at, status, target_ms, active_ms, created_at, updated_at
+                "SELECT id, started_at, stopped_at, status, target_ms, active_ms, label_id, created_at, updated_at
                  FROM sessions
                  WHERE status IN ('Completed', 'Interrupted')
                  ORDER BY started_at DESC
@@ -191,6 +198,45 @@ impl Database {
             }
 
             Ok(sessions)
+        })
+        .await
+    }
+
+    /// Update the label_id for a session
+    pub async fn update_session_label(
+        &self,
+        session_id: &str,
+        label_id: Option<i64>,
+    ) -> Result<()> {
+        let session_id = session_id.to_string();
+        self.execute(move |conn| {
+            if let Some(label_id) = label_id {
+                let exists: Option<i64> = conn
+                    .query_row(
+                        "SELECT id FROM labels WHERE id = ?1 AND deleted_at IS NULL",
+                        params![label_id],
+                        |row| row.get(0),
+                    )
+                    .optional()?;
+
+                if exists.is_none() {
+                    return Err(anyhow::anyhow!("Label not found or has been deleted"));
+                }
+            }
+
+            let rows_affected = conn.execute(
+                "UPDATE sessions
+                 SET label_id = ?1,
+                     updated_at = ?2
+                 WHERE id = ?3",
+                params![label_id, Utc::now().to_rfc3339(), session_id],
+            )?;
+
+            if rows_affected == 0 {
+                return Err(anyhow::anyhow!("Session not found"));
+            }
+
+            Ok(())
         })
         .await
     }

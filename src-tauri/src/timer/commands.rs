@@ -108,6 +108,7 @@ pub async fn list_sessions(state: State<'_, AppState>) -> Result<Vec<SessionSumm
             status: session.status,
             target_ms: session.target_ms,
             active_ms: session.active_ms,
+            label_id: session.label_id,
             top_apps,
             app_icons: HashMap::new(), // Will be populated below
             app_colors: HashMap::new(), // Will be populated below
@@ -171,6 +172,7 @@ pub async fn list_sessions_paginated(
             status: session.status,
             target_ms: session.target_ms,
             active_ms: session.active_ms,
+            label_id: session.label_id,
             top_apps,
             app_icons: HashMap::new(), // Will be populated below
             app_colors: HashMap::new(), // Will be populated below

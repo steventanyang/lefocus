@@ -15,6 +15,9 @@ use macos_bridge::{
 };
 use tauri::Manager;
 use tauri::State;
+use db::commands::{
+    create_label, delete_label, get_labels, update_label, update_session_label,
+};
 use timer::{
     commands::{
         cancel_timer, end_timer, get_interruptions_for_segment, get_segments_for_session,
@@ -196,6 +199,11 @@ pub fn run() {
             get_window_titles_for_segment,
             list_sessions,
             list_sessions_paginated,
+            create_label,
+            get_labels,
+            update_label,
+            delete_label,
+            update_session_label,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
