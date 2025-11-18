@@ -8,6 +8,7 @@ interface UseKeyboardShortcutsOptions {
   isIdle: boolean;
   startDisabled: boolean;
   isSessionResultsDisplayed?: boolean; // Prevent shortcuts when session results are shown
+  isModalOpen?: boolean; // Prevent shortcuts when any modal is open
 }
 
 /**
@@ -28,6 +29,7 @@ export function useKeyboardShortcuts({
   isIdle,
   startDisabled,
   isSessionResultsDisplayed = false,
+  isModalOpen = false,
 }: UseKeyboardShortcutsOptions): void {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -38,6 +40,11 @@ export function useKeyboardShortcuts({
 
       // Don't handle shortcuts when session results are displayed
       if (isSessionResultsDisplayed) {
+        return;
+      }
+
+      // Don't handle shortcuts when a modal is open
+      if (isModalOpen) {
         return;
       }
 
@@ -85,7 +92,7 @@ export function useKeyboardShortcuts({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onStart, onSwitchMode, isIdle, startDisabled, isSessionResultsDisplayed]);
+  }, [onStart, onSwitchMode, isIdle, startDisabled, isSessionResultsDisplayed, isModalOpen]);
 }
 
 /**

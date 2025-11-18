@@ -143,13 +143,12 @@ export function SessionResults({
   return (
     <div className="w-full max-w-3xl flex flex-col gap-8 relative">
       {/* Label section in top right */}
-      <div className="absolute top-0 right-0 flex flex-col items-end gap-2 z-10">
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <KeyBox hovered={false}>L</KeyBox>
-          <span>Change Label</span>
-        </div>
-        <div className="relative">
-          <LabelTag label={currentLabel} />
+      <div className="absolute top-0 right-0 z-10">
+        <div className="flex flex-col items-end gap-2 relative">
+          <div className="flex items-center gap-2">
+            <KeyBox hovered={false}>L</KeyBox>
+            <LabelTag label={currentLabel} />
+          </div>
           <LabelDropdown
             isOpen={isLabelDropdownOpen}
             onClose={() => setIsLabelDropdownOpen(false)}

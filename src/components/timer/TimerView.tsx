@@ -191,6 +191,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     isIdle,
     startDisabled,
     isSessionResultsDisplayed: !!displayedSession,
+    isModalOpen: isLabelModalOpen,
   });
 
   // Handle keyboard shortcuts for arrow keys and h key
@@ -309,16 +310,15 @@ export function TimerView({ onNavigate }: TimerViewProps) {
       {/* Label section in top right */}
       {state.status === "idle" && (
         <div
-          className={`fixed top-8 right-8 flex flex-col items-end gap-2 z-10 transition-opacity duration-300 ${
+          className={`fixed top-8 right-8 z-10 transition-opacity duration-300 ${
             controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
           }`}
         >
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <KeyBox hovered={false}>L</KeyBox>
-            <span>Change Label</span>
-          </div>
-          <div className="relative">
-            <LabelTag label={selectedLabel} />
+          <div className="flex flex-col items-end gap-2 relative">
+            <div className="flex items-center gap-2">
+              <KeyBox hovered={false}>L</KeyBox>
+              <LabelTag label={selectedLabel} />
+            </div>
             <LabelDropdown
               isOpen={isLabelDropdownOpen}
               onClose={() => setIsLabelDropdownOpen(false)}

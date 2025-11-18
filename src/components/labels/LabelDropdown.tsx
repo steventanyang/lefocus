@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Label } from "@/types/label";
 import { isUserTyping } from "@/utils/keyboardUtils";
+import { KeyBox } from "@/components/ui/KeyBox";
 
 interface LabelDropdownProps {
   isOpen: boolean;
@@ -36,9 +37,9 @@ export function LabelDropdown({
         return;
       }
 
-      // Number keys 1-9: select label by index
+      // Number keys 1-8: select label by index
       const num = parseInt(event.key);
-      if (num >= 1 && num <= 9) {
+      if (num >= 1 && num <= 8) {
         event.preventDefault();
         const labelIndex = num - 1;
         if (labelIndex < labels.length) {
@@ -53,11 +54,18 @@ export function LabelDropdown({
         onSelectLabel(null);
         return;
       }
+
+      // N: add new label (only if less than 8 labels)
+      if ((event.key === "n" || event.key === "N") && labels.length < 8) {
+        event.preventDefault();
+        onAddNew();
+        return;
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, labels, onSelectLabel, onClose]);
+  }, [isOpen, labels, onSelectLabel, onClose, onAddNew]);
 
   // Click outside to close
   useEffect(() => {
@@ -87,25 +95,30 @@ export function LabelDropdown({
       : null;
   };
 
+  // Calculate the width needed for all labels (find the longest one)
+  const allOptions = [
+    { text: "No Label", isLabel: false },
+    ...labels.map(l => ({ text: l.name, isLabel: true }))
+  ];
+
   return (
     <div
       ref={dropdownRef}
-      className="absolute z-50 mt-2 flex flex-col gap-1"
+      className="absolute z-50 top-full mt-4 right-0 flex flex-col gap-2 items-end"
     >
       {/* No Label Option */}
-      <button
-        onClick={() => onSelectLabel(null)}
-        className="flex items-center gap-2 group"
-      >
-        <span className="text-xs text-gray-400 font-mono w-4">0</span>
-        <div
-          className={`flex-1 border border-gray-300 px-3 py-1 text-sm font-medium transition-opacity ${
-            currentLabelId === null ? "bg-gray-100 text-gray-600" : "bg-gray-100 text-gray-600 opacity-60"
-          } group-hover:opacity-100`}
+      <div className="flex items-center gap-2">
+        <KeyBox hovered={false}>0</KeyBox>
+        <button
+          onClick={() => onSelectLabel(null)}
+          className={`border border-gray-300 px-3 py-1 text-sm font-medium transition-opacity whitespace-nowrap ${
+            currentLabelId === null ? "text-gray-400" : "text-gray-400 opacity-60"
+          } hover:opacity-100`}
+          style={{ width: '126px', backgroundColor: 'transparent' }}
         >
           No Label
-        </div>
-      </button>
+        </button>
+      </div>
 
       {/* Label Options */}
       {labels.map((label, index) => {
@@ -114,42 +127,37 @@ export function LabelDropdown({
         const isSelected = currentLabelId === label.id;
 
         return (
-          <button
-            key={label.id}
-            onClick={() => onSelectLabel(label.id)}
-            className="flex items-center gap-2 group"
-          >
-            <span className="text-xs text-gray-400 font-mono w-4">{index + 1}</span>
-            <div
-              className={`flex-1 border px-3 py-1 text-sm font-medium transition-opacity ${
+          <div key={label.id} className="flex items-center gap-2">
+            <KeyBox hovered={false}>{index + 1}</KeyBox>
+            <button
+              onClick={() => onSelectLabel(label.id)}
+              className={`border px-3 py-1 text-sm font-medium transition-opacity whitespace-nowrap ${
                 isSelected ? "" : "opacity-60"
-              } group-hover:opacity-100`}
+              } hover:opacity-100`}
               style={{
                 backgroundColor: lightBg,
                 borderColor: label.color,
                 color: label.color,
+                width: '126px',
               }}
             >
               {label.name}
-            </div>
-          </button>
+            </button>
+          </div>
         );
       })}
 
       {/* Add New Option */}
-      {labels.length < 9 && (
-        <button
-          onClick={onAddNew}
-          className="mt-2 text-sm text-gray-500 hover:text-gray-700 text-left pl-6"
-        >
-          + Add New Label
-        </button>
-      )}
-
-      {/* Max labels reached */}
-      {labels.length >= 9 && (
-        <div className="mt-2 text-xs text-gray-400 pl-6">
-          Maximum 9 labels reached
+      {labels.length < 8 && (
+        <div className="flex items-center gap-2 mt-3">
+          <KeyBox hovered={false}>N</KeyBox>
+          <button
+            onClick={onAddNew}
+            className="text-sm text-gray-500 hover:text-gray-700 flex items-center justify-center"
+            style={{ width: '126px' }}
+          >
+            + New Label
+          </button>
         </div>
       )}
     </div>

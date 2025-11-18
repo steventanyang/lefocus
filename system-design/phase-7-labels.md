@@ -26,22 +26,22 @@ CREATE TABLE labels (
 ```
 
 **Constraints:**
-- Maximum 9 labels (enforced atomically in the DB worker to avoid races)
+- Maximum 8 labels (enforced atomically in the DB worker to avoid races)
 - `name` must be unique
-- `order_index` determines display order and keyboard shortcuts (1-9) and always stays within 0-8 by reusing freed slots when labels are deleted
+- `order_index` determines display order and keyboard shortcuts (1-8) and always stays within 0-7 by reusing freed slots when labels are deleted
 
-#### Modified Table: `activities`
+#### Modified Table: `sessions`
 ```sql
-ALTER TABLE activities ADD COLUMN label_id INTEGER REFERENCES labels(id) ON DELETE SET NULL;
+ALTER TABLE sessions ADD COLUMN label_id INTEGER REFERENCES labels(id) ON DELETE SET NULL;
 ```
 
 **Behavior:**
 - `label_id` is nullable (sessions can be unlabeled)
-- When a label is soft-deleted, all activities with that label have `label_id` set to NULL
+- When a label is soft-deleted, all sessions with that label have `label_id` set to NULL
 
 ### Indexes
 ```sql
-CREATE INDEX idx_activities_label_id ON activities(label_id);
+CREATE INDEX idx_sessions_label_id ON sessions(label_id);
 CREATE INDEX idx_labels_deleted_at ON labels(deleted_at);
 CREATE INDEX idx_labels_order_index ON labels(order_index);
 ```
@@ -54,21 +54,26 @@ CREATE INDEX idx_labels_order_index ON labels(order_index);
 
 **Visual Layout:**
 - Label appears in top-right corner of timer screen
-- If no label: shows "No Label" in grey outlined tag with grey text
-- If labeled: shows label name in colored tag matching label color
-- Below label: shortcut indicator "L → change label"
+- KeyBox `[L]` followed by label tag (126px wide, square corners)
+- If no label: shows "No Label" in grey border with transparent background
+- If labeled: shows label name with light colored background (15% opacity), dark colored text and border
+- No extra text - just `[L]` and the label
 
 **Interaction:**
-1. Press `L` key → dropdown animates down from label
-2. Dropdown shows all labels (max 9)
-3. Each label shows:
-   - Colored indicator (matching label color)
-   - Label name
-   - Number shortcut (1-9) on the right
-4. Press number key (1-9) → switches to that label, dropdown closes
-5. Click label → switches to that label, dropdown closes
-6. Press `Esc` → closes dropdown without changing
-7. "Add New" option at bottom of dropdown (covered in Flow 4)
+1. Press `L` key → dropdown opens below label with 16px gap
+2. Dropdown shows all labels (max 8) in two-column layout:
+   - Left column: KeyBoxes (0, 1-8, N)
+   - Right column: Label tags (all 126px wide)
+3. Each label row shows:
+   - KeyBox with number (left)
+   - Label button with light background, dark text/border, 60% opacity when not selected
+   - Selected label at 100% opacity
+4. Press number key (0, 1-8) → switches to that label, dropdown closes
+5. Press `N` → opens label creation modal (if < 8 labels)
+6. Click label → switches to that label, dropdown closes
+7. Press `Esc` → closes dropdown without changing
+8. Dropdown has transparent background, labels stack with 8px gap
+9. "+ New Label" option shows below labels (if < 8 labels exist)
 
 **Default Behavior:**
 - On fresh app install: no labels exist, shows "No Label"
@@ -77,18 +82,18 @@ CREATE INDEX idx_labels_order_index ON labels(order_index);
 ### 2. Session Summary Screen - Label Assignment (After Session Ends)
 
 **Visual Layout:**
-- Label tag appears next to duration
-- Same styling as timer screen (colored tag or grey "No Label")
-- Shortcut indicator: "L → change label"
+- Label appears in top-right corner of session results
+- Same layout as timer screen: `[L]` followed by label tag
+- Same styling: square corners, 126px wide, light bg with dark text/border
 
 **Interaction:**
-1. Press `L` key → modal opens (similar to segment summary modal)
-2. Same dropdown UI as timer screen
+1. Press `L` key → dropdown opens (same as timer screen)
+2. Same two-column layout with KeyBoxes and labels
 3. Selecting a label:
-   - Updates the activity's `label_id` in database
-   - Closes modal
+   - Updates the session's `label_id` in database
+   - Closes dropdown
    - Updates label display on summary screen
-4. Press `Esc` → closes modal without changing
+4. Press `Esc` → closes dropdown without changing
 
 ### 3. Activities View - Label Assignment (Individual Session)
 
@@ -130,9 +135,12 @@ CREATE INDEX idx_labels_order_index ON labels(order_index);
    - Modal closes
 
 **Validation:**
-- Maximum 9 labels (show error if limit reached)
+- Maximum 8 labels (enforced - N key and "+ New Label" don't appear when limit reached)
 - Name must be unique (show error if duplicate)
 - Name cannot be empty
+
+**Important:**
+- Modal blocks timer shortcuts (pressing Enter in modal does not start timer)
 
 ### 5. Profile → Labels Settings Page
 
@@ -156,7 +164,7 @@ CREATE INDEX idx_labels_order_index ON labels(order_index);
 2. Shows "Press D to confirm" indicator (same UX as end/cancel session)
 3. Press `D` again → soft delete label:
    - Set `deleted_at = NOW()`
-   - Update all activities: `SET label_id = NULL WHERE label_id = <deleted_id>`
+   - Update all sessions: `SET label_id = NULL WHERE label_id = <deleted_id>`
 4. Label removed from settings list
 
 **Edit Label (Future):**
@@ -171,9 +179,9 @@ CREATE INDEX idx_labels_order_index ON labels(order_index);
 ### New Database Functions
 
 #### `createLabel(name: string, color: string): Promise<Label>`
-- Validates max 9 labels
+- Validates max 8 labels
 - Validates unique name
-- Gets next `order_index` (max + 1)
+- Gets next `order_index` (finds lowest available slot 0-7)
 - Inserts into `labels` table
 - Returns created label
 
@@ -181,13 +189,13 @@ CREATE INDEX idx_labels_order_index ON labels(order_index);
 - Returns all non-deleted labels
 - Ordered by `order_index ASC`
 
-#### `updateActivityLabel(activityId: number, labelId: number | null): Promise<void>`
-- Updates `activities.label_id`
+#### `updateSessionLabel(sessionId: string, labelId: number | null): Promise<void>`
+- Updates `sessions.label_id`
 - Handles null for "No Label"
 
 #### `softDeleteLabel(labelId: number): Promise<void>`
 - Sets `deleted_at` on label
-- Updates all activities with that label to `label_id = NULL`
+- Updates all sessions with that label to `label_id = NULL`
 
 #### `updateLabel(labelId: number, name?: string, color?: string): Promise<Label>` (Future)
 - Updates label name and/or color
@@ -201,13 +209,17 @@ CREATE INDEX idx_labels_order_index ON labels(order_index);
 
 #### `LabelTag`
 - Props: `label: Label | null`, `size?: 'small' | 'medium'`
-- Displays colored tag with label name
-- If null: shows "No Label" in grey
+- Hardcoded width: 126px, square corners
+- If labeled: light background (15% opacity of label color), dark text and border (label color)
+- If null: shows "No Label" in grey border with transparent background, grey text
 
 #### `LabelDropdown`
 - Props: `currentLabel: Label | null`, `onSelect: (labelId: number | null) => void`, `onAddNew: () => void`
-- Keyboard shortcuts: 1-9 for selection, L to open, Esc to close
-- "Add New" option at bottom
+- Two-column layout: KeyBoxes (left) + Labels (right, all 126px wide)
+- Keyboard shortcuts: 0 (No Label), 1-8 for labels, N for new label, Esc to close
+- Transparent background, labels stack with 8px gap
+- "+ New Label" shows at bottom when < 8 labels (centered text, 126px wide)
+- Selected label at 100% opacity, others at 60%
 
 #### `LabelModal` (for Add/Edit)
 - Two-step form: name entry → color picker
@@ -247,11 +259,13 @@ CREATE INDEX idx_labels_order_index ON labels(order_index);
 
 ## Technical Considerations
 
-### Label Shortcuts (1-9)
+### Label Shortcuts (1-8)
 - Shortcuts are dynamic based on `order_index`
 - Label at `order_index = 0` gets shortcut `1`
-- Label at `order_index = 8` gets shortcut `9`
-- When creating a label we scan existing non-deleted labels and assign the smallest unused `order_index`, so a delete/recreate cycle never produces an index ≥ 9
+- Label at `order_index = 7` gets shortcut `8`
+- `0` is reserved for "No Label"
+- `N` is reserved for creating new labels
+- When creating a label we scan existing non-deleted labels and assign the smallest unused `order_index`, so a delete/recreate cycle never produces an index ≥ 8
 
 ### Default Label Selection
 - On app load, fetch the latest session (completed or interrupted) to seed a `lastUsedLabelId`
@@ -270,12 +284,14 @@ CREATE INDEX idx_labels_order_index ON labels(order_index);
 
 ### Order Management
 - Labels maintain creation order via `order_index`
-- On delete: do NOT reorder remaining labels, but reuse the lowest available index when a new label is created to keep shortcuts 1-9 valid
+- On delete: do NOT reorder remaining labels, but reuse the lowest available index when a new label is created to keep shortcuts 1-8 valid
 - Future feature: manual reordering
 
 ### Session Label Updates
 - `update_session_label` validates that the requested `label_id` exists and is not soft-deleted
 - Fails with a clear error if the label has been deleted or never existed, ensuring sessions never point to hidden labels
+- Labels are assigned at session creation time (passed to `start_timer` command)
+- Can be changed during or after session via label dropdown
 
 ---
 
@@ -292,21 +308,24 @@ CREATE INDEX idx_labels_order_index ON labels(order_index);
 
 ## Testing Checklist
 
-- [ ] Create label (max 9 enforced)
+- [x] Create label (max 8 enforced)
 - [ ] Create label with duplicate name (error)
-- [ ] Assign label to activity before timer starts
-- [ ] Change label after session ends
-- [ ] Change label from activities detail view
-- [ ] Soft delete label (activities become unlabeled)
-- [ ] Label dropdown keyboard shortcuts (1-9)
-- [ ] Label dropdown navigation (L to open, Esc to close)
-- [ ] Add new label from dropdown
-- [ ] Two-step label creation flow (name → color)
-- [ ] Color picker keyboard navigation
+- [x] Assign label to session before timer starts
+- [x] Change label after session ends
+- [x] Change label from session results view
+- [ ] Soft delete label (sessions become unlabeled)
+- [x] Label dropdown keyboard shortcuts (0, 1-8, N)
+- [x] Label dropdown navigation (L to open, Esc to close)
+- [x] Add new label from dropdown (N key)
+- [x] Two-step label creation flow (name → color)
+- [x] Color picker keyboard navigation
 - [ ] Profile page opens with Cmd+P
 - [ ] Labels settings page shows all labels
-- [ ] Default label selection (last used)
-- [ ] "No Label" display and behavior
+- [x] Default label selection (last used)
+- [x] "No Label" display and behavior
+- [x] Enter key in label modal doesn't start timer
+- [x] Label dropdown layout (KeyBoxes left, labels right)
+- [x] Label styling (square corners, light bg, dark text/border)
 
 ---
 
@@ -314,8 +333,8 @@ CREATE INDEX idx_labels_order_index ON labels(order_index);
 
 ### Database Migration
 ```sql
--- Add label_id column to activities
-ALTER TABLE activities ADD COLUMN label_id INTEGER REFERENCES labels(id) ON DELETE SET NULL;
+-- Add label_id column to sessions
+ALTER TABLE sessions ADD COLUMN label_id INTEGER REFERENCES labels(id) ON DELETE SET NULL;
 
 -- Create labels table
 CREATE TABLE labels (
@@ -329,11 +348,11 @@ CREATE TABLE labels (
 );
 
 -- Create indexes
-CREATE INDEX idx_activities_label_id ON activities(label_id);
+CREATE INDEX idx_sessions_label_id ON sessions(label_id);
 CREATE INDEX idx_labels_deleted_at ON labels(deleted_at);
 CREATE INDEX idx_labels_order_index ON labels(order_index);
 ```
 
 ### Data Migration
 - No data migration needed (fresh feature)
-- All existing activities have `label_id = NULL` (unlabeled)
+- All existing sessions have `label_id = NULL` (unlabeled)

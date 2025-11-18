@@ -26,10 +26,11 @@ export function LabelTag({ label, size = "medium" }: LabelTagProps) {
   };
 
   if (!label) {
-    // No label - grey styling matching status badges
+    // No label - grey border with transparent background
     return (
       <div
-        className={`inline-flex items-center justify-center border border-gray-300 ${sizeClasses[size]} bg-gray-100 text-gray-600 font-medium w-full`}
+        className={`inline-flex items-center justify-center border border-gray-300 ${sizeClasses[size]} text-gray-400 font-medium`}
+        style={{ width: '126px', backgroundColor: 'transparent' }}
       >
         No Label
       </div>
@@ -45,11 +46,12 @@ export function LabelTag({ label, size = "medium" }: LabelTagProps) {
 
   return (
     <div
-      className={`inline-flex items-center justify-center border ${sizeClasses[size]} font-medium w-full`}
+      className={`inline-flex items-center justify-center border ${sizeClasses[size]} font-medium`}
       style={{
         backgroundColor: lightBg,
         borderColor: darkBorder,
         color: darkText,
+        width: '126px',
       }}
     >
       {label.name}
