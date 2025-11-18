@@ -23,7 +23,7 @@ import {
 } from "@/constants/timer";
 
 interface TimerViewProps {
-  onNavigate: (view: "timer" | "activities" | "stats") => void;
+  onNavigate: (view: "timer" | "activities" | "stats" | "profile") => void;
 }
 
 export function TimerView({ onNavigate }: TimerViewProps) {
@@ -329,7 +329,9 @@ export function TimerView({ onNavigate }: TimerViewProps) {
               currentLabelId={selectedLabelId}
               onSelectLabel={(labelId) => {
                 setSelectedLabelId(labelId);
-                setLastUsedLabelId(labelId);
+                if (labelId !== null) {
+                  setLastUsedLabelId(labelId);
+                }
                 setIsLabelDropdownOpen(false);
               }}
               onAddNew={() => {
@@ -348,6 +350,10 @@ export function TimerView({ onNavigate }: TimerViewProps) {
         mode="create"
         autoAssignToSessionId={undefined}
         existingLabels={labels}
+        onLabelCreated={(labelId) => {
+          setSelectedLabelId(labelId);
+          setLastUsedLabelId(labelId);
+        }}
       />
 
       {/* Navigation buttons in top left */}
@@ -398,6 +404,13 @@ export function TimerView({ onNavigate }: TimerViewProps) {
             >
               <KeyboardShortcut keyLetter="s" hovered={false} />
               <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Stats</span>
+            </button>
+            <button
+              className="text-base font-light text-gray-600 flex items-center gap-2 group"
+              onClick={() => onNavigate("profile")}
+            >
+              <KeyboardShortcut keyLetter="p" hovered={false} />
+              <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Profile</span>
             </button>
           </div>
         </div>

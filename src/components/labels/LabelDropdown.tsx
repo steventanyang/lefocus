@@ -74,6 +74,7 @@ export function LabelDropdown({
         const labelIndex = num - 1;
         if (labelIndex < labels.length) {
           onSelectLabel(labels[labelIndex].id);
+          onClose();
         }
         return;
       }
@@ -82,6 +83,7 @@ export function LabelDropdown({
       if (event.key === "0") {
         event.preventDefault();
         onSelectLabel(null);
+        onClose();
         return;
       }
 

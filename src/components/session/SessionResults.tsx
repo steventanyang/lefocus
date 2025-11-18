@@ -6,7 +6,7 @@ import { SegmentStats } from "@/components/segments/SegmentStats";
 import { SegmentDetailsModal } from "@/components/segments/SegmentDetailsModal";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import { LabelTag } from "@/components/labels/LabelTag";
-import { LabelDropdown } from "@/components/labels/LabelDropdown";
+import { LabelSelectionModal } from "@/components/labels/LabelSelectionModal";
 import { LabelModal } from "@/components/labels/LabelModal";
 import { useLabels, useLabelById } from "@/hooks/useLabels";
 import { KeyBox } from "@/components/ui/KeyBox";
@@ -42,7 +42,7 @@ export function SessionResults({
 
   const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
   const [currentLabelId, setCurrentLabelId] = useState<number | null>(session?.labelId ?? null);
-  const [isLabelDropdownOpen, setIsLabelDropdownOpen] = useState(false);
+  const [isLabelSelectionModalOpen, setIsLabelSelectionModalOpen] = useState(false);
   const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
 
   const currentLabel = useLabelById(currentLabelId, labels);
@@ -55,17 +55,17 @@ export function SessionResults({
   // Handle keyboard shortcuts for navigation and labels
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Ignore shortcuts when user is typing or modal is open
-      if (isUserTyping() || isLabelModalOpen) {
+      // Ignore shortcuts when user is typing or any modal is open
+      if (isUserTyping() || isLabelSelectionModalOpen || isLabelModalOpen) {
         return;
       }
 
       const isModifierPressed = isMac() ? event.metaKey : event.ctrlKey;
 
-      // L key: Open label dropdown
+      // L key: Open label selection modal
       if ((event.key === "l" || event.key === "L") && !isModifierPressed) {
         event.preventDefault();
-        setIsLabelDropdownOpen((prev) => !prev);
+        setIsLabelSelectionModalOpen((prev) => !prev);
         return;
       }
 
@@ -93,7 +93,7 @@ export function SessionResults({
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [onBack, backButtonText, isLabelModalOpen]);
+  }, [onBack, backButtonText, isLabelSelectionModalOpen, isLabelModalOpen]);
 
   const stats = calculateSegmentStats(segments, 5); // Limit to top 5 apps for session view
   const sessionDurationSecs =
@@ -140,48 +140,56 @@ export function SessionResults({
     </button>
   );
 
-  return (
-    <div className="w-full max-w-3xl flex flex-col gap-8 relative">
-      {/* Label section in top right */}
-      <div className="absolute top-0 right-0 z-10">
-        <div className="flex flex-col items-end gap-2 relative">
-          <div className="flex items-center gap-2">
-            <KeyBox hovered={false}>L</KeyBox>
-            <LabelTag label={currentLabel} />
-          </div>
-          <LabelDropdown
-            isOpen={isLabelDropdownOpen}
-            onClose={() => setIsLabelDropdownOpen(false)}
-            labels={labels}
-            currentLabelId={currentLabelId}
-            onSelectLabel={async (labelId) => {
-              setCurrentLabelId(labelId);
-              setLastUsedLabelId(labelId);
-              setIsLabelDropdownOpen(false);
-              try {
-                await updateSessionLabelMutation.mutateAsync({
-                  sessionId,
-                  labelId,
-                });
-              } catch (err) {
-                console.error("Failed to update session label:", err);
-              }
-            }}
-            onAddNew={() => {
-              setIsLabelDropdownOpen(false);
-              setIsLabelModalOpen(true);
-            }}
-          />
-        </div>
-      </div>
+  const labelSection = {
+    labelKey: <KeyBox hovered={false}>L</KeyBox>,
+    labelTag: (
+      <button
+        onClick={() => setIsLabelSelectionModalOpen(true)}
+        className="group"
+      >
+        <LabelTag label={currentLabel} />
+      </button>
+    ),
+  };
 
-      {/* Label Modal */}
+  return (
+    <div className="w-full max-w-3xl flex flex-col gap-8">
+      {/* Label Selection Modal */}
+      <LabelSelectionModal
+        isOpen={isLabelSelectionModalOpen}
+        onClose={() => setIsLabelSelectionModalOpen(false)}
+        labels={labels}
+        currentLabelId={currentLabelId}
+        onSelectLabel={async (labelId) => {
+          setCurrentLabelId(labelId);
+          setLastUsedLabelId(labelId);
+          setIsLabelSelectionModalOpen(false);
+          try {
+            await updateSessionLabelMutation.mutateAsync({
+              sessionId,
+              labelId,
+            });
+          } catch (err) {
+            console.error("Failed to update session label:", err);
+          }
+        }}
+        onAddNew={() => {
+          setIsLabelSelectionModalOpen(false);
+          setIsLabelModalOpen(true);
+        }}
+      />
+
+      {/* Label Create Modal */}
       <LabelModal
         isOpen={isLabelModalOpen}
         onClose={() => setIsLabelModalOpen(false)}
         mode="create"
         autoAssignToSessionId={sessionId}
         existingLabels={labels}
+        onLabelCreated={(labelId) => {
+          setCurrentLabelId(labelId);
+          setLastUsedLabelId(labelId);
+        }}
       />
 
       {segments.length === 0 ? (
@@ -201,6 +209,7 @@ export function SessionResults({
           segments={segments}
           onSegmentClick={setSelectedSegment}
           backButton={backButton}
+          labelSection={labelSection}
           dateTime={session?.startedAt}
         />
       )}

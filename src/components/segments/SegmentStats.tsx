@@ -9,6 +9,10 @@ interface SegmentStatsProps {
   segments: Segment[];
   onSegmentClick: (segment: Segment) => void;
   backButton?: React.ReactNode;
+  labelSection?: {
+    labelKey: React.ReactNode;
+    labelTag: React.ReactNode;
+  };
   dateTime?: string; // ISO 8601 datetime string
 }
 
@@ -60,6 +64,7 @@ export function SegmentStats({
   segments,
   onSegmentClick,
   backButton,
+  labelSection,
   dateTime,
 }: SegmentStatsProps) {
   const [selectedBundleId, setSelectedBundleId] = useState<string | null>(null);
@@ -194,13 +199,27 @@ export function SegmentStats({
         {backButton && <div>{backButton}</div>}
       </div>
 
-      <div className="flex flex-col gap-2">
-        <div className="text-sm font-normal tracking-wide text-gray-800">
-          Total Duration
+      <div className="flex items-start justify-between">
+        <div className="flex flex-col gap-2">
+          <div className="text-sm font-normal tracking-wide text-gray-800">
+            Total Duration
+          </div>
+          <div className="text-2xl font-semibold tabular-nums">
+            {formatDuration(stats.totalDurationSecs)}
+          </div>
         </div>
-        <div className="text-2xl font-semibold tabular-nums">
-          {formatDuration(stats.totalDurationSecs)}
-        </div>
+
+        {labelSection && (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              {labelSection.labelKey}
+              <div className="text-sm font-normal tracking-wide text-gray-800">
+                Label
+              </div>
+            </div>
+            <div>{labelSection.labelTag}</div>
+          </div>
+        )}
       </div>
 
       {/* Timeline embedded here */}

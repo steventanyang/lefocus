@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLabelsQuery, useDeleteLabelMutation } from "@/hooks/queries";
 import { LabelModal } from "@/components/labels/LabelModal";
+import { LabelTag } from "@/components/labels/LabelTag";
 import { KeyBox } from "@/components/ui/KeyBox";
 import { isUserTyping } from "@/utils/keyboardUtils";
 import type { Label } from "@/types/label";
@@ -13,6 +14,7 @@ export function LabelsSettingsPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [editingLabel, setEditingLabel] = useState<Label | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<"create" | "edit">("edit");
 
   // Reset deleteConfirmId after timeout
   useEffect(() => {
@@ -31,6 +33,17 @@ export function LabelsSettingsPage() {
 
       const selectedLabel = selectedIndex !== null ? labels[selectedIndex] : null;
 
+      // Number keys 1-8: Jump to label by index
+      const num = parseInt(event.key);
+      if (num >= 1 && num <= 8) {
+        event.preventDefault();
+        const labelIndex = num - 1;
+        if (labelIndex < labels.length) {
+          setSelectedIndex(labelIndex);
+        }
+        return;
+      }
+
       // Arrow keys: navigate list
       if (event.key === "ArrowUp") {
         event.preventDefault();
@@ -46,9 +59,18 @@ export function LabelsSettingsPage() {
         });
       }
 
+      // N key: Create new label (only if less than 8 labels)
+      else if ((event.key === "n" || event.key === "N") && labels.length < 8) {
+        event.preventDefault();
+        setModalMode("create");
+        setEditingLabel(null);
+        setIsModalOpen(true);
+      }
+
       // E key: Edit selected label
       else if ((event.key === "e" || event.key === "E") && selectedLabel) {
         event.preventDefault();
+        setModalMode("edit");
         setEditingLabel(selectedLabel);
         setIsModalOpen(true);
       }
@@ -94,99 +116,104 @@ export function LabelsSettingsPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Labels</h2>
-        <p className="text-sm text-gray-500">
-          {labels.length} / 9 labels
-        </p>
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold">Labels</h2>
+          <span className="text-sm text-gray-500">
+            {labels.length} / 8
+          </span>
+        </div>
+        <button
+          onClick={() => {
+            setModalMode("create");
+            setEditingLabel(null);
+            setIsModalOpen(true);
+          }}
+          disabled={labels.length >= 8}
+          className="flex items-center gap-2 text-gray-600 hover:text-black disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <KeyBox hovered={false}>N</KeyBox>
+          <span className="text-sm">New Label</span>
+        </button>
       </div>
 
-      {/* Labels list */}
-      <div className="flex flex-col gap-2">
-        {labels.map((label, index) => (
-          <div
-            key={label.id}
-            className={`flex items-center justify-between p-3 rounded-md border transition-colors ${
-              selectedIndex === index
-                ? "border-blue-500 bg-blue-50"
-                : "border-gray-200 hover:bg-gray-50"
-            } ${deleteConfirmId === label.id ? "bg-red-50 border-red-300" : ""}`}
-            onClick={() => setSelectedIndex(index)}
-          >
-            <div className="flex items-center gap-3">
-              {/* Color indicator */}
-              <div
-                className="w-6 h-6 rounded-full"
-                style={{ backgroundColor: label.color }}
-              />
+      {/* Labels list - single column */}
+      <div className="flex flex-col gap-3">
+        {labels.map((label, index) => {
+          const isSelected = selectedIndex === index;
+          const isDeleteConfirm = deleteConfirmId === label.id;
 
-              {/* Label name */}
-              <span className="font-medium">{label.name}</span>
-
+          return (
+            <div key={label.id} className="flex items-center gap-2" style={{ height: '34px' }}>
               {/* Shortcut number */}
-              <span className="text-xs text-gray-400 font-mono ml-2">
+              <KeyBox selected={isSelected} hovered={false} selectedColor={label.color}>
                 {index + 1}
-              </span>
-            </div>
+              </KeyBox>
 
-            {/* Actions */}
-            <div className="flex items-center gap-2">
-              {selectedIndex === index && (
-                <>
-                  {deleteConfirmId === label.id ? (
-                    <div className="flex items-center gap-2 text-sm text-red-600">
-                      <KeyBox>D</KeyBox>
-                      <span>to confirm</span>
-                    </div>
-                  ) : (
-                    <>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingLabel(label);
-                          setIsModalOpen(true);
-                        }}
-                        className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:text-black"
-                      >
-                        <KeyBox>E</KeyBox>
-                        <span>Edit</span>
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeleteConfirmId(label.id);
-                        }}
-                        className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:text-red-600"
-                      >
+              {/* Row container with border */}
+              <div
+                className={`flex cursor-pointer ${
+                  isSelected ? "border" : ""
+                }`}
+                style={{
+                  borderColor: isSelected ? label.color : 'transparent',
+                }}
+                onClick={() => setSelectedIndex(index)}
+              >
+                {/* Label tag - filled when selected, light bg when not */}
+                <LabelTag label={label} selected={isSelected} />
+
+                {/* Actions container - only show when selected */}
+                {isSelected && (
+                  <div className="flex items-center justify-center px-2" style={{ minWidth: '200px' }}>
+                    {isDeleteConfirm ? (
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
                         <KeyBox>D</KeyBox>
-                        <span>Delete</span>
-                      </button>
-                    </>
-                  )}
-                </>
-              )}
+                        <span>to confirm</span>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setModalMode("edit");
+                            setEditingLabel(label);
+                            setIsModalOpen(true);
+                          }}
+                          className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:text-black"
+                        >
+                          <KeyBox>E</KeyBox>
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Mouse click: delete immediately without confirmation
+                            deleteLabelMutation.mutate(label.id);
+                            setSelectedIndex(null);
+                          }}
+                          className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:text-red-600"
+                        >
+                          <KeyBox>D</KeyBox>
+                          <span>Delete</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Keyboard hints */}
-      <div className="mt-6 p-4 bg-gray-50 rounded-md text-sm text-gray-600">
-        <p className="font-medium mb-2">Keyboard Shortcuts:</p>
-        <ul className="space-y-1">
-          <li>↑↓ - Navigate labels</li>
-          <li>E - Edit selected label</li>
-          <li>D (twice) - Delete selected label</li>
-        </ul>
-      </div>
-
-      {/* Edit Label Modal */}
+      {/* Label Modal */}
       <LabelModal
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
           setEditingLabel(null);
         }}
-        mode="edit"
+        mode={modalMode}
         existingLabel={editingLabel || undefined}
         existingLabels={labels}
       />
