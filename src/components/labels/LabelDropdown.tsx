@@ -75,69 +75,82 @@ export function LabelDropdown({
 
   if (!isOpen) return null;
 
+  // Helper to convert hex to rgba for light backgrounds
+  const hexToRgb = (hex: string) => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result
+      ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16),
+        }
+      : null;
+  };
+
   return (
     <div
       ref={dropdownRef}
-      className="absolute z-50 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2"
+      className="absolute z-50 mt-2 flex flex-col gap-1"
     >
       {/* No Label Option */}
       <button
         onClick={() => onSelectLabel(null)}
-        className={`w-full px-4 py-2 text-left hover:bg-gray-100 flex items-center justify-between ${
-          currentLabelId === null ? "bg-gray-50" : ""
-        }`}
+        className="flex items-center gap-2 group"
       >
-        <div className="flex items-center gap-3">
-          <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
-          <span className="text-gray-500">No Label</span>
+        <span className="text-xs text-gray-400 font-mono w-4">0</span>
+        <div
+          className={`flex-1 border border-gray-300 px-3 py-1 text-sm font-medium transition-opacity ${
+            currentLabelId === null ? "bg-gray-100 text-gray-600" : "bg-gray-100 text-gray-600 opacity-60"
+          } group-hover:opacity-100`}
+        >
+          No Label
         </div>
-        <span className="text-xs text-gray-400 font-mono">0</span>
       </button>
 
-      {/* Separator */}
-      {labels.length > 0 && <div className="h-px bg-gray-200 my-2" />}
-
       {/* Label Options */}
-      {labels.map((label, index) => (
-        <button
-          key={label.id}
-          onClick={() => onSelectLabel(label.id)}
-          className={`w-full px-4 py-2 text-left hover:bg-gray-100 flex items-center justify-between ${
-            currentLabelId === label.id ? "bg-gray-50" : ""
-          }`}
-        >
-          <div className="flex items-center gap-3">
+      {labels.map((label, index) => {
+        const rgb = hexToRgb(label.color);
+        const lightBg = rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)` : label.color;
+        const isSelected = currentLabelId === label.id;
+
+        return (
+          <button
+            key={label.id}
+            onClick={() => onSelectLabel(label.id)}
+            className="flex items-center gap-2 group"
+          >
+            <span className="text-xs text-gray-400 font-mono w-4">{index + 1}</span>
             <div
-              className="w-4 h-4 rounded-full"
-              style={{ backgroundColor: label.color }}
-            />
-            <span>{label.name}</span>
-          </div>
-          <span className="text-xs text-gray-400 font-mono">{index + 1}</span>
-        </button>
-      ))}
+              className={`flex-1 border px-3 py-1 text-sm font-medium transition-opacity ${
+                isSelected ? "" : "opacity-60"
+              } group-hover:opacity-100`}
+              style={{
+                backgroundColor: lightBg,
+                borderColor: label.color,
+                color: label.color,
+              }}
+            >
+              {label.name}
+            </div>
+          </button>
+        );
+      })}
 
       {/* Add New Option */}
       {labels.length < 9 && (
-        <>
-          <div className="h-px bg-gray-200 my-2" />
-          <button
-            onClick={onAddNew}
-            className="w-full px-4 py-2 text-left hover:bg-gray-100 text-blue-600 font-medium"
-          >
-            + Add New Label
-          </button>
-        </>
+        <button
+          onClick={onAddNew}
+          className="mt-2 text-sm text-gray-500 hover:text-gray-700 text-left pl-6"
+        >
+          + Add New Label
+        </button>
       )}
 
       {/* Max labels reached */}
       {labels.length >= 9 && (
-        <>
-          <div className="h-px bg-gray-200 my-2" />
-          <div className="px-4 py-2 text-xs text-gray-400">
-            Maximum 9 labels reached
-          </div>
-        </>
+        <div className="mt-2 text-xs text-gray-400 pl-6">
+          Maximum 9 labels reached
+        </div>
       )}
     </div>
   );

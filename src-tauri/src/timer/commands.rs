@@ -25,11 +25,12 @@ pub async fn start_timer(
     state: State<'_, AppState>,
     target_ms: u64,
     mode: Option<TimerMode>,
+    label_id: Option<i64>,
 ) -> Result<TimerState, String> {
     let controller = controller_from_state(&state);
 
     controller
-        .start_timer(target_ms, mode)
+        .start_timer(target_ms, mode, label_id)
         .await
         .map_err(|e| e.to_string())
 }

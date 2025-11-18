@@ -90,7 +90,7 @@ impl TimerController {
         }
     }
 
-    pub async fn start_timer(&self, target_ms: u64, mode: Option<TimerMode>) -> Result<TimerState> {
+    pub async fn start_timer(&self, target_ms: u64, mode: Option<TimerMode>, label_id: Option<i64>) -> Result<TimerState> {
         let mode = mode.unwrap_or(TimerMode::Countdown);
 
         // For stopwatch mode, use i64::MAX as target (essentially unlimited, but SQLite-safe)
@@ -134,7 +134,7 @@ impl TimerController {
                 status: SessionStatus::Running,
                 target_ms: actual_target_ms,
                 active_ms: 0,
-                label_id: None,
+                label_id,
                 created_at: started_at,
                 updated_at: started_at,
             };
@@ -360,7 +360,10 @@ impl TimerController {
 
         self.emit_state_changed().await?;
 
-        let session_info = SessionInfo::from(session_snapshot);
+        // Fetch the actual session from DB to get the correct label_id
+        // (session_snapshot has label_id: None because it's a snapshot from the timer state)
+        let session_from_db = self.db.get_session(&session_snapshot.id).await?;
+        let session_info = SessionInfo::from(session_from_db);
 
         // Skip session_completed event for Break mode (no results modal)
         if !is_break_mode {

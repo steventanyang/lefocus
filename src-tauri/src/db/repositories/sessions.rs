@@ -108,6 +108,24 @@ impl Database {
         .await
     }
 
+    pub async fn get_session(&self, session_id: &str) -> Result<Session> {
+        let session_id = session_id.to_string();
+        self.execute(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT id, started_at, stopped_at, status, target_ms, active_ms, label_id, created_at, updated_at
+                 FROM sessions
+                 WHERE id = ?1",
+            )?;
+
+            let session = stmt
+                .query_row(params![session_id], |row| Ok(row_to_session(row)))?
+                .map_err(|e| anyhow::anyhow!("Failed to parse session: {}", e))?;
+
+            Ok(session)
+        })
+        .await
+    }
+
     pub async fn get_incomplete_session(&self) -> Result<Option<Session>> {
         self.execute(|conn| {
             let mut stmt = conn.prepare(

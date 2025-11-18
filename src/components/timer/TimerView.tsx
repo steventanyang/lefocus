@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useTimer } from "@/hooks/useTimer";
-import { useEndTimerMutation, useUpdateSessionLabelMutation } from "@/hooks/queries";
+import { useEndTimerMutation } from "@/hooks/queries";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useSessionCompleted } from "@/hooks/useSessionCompleted";
 import { useLabels, useLabelById } from "@/hooks/useLabels";
@@ -29,7 +29,6 @@ interface TimerViewProps {
 export function TimerView({ onNavigate }: TimerViewProps) {
   const { timerState, error, startTimer, cancelTimer } = useTimer();
   const endTimerMutation = useEndTimerMutation();
-  const updateSessionLabelMutation = useUpdateSessionLabelMutation();
   const completedSession = useSessionCompleted();
   const { labels, lastUsedLabelId, setLastUsedLabelId } = useLabels();
 
@@ -74,36 +73,16 @@ export function TimerView({ onNavigate }: TimerViewProps) {
   const handleStart = () => {
     if (timerState) {
       const duration = selectedMode === "break" ? selectedBreakDuration : selectedDuration;
-      startTimer(duration, selectedMode);
-      // Note: Label assignment happens in useEffect when session_id becomes available
+      // Pass labelId when starting timer (only for non-break sessions)
+      const labelIdToPass = selectedMode === "break" ? null : selectedLabelId;
+      startTimer(duration, selectedMode, labelIdToPass);
+      // Update lastUsedLabelId for next session
+      if (selectedMode !== "break" && selectedLabelId !== null) {
+        setLastUsedLabelId(selectedLabelId);
+      }
     }
   };
 
-  // Assign label to session after timer starts (when session_id becomes available)
-  useEffect(() => {
-    const assignLabel = async () => {
-      if (
-        timerState?.state.status === "running" &&
-        timerState.state.session_id &&
-        timerState.state.mode !== "break" &&
-        selectedLabelId !== null
-      ) {
-        try {
-          await updateSessionLabelMutation.mutateAsync({
-            sessionId: timerState.state.session_id,
-            labelId: selectedLabelId,
-          });
-          // Update lastUsedLabelId
-          setLastUsedLabelId(selectedLabelId);
-        } catch (err) {
-          console.error("Failed to assign label to session:", err);
-        }
-      }
-    };
-
-    assignLabel();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timerState?.state.status, timerState?.state.session_id]);
 
   // Cycle through presets (left/right arrows)
   const cyclePreset = useCallback((direction: "left" | "right", event?: React.MouseEvent) => {
@@ -222,10 +201,10 @@ export function TimerView({ onNavigate }: TimerViewProps) {
         return;
       }
 
-      // Don't handle arrow keys when SessionResults is displayed
+      // Don't handle keyboard shortcuts when SessionResults is displayed
       // Let SessionResults handle its own keyboard navigation
       const hasDisplayedSession = completedSession && completedSession.id !== dismissedSessionId;
-      if (hasDisplayedSession && (event.key === "ArrowLeft" || event.key === "ArrowRight" || event.key === "ArrowUp" || event.key === "ArrowDown")) {
+      if (hasDisplayedSession) {
         return;
       }
 
@@ -334,6 +313,10 @@ export function TimerView({ onNavigate }: TimerViewProps) {
             controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
           }`}
         >
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <KeyBox hovered={false}>L</KeyBox>
+            <span>Change Label</span>
+          </div>
           <div className="relative">
             <LabelTag label={selectedLabel} />
             <LabelDropdown
@@ -351,10 +334,6 @@ export function TimerView({ onNavigate }: TimerViewProps) {
                 setIsLabelModalOpen(true);
               }}
             />
-          </div>
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <KeyBox hovered={false}>L</KeyBox>
-            <span>change label</span>
           </div>
         </div>
       )}
