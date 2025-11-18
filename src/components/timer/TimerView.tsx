@@ -315,10 +315,13 @@ export function TimerView({ onNavigate }: TimerViewProps) {
           }`}
         >
           <div className="flex flex-col items-end gap-2 relative">
-            <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsLabelDropdownOpen((prev) => !prev)}
+              className="flex items-center gap-2 group"
+            >
               <KeyBox hovered={false}>L</KeyBox>
               <LabelTag label={selectedLabel} />
-            </div>
+            </button>
             <LabelDropdown
               isOpen={isLabelDropdownOpen}
               onClose={() => setIsLabelDropdownOpen(false)}
@@ -467,6 +470,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
         onEnd={handleEnd}
         onCancel={cancelTimer}
         controlsVisible={controlsVisible}
+        isLabelDropdownOpen={isLabelDropdownOpen}
       />
 
       {error && (

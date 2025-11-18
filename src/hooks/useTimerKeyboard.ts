@@ -9,6 +9,7 @@ interface UseTimerKeyboardOptions {
   onTimeChange?: (ms: number) => void;
   displayRef: React.RefObject<HTMLDivElement | null>;
   lastSentMsRef: React.MutableRefObject<number | null>;
+  isLabelDropdownOpen?: boolean;
 }
 
 /**
@@ -17,18 +18,19 @@ interface UseTimerKeyboardOptions {
  */
 export function useTimerKeyboard({
   isEditable,
-  editableValue,
+  editableValue: _editableValue,
   setEditableValue,
   onTimeChange,
   displayRef,
   lastSentMsRef,
+  isLabelDropdownOpen = false,
 }: UseTimerKeyboardOptions) {
   const isProcessingKeyRef = useRef<boolean>(false);
 
   // Handle keyboard input for timer editing
   const handleKeyInput = useCallback(
     (key: string, preventDefault: () => void, stopImmediate?: () => void) => {
-      if (!isEditable) return false;
+      if (!isEditable || isLabelDropdownOpen) return false;
 
       // Prevent double-processing
       if (isProcessingKeyRef.current) return false;
@@ -80,7 +82,7 @@ export function useTimerKeyboard({
       isProcessingKeyRef.current = false;
       return false;
     },
-    [isEditable, onTimeChange, setEditableValue, lastSentMsRef]
+    [isEditable, onTimeChange, setEditableValue, lastSentMsRef, isLabelDropdownOpen]
   );
 
   // Global keyboard listener for when display is editable but not focused

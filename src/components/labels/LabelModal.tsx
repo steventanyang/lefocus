@@ -3,12 +3,24 @@ import { useCreateLabelMutation, useUpdateLabelMutation, useUpdateSessionLabelMu
 import type { Label } from "@/types/label";
 import { isUserTyping } from "@/utils/keyboardUtils";
 
-// 4x4 grid of preset colors (16 colors)
+// 4x4 grid of preset colors (16 colors) - muted, darker, grey-toned palette
 const PRESET_COLORS = [
-  "#EF4444", "#F97316", "#F59E0B", "#EAB308",
-  "#84CC16", "#22C55E", "#10B981", "#14B8A6",
-  "#06B6D4", "#0EA5E9", "#3B82F6", "#6366F1",
-  "#8B5CF6", "#A855F7", "#D946EF", "#EC4899",
+  "#6B5B5F", // dusty mauve
+  "#7A5F5B", // terracotta grey
+  "#8A6B5F", // warm clay
+  "#9E8A73", // sandy taupe
+  "#5F6B5F", // sage grey
+  "#5B7A6B", // forest grey
+  "#6B8A7A", // muted jade
+  "#5F8A8A", // teal grey
+  "#5F7A8A", // slate blue
+  "#5B6B8A", // periwinkle grey
+  "#6B5F8A", // dusty purple
+  "#7A5F8A", // mauve grey
+  "#8A5F7A", // plum grey
+  "#8A5F6B", // rose grey
+  "#7A6B6B", // warm stone
+  "#6B6B7A", // cool stone
 ];
 
 type Step = "name" | "color";

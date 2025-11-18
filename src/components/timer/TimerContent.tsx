@@ -20,6 +20,7 @@ interface TimerContentProps {
   onEnd: () => void;
   onCancel: () => void;
   controlsVisible?: boolean;
+  isLabelDropdownOpen?: boolean;
 }
 
 export function TimerContent({
@@ -38,6 +39,7 @@ export function TimerContent({
   onEnd,
   onCancel,
   controlsVisible = true,
+  isLabelDropdownOpen = false,
 }: TimerContentProps) {
 
   return (
@@ -56,6 +58,7 @@ export function TimerContent({
               ? 0
               : selectedDuration
           }
+          isLabelDropdownOpen={isLabelDropdownOpen}
         />
       </div>
 
