@@ -181,6 +181,7 @@ export function SessionResults({
         onClose={() => setIsLabelModalOpen(false)}
         mode="create"
         autoAssignToSessionId={sessionId}
+        existingLabels={labels}
       />
 
       {segments.length === 0 ? (

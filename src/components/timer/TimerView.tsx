@@ -347,6 +347,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
         onClose={() => setIsLabelModalOpen(false)}
         mode="create"
         autoAssignToSessionId={undefined}
+        existingLabels={labels}
       />
 
       {/* Navigation buttons in top left */}

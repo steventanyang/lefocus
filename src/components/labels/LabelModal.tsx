@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useCreateLabelMutation, useUpdateLabelMutation, useUpdateSessionLabelMutation } from "@/hooks/queries";
 import type { Label } from "@/types/label";
 import { isUserTyping } from "@/utils/keyboardUtils";
+import { KeyBox } from "@/components/ui/KeyBox";
 
 // 4x4 grid of preset colors (16 colors) - muted, darker, grey-toned palette
 const PRESET_COLORS = [
@@ -31,6 +32,7 @@ interface LabelModalProps {
   mode: "create" | "edit";
   existingLabel?: Label;
   autoAssignToSessionId?: string;
+  existingLabels: Label[];
 }
 
 export function LabelModal({
@@ -39,6 +41,7 @@ export function LabelModal({
   mode,
   existingLabel,
   autoAssignToSessionId,
+  existingLabels,
 }: LabelModalProps) {
   const [step, setStep] = useState<Step>("name");
   const [name, setName] = useState("");
@@ -77,69 +80,32 @@ export function LabelModal({
     }
   }, [isOpen, step]);
 
-  // Handle keyboard shortcuts
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Step 1: Name input
-      if (step === "name") {
-        // Don't prevent default for typing in input
-        if (event.key === "Enter") {
-          event.preventDefault();
-          handleNameSubmit();
-        } else if (event.key === "Escape") {
-          event.preventDefault();
-          onClose();
-        }
-      }
-
-      // Step 2: Color picker
-      else if (step === "color") {
-        // Ignore if user is typing (shouldn't happen but safety check)
-        if (isUserTyping()) return;
-
-        // Arrow keys: navigate color grid
-        if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
-          event.preventDefault();
-          const row = Math.floor(selectedColorIndex / 4);
-          const col = selectedColorIndex % 4;
-
-          let newRow = row;
-          let newCol = col;
-
-          if (event.key === "ArrowUp") newRow = Math.max(0, row - 1);
-          if (event.key === "ArrowDown") newRow = Math.min(3, row + 1);
-          if (event.key === "ArrowLeft") newCol = Math.max(0, col - 1);
-          if (event.key === "ArrowRight") newCol = Math.min(3, col + 1);
-
-          const newIndex = newRow * 4 + newCol;
-          setSelectedColorIndex(newIndex);
-          setSelectedColor(PRESET_COLORS[newIndex]);
-        }
-
-        // Enter or Escape: save label
-        else if (event.key === "Enter" || event.key === "Escape") {
-          event.preventDefault();
-          handleColorSubmit();
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, step, name, selectedColor, selectedColorIndex, onClose]);
-
-  const handleNameSubmit = () => {
+  const handleNameSubmit = useCallback(() => {
     if (!name.trim()) {
       setError("Label name cannot be empty");
       return;
     }
+
+    // Check for duplicate label names (case-insensitive)
+    const trimmedName = name.trim().toLowerCase();
+    const isDuplicate = existingLabels.some(label => {
+      // In edit mode, allow the same name if it's the current label being edited
+      if (mode === "edit" && existingLabel && label.id === existingLabel.id) {
+        return false;
+      }
+      return label.name.toLowerCase() === trimmedName;
+    });
+
+    if (isDuplicate) {
+      setError("A label with this name already exists");
+      return;
+    }
+
     setError(null);
     setStep("color");
-  };
+  }, [name, existingLabels, mode, existingLabel]);
 
-  const handleColorSubmit = async () => {
+  const handleColorSubmit = useCallback(async () => {
     try {
       if (mode === "create") {
         // Create new label
@@ -168,78 +134,172 @@ export function LabelModal({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save label");
     }
-  };
+  }, [mode, name, selectedColor, autoAssignToSessionId, existingLabel, createLabelMutation, updateLabelMutation, updateSessionLabelMutation, onClose]);
+
+  // Handle keyboard shortcuts - synchronizing with keyboard events (external system)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Step 1: Name input
+      if (step === "name") {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.stopPropagation();
+          handleNameSubmit();
+          return;
+        } else if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+          return;
+        }
+      }
+
+      // Step 2: Color picker
+      else if (step === "color") {
+        // Arrow keys: navigate color grid
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          event.stopPropagation();
+          setSelectedColorIndex(prev => {
+            const currentRow = Math.floor(prev / 4);
+            if (currentRow > 0) {
+              const newIndex = prev - 4;
+              setSelectedColor(PRESET_COLORS[newIndex]);
+              return newIndex;
+            }
+            return prev;
+          });
+          return;
+        }
+
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          event.stopPropagation();
+          setSelectedColorIndex(prev => {
+            const currentRow = Math.floor(prev / 4);
+            if (currentRow < 3) {
+              const newIndex = prev + 4;
+              setSelectedColor(PRESET_COLORS[newIndex]);
+              return newIndex;
+            }
+            return prev;
+          });
+          return;
+        }
+
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          event.stopPropagation();
+          setSelectedColorIndex(prev => {
+            const currentCol = prev % 4;
+            if (currentCol > 0) {
+              const newIndex = prev - 1;
+              setSelectedColor(PRESET_COLORS[newIndex]);
+              return newIndex;
+            }
+            return prev;
+          });
+          return;
+        }
+
+        if (event.key === "ArrowRight") {
+          event.preventDefault();
+          event.stopPropagation();
+          setSelectedColorIndex(prev => {
+            const currentCol = prev % 4;
+            if (currentCol < 3) {
+              const newIndex = prev + 1;
+              setSelectedColor(PRESET_COLORS[newIndex]);
+              return newIndex;
+            }
+            return prev;
+          });
+          return;
+        }
+
+        // Delete/Backspace: go back to name step
+        if (event.key === "Backspace" || event.key === "Delete") {
+          event.preventDefault();
+          event.stopPropagation();
+          setStep("name");
+          return;
+        }
+
+        // Enter: save label
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.stopPropagation();
+          handleColorSubmit();
+          return;
+        }
+      }
+    };
+
+    // Use capture phase to catch events before other handlers
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [isOpen, step, handleNameSubmit, handleColorSubmit, onClose, selectedColorIndex]);
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl p-6 w-96">
-        <h2 className="text-xl font-semibold mb-4">
-          {mode === "create" ? "Create New Label" : "Edit Label"}
-        </h2>
-
+    <div className="fixed inset-0 backdrop-blur-md flex items-center justify-center z-50">
+      <div className="bg-white shadow-xl p-8 w-96">
         {/* Step 1: Name Input */}
         {step === "name" && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Label Name
-            </label>
             <input
               ref={nameInputRef}
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleNameSubmit();
-                }
-              }}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Enter label name"
+              className="w-full text-3xl font-semibold focus:outline-none placeholder-gray-400"
+              placeholder="New label name"
               maxLength={50}
             />
-            {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-            <div className="flex justify-between mt-4">
-              <button
-                onClick={onClose}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleNameSubmit}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                Next
-              </button>
+            {/* Error banner with fixed height */}
+            <div className="mt-6 h-12">
+              {error && (
+                <div className="bg-red-50 text-red-800 px-4 py-3 text-sm">
+                  {error}
+                </div>
+              )}
             </div>
-            <p className="text-xs text-gray-500 mt-4">
-              Press <span className="font-mono font-semibold">Enter</span> to continue,{" "}
-              <span className="font-mono font-semibold">Esc</span> to cancel
-            </p>
+
+            <div className="flex gap-4 mt-4">
+              <div className="flex-1 flex flex-col items-start gap-2">
+                <KeyBox className="w-12 h-6 py-1" hovered={false}>esc</KeyBox>
+                <button
+                  onClick={onClose}
+                  className="w-full bg-transparent border border-black text-black px-6 py-3 text-base font-semibold cursor-pointer hover:bg-black hover:text-white hover:transition-none transition-all duration-200"
+                >
+                  Cancel
+                </button>
+              </div>
+              <div className="flex-1 flex flex-col items-start gap-2">
+                <KeyBox className="w-16 h-6 px-2 py-1" hovered={false}>return</KeyBox>
+                <button
+                  onClick={handleNameSubmit}
+                  className="w-full bg-transparent border border-black text-black px-6 py-3 text-base font-semibold cursor-pointer hover:bg-black hover:text-white hover:transition-none transition-all duration-200"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
         {/* Step 2: Color Picker */}
         {step === "color" && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Select Color
-            </label>
-            <div className="mb-4">
-              <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-md">
-                <div
-                  className="w-8 h-8 rounded-full"
-                  style={{ backgroundColor: selectedColor }}
-                />
-                <span className="font-medium">{name}</span>
-              </div>
+            <div className="mb-6">
+              <span className="text-3xl font-semibold">{name}</span>
             </div>
 
             {/* 4x4 Color Grid */}
-            <div className="grid grid-cols-4 gap-2 mb-4">
+            <div className="grid grid-cols-4 gap-3 mb-6">
               {PRESET_COLORS.map((color, index) => (
                 <button
                   key={color}
@@ -247,40 +307,44 @@ export function LabelModal({
                     setSelectedColor(color);
                     setSelectedColorIndex(index);
                   }}
-                  className={`w-full h-12 rounded-md transition-all ${
+                  className={`w-full h-10 transition-all ${
                     selectedColorIndex === index
-                      ? "ring-2 ring-blue-500 ring-offset-2 scale-105"
-                      : "hover:scale-105"
+                      ? "ring-2 ring-offset-2"
+                      : ""
                   }`}
-                  style={{ backgroundColor: color }}
+                  style={{
+                    backgroundColor: color,
+                    ...(selectedColorIndex === index && { '--tw-ring-color': color } as any)
+                  }}
                 />
               ))}
             </div>
 
-            {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
+            {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
 
-            <div className="flex justify-between">
-              <button
-                onClick={() => setStep("name")}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Back
-              </button>
-              <button
-                onClick={handleColorSubmit}
-                disabled={createLabelMutation.isPending || updateLabelMutation.isPending}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-              >
-                {createLabelMutation.isPending || updateLabelMutation.isPending
-                  ? "Saving..."
-                  : "Save"}
-              </button>
+            <div className="flex gap-4">
+              <div className="flex-1 flex flex-col items-start gap-2">
+                <KeyBox className="w-16 h-6 px-2 py-1" hovered={false}>delete</KeyBox>
+                <button
+                  onClick={() => setStep("name")}
+                  className="w-full bg-transparent border border-black text-black px-6 py-3 text-base font-semibold cursor-pointer hover:bg-black hover:text-white hover:transition-none transition-all duration-200"
+                >
+                  Back
+                </button>
+              </div>
+              <div className="flex-1 flex flex-col items-start gap-2">
+                <KeyBox className="w-16 h-6 px-2 py-1" hovered={false}>return</KeyBox>
+                <button
+                  onClick={handleColorSubmit}
+                  disabled={createLabelMutation.isPending || updateLabelMutation.isPending}
+                  className="w-full bg-transparent border border-black text-black px-6 py-3 text-base font-semibold cursor-pointer hover:bg-black hover:text-white hover:transition-none transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-black"
+                >
+                  {createLabelMutation.isPending || updateLabelMutation.isPending
+                    ? "Saving..."
+                    : "Save"}
+                </button>
+              </div>
             </div>
-            <p className="text-xs text-gray-500 mt-4">
-              Use arrow keys to navigate,{" "}
-              <span className="font-mono font-semibold">Enter</span> or{" "}
-              <span className="font-mono font-semibold">Esc</span> to save
-            </p>
           </div>
         )}
       </div>

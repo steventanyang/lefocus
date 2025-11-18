@@ -188,6 +188,7 @@ export function LabelsSettingsPage() {
         }}
         mode="edit"
         existingLabel={editingLabel || undefined}
+        existingLabels={labels}
       />
     </div>
   );
