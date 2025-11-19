@@ -256,7 +256,7 @@ export function useLabelModal({
     // Use capture phase to catch events before other handlers
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [isOpen, step, onClose]);
+  }, [isOpen, step]);
 
   return {
     step,
