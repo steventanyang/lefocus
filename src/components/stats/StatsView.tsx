@@ -112,9 +112,6 @@ export function StatsView({ onNavigate }: StatsViewProps) {
   const isLoading = sessionsLoading || segmentsLoading;
   const timeWindowLabel = getTimeWindowLabel(timeWindow);
 
-  const buttonPrimaryClass =
-    "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-gray-300 hover:text-black";
-
   return (
     <div className="w-full max-w-3xl flex flex-col gap-8">
       {/* Header */}

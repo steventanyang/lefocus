@@ -32,7 +32,6 @@ export function TimerDisplayRenderer({
   
   const minDigits = minutes.split("");
   const secDigits = seconds.split("");
-  const hourDigits = hours ? hours.split("") : [];
 
   // When running and minutes are 00, hide the "00:" part and show only seconds (only for MM:SS format)
   const shouldHideMinutes = !isHoursFormat && hideLeadingZerosWhenRunning && minutes === "00";

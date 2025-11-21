@@ -5,8 +5,11 @@ import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import { KeyBox } from "@/components/ui/KeyBox";
 import { isUserTyping } from "@/utils/keyboardUtils";
 
+type ViewName = "timer" | "activities" | "stats" | "profile";
+
 interface ProfileViewProps {
   onClose: () => void;
+  onNavigate?: (view: ViewName) => void;
 }
 
 type SubPage = "labels" | "test";

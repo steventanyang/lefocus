@@ -196,7 +196,6 @@ export function Treemap({ apps, onAppClick, selectedBundleId }: TreemapProps) {
         const showLogo = adjustedWidth >= LOGO_SIZE && adjustedHeight >= LOGO_SIZE;
         const showName = adjustedWidth >= 80 && adjustedHeight >= 40;
         const showPercentage = adjustedWidth >= 60 && adjustedHeight >= 40;
-        const showDuration = adjustedWidth >= 100 && adjustedHeight >= 60;
         const showAllLabels = adjustedWidth >= 120 && adjustedHeight >= 120;
 
         return (
