@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useSessionsListInfinite, useSegmentsForSessions } from "@/hooks/queries";
+import { useSessionsListInfinite, useSegmentsForSessions, useLabelsQuery } from "@/hooks/queries";
 import { SessionCard } from "@/components/session/SessionCard";
 import { BlockView } from "@/components/activities/BlockView";
 import { SessionResults } from "@/components/session/SessionResults";
@@ -74,6 +74,9 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
     onSetSelectedIndex: setSelectedIndex,
     onSessionClick: handleSessionClick,
   });
+
+  // Fetch labels for display in session cards
+  const { data: labels = [] } = useLabelsQuery();
 
   // Fetch segments for all sessions in parallel with automatic caching and deduplication
   const { segmentsBySession } = useSegmentsForSessions(sessions);
@@ -345,6 +348,7 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
                           }}
                           session={session}
                           segments={segmentsBySession[session.id]}
+                          labels={labels}
                           onClick={handleSessionClick}
                           isSelected={selectedIndex === virtualItem.index}
                         />
@@ -363,6 +367,7 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
           ) : (
             <BlockView
               sessions={sessions}
+              labels={labels}
               onClick={handleSessionClick}
               selectedIndex={selectedIndex}
               cardRefs={cardRefs}

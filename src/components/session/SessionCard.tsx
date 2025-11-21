@@ -3,10 +3,13 @@ import { SessionSummary } from "@/types/timer";
 import { Segment } from "@/types/segment";
 import { getAppColor } from "@/constants/appColors";
 import { AppleLogo, shouldShowAppleLogo } from "@/utils/appUtils";
+import { LabelTag } from "@/components/labels/LabelTag";
+import type { Label } from "@/types/timer";
 
 interface SessionCardProps {
   session: SessionSummary;
   segments?: Segment[];
+  labels?: Label[];
   onClick: (session: SessionSummary) => void;
   isSelected?: boolean;
 }
@@ -64,9 +67,12 @@ function getStatusBadge(status: string): { text: string; className: string } {
 }
 
 export const SessionCard = forwardRef<HTMLButtonElement, SessionCardProps>(
-  ({ session, segments, onClick, isSelected = false }, ref) => {
+  ({ session, segments, labels = [], onClick, isSelected = false }, ref) => {
     const totalDurationSecs = Math.floor(session.activeMs / 1000);
     const statusBadge = getStatusBadge(session.status);
+    
+    // Find the label for this session
+    const currentLabel = session.labelId ? labels.find(l => l.id === session.labelId) : null;
 
     return (
       <button
@@ -82,11 +88,22 @@ export const SessionCard = forwardRef<HTMLButtonElement, SessionCardProps>(
       </span>
       
       {/* Status badge in top right corner */}
-      <span
-        className={`absolute top-4 right-4 text-xs px-2 py-1 border ${statusBadge.className} font-normal`}
-      >
-        {statusBadge.text}
-      </span>
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        {/* Label tag on the left of status badge */}
+        {currentLabel ? (
+          <LabelTag label={currentLabel} size="small" selected={false} />
+        ) : (
+          <div className="flex items-center justify-center border border-gray-300 px-2 py-1 text-xs text-gray-400 font-medium bg-transparent">
+            No Label
+          </div>
+        )}
+        
+        <span
+          className={`text-xs px-2 py-1 border ${statusBadge.className} font-normal`}
+        >
+          {statusBadge.text}
+        </span>
+      </div>
       
       {/* Date in bottom right corner */}
       <span className="absolute bottom-4 right-4 text-sm font-light">

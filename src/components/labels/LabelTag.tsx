@@ -4,11 +4,12 @@ interface LabelTagProps {
   label: Label | null;
   size?: "small" | "medium";
   selected?: boolean;
+  maxWidth?: string;
 }
 
-export function LabelTag({ label, size = "medium", selected = true }: LabelTagProps) {
+export function LabelTag({ label, size = "medium", selected = true, maxWidth }: LabelTagProps) {
   const sizeClasses = {
-    small: "px-2 py-0.5 text-xs",
+    small: "px-2 py-1 text-xs",
     medium: "px-3 py-1 text-sm",
   };
 
@@ -16,11 +17,13 @@ export function LabelTag({ label, size = "medium", selected = true }: LabelTagPr
     // No label - grey border with transparent background
     return (
       <div
-        className={`flex items-center justify-center border border-gray-300 ${sizeClasses[size]} text-gray-400 font-medium`}
-        style={{ width: '126px', backgroundColor: 'transparent' }}
+        className={`flex items-center justify-center ${maxWidth ? 'min-w-0' : ''} border border-gray-300 ${sizeClasses[size]} text-gray-400 font-medium`}
+        style={{ backgroundColor: 'transparent', ...(maxWidth && { maxWidth }) }}
       >
-        No Label
-      </div>
+        <span className={maxWidth ? 'truncate inline-block max-w-full text-left' : ''}>
+          No Label
+        </span>
+        </div>
     );
   }
 
@@ -43,15 +46,17 @@ export function LabelTag({ label, size = "medium", selected = true }: LabelTagPr
   // Unselected: light background with dark text (label color)
   return (
     <div
-      className={`flex items-center justify-center border ${sizeClasses[size]} font-medium`}
+      className={`flex items-center justify-center ${maxWidth ? 'min-w-0' : ''} border ${sizeClasses[size]} font-medium`}
       style={{
         backgroundColor: selected ? label.color : lightBg,
         borderColor: label.color,
         color: selected ? 'white' : label.color,
-        width: '126px',
+        ...(maxWidth && { maxWidth }),
       }}
     >
-      {label.name}
+      <span className={maxWidth ? 'truncate inline-block max-w-full text-left' : ''}>
+        {label.name}
+      </span>
     </div>
   );
 }

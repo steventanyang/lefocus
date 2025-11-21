@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLabelsQuery, useDeleteLabelMutation } from "@/hooks/queries";
 import { LabelModal } from "@/components/labels/LabelModal";
-import { LabelTag } from "@/components/labels/LabelTag";
 import { KeyBox } from "@/components/ui/KeyBox";
 import { isUserTyping } from "@/utils/keyboardUtils";
 import type { Label } from "@/types/label";
@@ -15,6 +14,13 @@ export function LabelsSettingsPage() {
   const [editingLabel, setEditingLabel] = useState<Label | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<"create" | "edit">("edit");
+
+  // Auto-select first label when labels are loaded
+  useEffect(() => {
+    if (!isLoading && labels.length > 0 && selectedIndex === null) {
+      setSelectedIndex(0);
+    }
+  }, [isLoading, labels.length, selectedIndex]);
 
   // Reset deleteConfirmId after timeout
   useEffect(() => {
@@ -104,6 +110,18 @@ export function LabelsSettingsPage() {
     return <div className="text-gray-500">Loading labels...</div>;
   }
 
+  // Helper to convert hex to rgba for light backgrounds
+  const hexToRgb = (hex: string) => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result
+      ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16),
+        }
+      : null;
+  };
+
   if (labels.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-12 text-gray-500">
@@ -149,18 +167,35 @@ export function LabelsSettingsPage() {
                 {index + 1}
               </KeyBox>
 
-              {/* Row container with border */}
+              {/* Row container */}
               <div
-                className={`flex cursor-pointer ${
-                  isSelected ? "border" : ""
-                }`}
-                style={{
-                  borderColor: isSelected ? label.color : 'transparent',
-                }}
+                className="flex cursor-pointer"
                 onClick={() => setSelectedIndex(index)}
               >
-                {/* Label tag - filled when selected, light bg when not */}
-                <LabelTag label={label} selected={isSelected} />
+                {/* Label button - matching dropdown style */}
+                {(() => {
+                  const rgb = hexToRgb(label.color);
+                  const lightBg = rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)` : label.color;
+                  return (
+                    <button
+                      className={`border px-3 py-1 text-sm font-medium transition-opacity flex items-center justify-center min-w-0 ${
+                        isSelected ? "" : "opacity-60"
+                      } hover:opacity-100`}
+                      style={{
+                        backgroundColor: isSelected ? label.color : lightBg,
+                        borderColor: label.color,
+                        color: isSelected ? 'white' : label.color,
+                        width: '126px',
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedIndex(index);
+                      }}
+                    >
+                      <span className="truncate inline-block max-w-full text-left">{label.name}</span>
+                    </button>
+                  );
+                })()}
 
                 {/* Actions container - only show when selected */}
                 {isSelected && (

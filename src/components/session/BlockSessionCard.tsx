@@ -2,9 +2,12 @@ import { forwardRef } from "react";
 import { SessionSummary } from "@/types/timer";
 import { getAppColor } from "@/constants/appColors";
 import { AppleLogo, shouldShowAppleLogo } from "@/utils/appUtils"; // Updated to .tsx
+import { LabelTag } from "@/components/labels/LabelTag";
+import type { Label } from "@/types/timer";
 
 interface BlockSessionCardProps {
   session: SessionSummary;
+  labels?: Label[];
   onClick: (session: SessionSummary) => void;
   isSelected?: boolean;
 }
@@ -27,33 +30,36 @@ function formatDateTime(isoString: string): string {
   return timeString;
 }
 
-function getStatusBadge(status: string): { text: string; className: string } {
+function getStatusBadge(status: string): { icon: string; className: string } {
   switch (status) {
     case "completed":
       return {
-        text: "Completed",
+        icon: "✓",
         className: "bg-green-100 text-green-800 border-green-500",
       };
     case "interrupted":
       return {
-        text: "Interrupted",
+        icon: "✕",
         className: "bg-amber-100 text-amber-800 border-amber-300",
       };
     default:
       return {
-        text: status,
+        icon: "",
         className: "bg-gray-100 text-gray-800 border-gray-300",
       };
   }
 }
 
 export const BlockSessionCard = forwardRef<HTMLButtonElement, BlockSessionCardProps>(
-  ({ session, onClick, isSelected = false }, ref) => {
+  ({ session, labels = [], onClick, isSelected = false }, ref) => {
     const totalDurationSecs = Math.floor(session.activeMs / 1000);
     const statusBadge = getStatusBadge(session.status);
     const topApp = session.topApps.length > 0 ? session.topApps[0] : null;
     const iconDataUrl = topApp ? session.appIcons[topApp.bundleId] : null;
     const iconColor = topApp ? session.appColors[topApp.bundleId] : null;
+    
+    // Find the label for this session
+    const currentLabel = session.labelId ? labels.find(l => l.id === session.labelId) : null;
 
     return (
       <button
@@ -70,13 +76,23 @@ export const BlockSessionCard = forwardRef<HTMLButtonElement, BlockSessionCardPr
         </span>
       </div>
 
-      {/* Top-right: Status badge */}
-      <div className="absolute top-3 right-3">
-        <span
-          className={`text-xs px-2 py-0.5 border ${statusBadge.className} font-normal`}
+      {/* Top-right: Status indicator with label */}
+      <div className="absolute top-3 right-3 flex items-center gap-2">
+        {/* Label tag on the left of status */}
+        {currentLabel ? (
+          <LabelTag label={currentLabel} size="small" selected={false} maxWidth="80px" />
+        ) : (
+          <div className="flex items-center justify-center border border-gray-300 px-2 py-1 text-xs text-gray-400 font-medium bg-transparent max-w-[80px] truncate">
+            No Label
+          </div>
+        )}
+        
+        {/* Square status indicator */}
+        <div
+          className={`w-6 h-6 border rounded ${statusBadge.className} flex items-center justify-center text-xs font-bold`}
         >
-          {statusBadge.text}
-        </span>
+          {statusBadge.icon}
+        </div>
       </div>
 
       {/* Bottom-left: Top app */}

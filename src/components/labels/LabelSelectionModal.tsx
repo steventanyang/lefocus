@@ -120,12 +120,12 @@ export function LabelSelectionModal({
             >
               <KeyBox hovered={false}>0</KeyBox>
               <button
-                className={`border border-gray-300 px-3 py-1 text-sm font-medium whitespace-nowrap flex items-center justify-center ${
+                className={`border border-gray-300 px-3 py-1 text-sm font-medium flex items-center justify-center min-w-0 ${
                   currentLabelId === null ? "text-gray-400" : "text-gray-400 opacity-60"
                 } hover:opacity-100`}
                 style={{ width: '126px', backgroundColor: 'transparent' }}
               >
-                {noLabelText}
+                <span className="truncate inline-block max-w-full text-left">{noLabelText}</span>
               </button>
             </div>
           )}
@@ -144,7 +144,7 @@ export function LabelSelectionModal({
               >
                 <KeyBox hovered={false}>{index + 1}</KeyBox>
                 <button
-                  className={`border px-3 py-1 text-sm font-medium whitespace-nowrap flex items-center justify-center ${
+                  className={`border px-3 py-1 text-sm font-medium flex items-center justify-center min-w-0 ${
                     isCurrentLabel ? "" : "opacity-60"
                   } hover:opacity-100`}
                   style={{
@@ -154,7 +154,7 @@ export function LabelSelectionModal({
                     width: '126px',
                   }}
                 >
-                  {label.name}
+                  <span className="truncate inline-block max-w-full text-left">{label.name}</span>
                 </button>
               </div>
             );
