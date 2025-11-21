@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { LabelsSettingsPage } from "./LabelsSettingsPage";
-import { TestSettingsPage } from "./TestSettingsPage";
+import { FontsSettingsPage } from "./FontsSettingsPage";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import { KeyBox } from "@/components/ui/KeyBox";
 import { isUserTyping } from "@/utils/keyboardUtils";
@@ -12,7 +12,7 @@ interface ProfileViewProps {
   onNavigate?: (view: ViewName) => void;
 }
 
-type SubPage = "labels" | "test";
+type SubPage = "labels" | "fonts";
 
 export function ProfileView({ onClose }: ProfileViewProps) {
   const [selectedSubPage, setSelectedSubPage] = useState<SubPage>("labels");
@@ -29,11 +29,11 @@ export function ProfileView({ onClose }: ProfileViewProps) {
         return;
       }
 
-      // T key: Switch to Test (only if not Cmd/Ctrl+T for timer navigation)
+      // F key: Switch to Fonts (only if not Cmd/Ctrl+F for browser search)
       const isModifierPressed = event.metaKey || event.ctrlKey;
-      if ((event.key === "t" || event.key === "T") && !isModifierPressed) {
+      if ((event.key === "f" || event.key === "F") && !isModifierPressed) {
         event.preventDefault();
-        setSelectedSubPage("test");
+        setSelectedSubPage("fonts");
         return;
       }
     };
@@ -75,17 +75,17 @@ export function ProfileView({ onClose }: ProfileViewProps) {
             </span>
           </button>
           <button
-            onClick={() => setSelectedSubPage("test")}
+            onClick={() => setSelectedSubPage("fonts")}
             className="flex items-center gap-2 px-4 py-2 text-left transition-colors hover:bg-gray-50"
           >
             <KeyBox
-              selected={selectedSubPage === "test"}
+              selected={selectedSubPage === "fonts"}
               hovered={false}
             >
-              T
+              F
             </KeyBox>
-            <span className={selectedSubPage === "test" ? "font-semibold text-black" : "text-gray-600"}>
-              Test
+            <span className={selectedSubPage === "fonts" ? "font-semibold text-black" : "text-gray-600"}>
+              Fonts
             </span>
           </button>
         </div>
@@ -93,7 +93,7 @@ export function ProfileView({ onClose }: ProfileViewProps) {
         {/* Right content area */}
         <div className="flex-1">
           {selectedSubPage === "labels" && <LabelsSettingsPage />}
-          {selectedSubPage === "test" && <TestSettingsPage />}
+          {selectedSubPage === "fonts" && <FontsSettingsPage />}
         </div>
       </div>
     </div>
