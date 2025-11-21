@@ -469,11 +469,6 @@ impl TimerController {
                         guard.clone()
                     };
 
-                    #[cfg(target_os = "macos")]
-                    {
-                        island_reset();
-                    }
-
                     // Stop sensing immediately (skip for Break mode)
                     if final_snapshot.mode != TimerMode::Break {
                         if let Err(e) = sensing.lock().await.stop_sensing().await {
