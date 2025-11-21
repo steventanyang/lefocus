@@ -22,7 +22,7 @@ final class IslandView: NSView {
     var trackInfo: TrackInfo?
     var isAudioPlaying: Bool = false
     var waveformBars: [CGFloat] = []
-    private var hasTimerFinished: Bool = false
+    var hasTimerFinished: Bool = false
     var trackingArea: NSTrackingArea?
     var isExpanded: Bool = false
     var isHovered: Bool = false

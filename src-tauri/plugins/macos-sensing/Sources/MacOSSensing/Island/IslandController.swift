@@ -9,6 +9,9 @@ func macos_sensing_trigger_end_timer()
 @_silgen_name("macos_sensing_trigger_cancel_timer")
 func macos_sensing_trigger_cancel_timer()
 
+@_silgen_name("macos_sensing_trigger_focus_app")
+func macos_sensing_trigger_focus_app()
+
 /// Coordinates the Dynamic Island window, timer presenter, and audio controller.
 public final class IslandController {
     public static let shared = IslandController()
@@ -136,6 +139,11 @@ public final class IslandController {
         macos_sensing_trigger_cancel_timer()
     }
 
+    private func collapseAndFocusApp() {
+        setExpanded(false)
+        macos_sensing_trigger_focus_app()
+    }
+
     // MARK: - Private Helpers
 
     private func configureIslandView(_ view: IslandView) {
@@ -245,10 +253,12 @@ extension IslandController: IslandViewInteractionDelegate {
 
     func islandViewDidRequestEndTimer(_ view: IslandView) {
         endTimer()
+        collapseAndFocusApp()
     }
 
     func islandViewDidRequestCancelTimer(_ view: IslandView) {
         cancelTimer()
+        collapseAndFocusApp()
     }
 
     func islandView(_ view: IslandView, didRequestSeek position: TimeInterval) {

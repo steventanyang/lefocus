@@ -87,6 +87,7 @@ void macos_sensing_audio_previous_track(void) {
 // Timer control callbacks
 static TimerEndCallback g_timer_end_callback = NULL;
 static TimerCancelCallback g_timer_cancel_callback = NULL;
+static FocusAppCallback g_focus_app_callback = NULL;
 
 void macos_sensing_set_timer_end_callback(TimerEndCallback callback) {
     g_timer_end_callback = callback;
@@ -94,6 +95,10 @@ void macos_sensing_set_timer_end_callback(TimerEndCallback callback) {
 
 void macos_sensing_set_timer_cancel_callback(TimerCancelCallback callback) {
     g_timer_cancel_callback = callback;
+}
+
+void macos_sensing_set_focus_app_callback(FocusAppCallback callback) {
+    g_focus_app_callback = callback;
 }
 
 void macos_sensing_trigger_end_timer(void) {
@@ -105,5 +110,11 @@ void macos_sensing_trigger_end_timer(void) {
 void macos_sensing_trigger_cancel_timer(void) {
     if (g_timer_cancel_callback != NULL) {
         g_timer_cancel_callback();
+    }
+}
+
+void macos_sensing_trigger_focus_app(void) {
+    if (g_focus_app_callback != NULL) {
+        g_focus_app_callback();
     }
 }

@@ -79,7 +79,7 @@ extension IslandView {
     }
 
     func drawTimerControlButtonsIfNeeded() {
-        guard isExpanded, !isIdle else {
+        guard isExpanded, (!isIdle || hasTimerFinished) else {
             timerEndButton = ButtonArea()
             timerCancelButton = ButtonArea()
             return
@@ -89,8 +89,15 @@ extension IslandView {
 
         if mode == .stopwatch {
             drawTextButton(timerEndButton, text: "End", emphasized: true)
+            drawTextButton(timerCancelButton, text: "Cancel", emphasized: false)
+            return
         }
-        drawTextButton(timerCancelButton, text: "Cancel", emphasized: false)
+
+        if hasTimerFinished {
+            drawTextButton(timerEndButton, text: "End", emphasized: true)
+        } else {
+            drawTextButton(timerCancelButton, text: "Cancel", emphasized: false)
+        }
     }
 
     func drawTextButton(_ button: ButtonArea, text: String, emphasized: Bool) {
@@ -113,7 +120,7 @@ extension IslandView {
     }
 
     func layoutTimerControlButtonRects() {
-        guard isExpanded, !isIdle else {
+        guard isExpanded, (!isIdle || hasTimerFinished) else {
             timerEndButton = ButtonArea()
             timerCancelButton = ButtonArea()
             return
@@ -159,8 +166,18 @@ extension IslandView {
                 width: buttonWidth,
                 height: buttonHeight
             )
+            return
+        }
+
+        if hasTimerFinished {
+            timerEndButton.rect = NSRect(
+                x: centerX - buttonWidth / 2.0,
+                y: bottomY,
+                width: buttonWidth,
+                height: buttonHeight
+            )
+            timerCancelButton.rect = .zero
         } else {
-            // Countdown and break modes: only Cancel button, centered under timer
             timerCancelButton.rect = NSRect(
                 x: centerX - buttonWidth / 2.0,
                 y: bottomY,
