@@ -2,61 +2,90 @@ import { useState, useEffect } from "react";
 import { KeyBox } from "@/components/ui/KeyBox";
 
 const fontOptions = [
-  { id: "system", name: "System Default", shortcut: "1", className: "" },
-  { id: "sans", name: "Sans Serif", shortcut: "2", className: "font-sans" },
-  { id: "serif", name: "Serif", shortcut: "3", className: "font-serif" },
-  { id: "mono", name: "Monospace", shortcut: "4", className: "font-mono" },
-  { id: "medium", name: "Medium Weight", shortcut: "5", className: "font-medium" },
-  { id: "light", name: "Light Weight", shortcut: "6", className: "font-light" },
+  { id: "noto-sans-jp", name: "Noto Sans JP", shortcut: "1", className: "font-noto-sans-jp" },
+  { id: "helvetica", name: "Helvetica", shortcut: "2", className: "font-helvetica" },
+  { id: "inter", name: "Inter", shortcut: "3", className: "font-inter" },
+  { id: "work-sans", name: "Work Sans", shortcut: "4", className: "font-work-sans" },
+  { id: "ibm-plex-sans", name: "IBM Plex Sans", shortcut: "5", className: "font-ibm-plex-sans" },
+  { id: "sf-pro", name: "SF Pro", shortcut: "6", className: "font-sf-pro" },
+  { id: "ibm-plex-mono", name: "IBM Plex Mono", shortcut: "7", className: "font-ibm-plex-mono" },
 ];
 
 export function FontsSettingsPage() {
-  const [selectedFont, setSelectedFont] = useState("system");
+  const [selectedFont, setSelectedFont] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Apply font to root element when selection changes
+  // Load font preference on mount and detect current font
   useEffect(() => {
     const root = document.documentElement;
+    const savedFont = localStorage.getItem("selectedFont");
     
-    // Clean up all font and weight classes
-    const allClasses = ["font-sans", "font-serif", "font-mono", "font-medium", "font-light"];
+    // Migrate old "system" preference to "noto-sans-jp"
+    if (savedFont === "system") {
+      localStorage.setItem("selectedFont", "noto-sans-jp");
+      setSelectedFont("noto-sans-jp");
+      setSelectedIndex(0);
+      setIsInitialized(true);
+      return;
+    }
+    
+    // Check what font is currently applied to the root element
+    const currentFontClass = fontOptions.find(font => {
+      if (!font.className) return false;
+      return font.className.split(" ").some(cls => root.classList.contains(cls));
+    });
+    
+    if (currentFontClass) {
+      // Use the currently applied font
+      setSelectedFont(currentFontClass.id);
+      const index = fontOptions.findIndex(f => f.id === currentFontClass.id);
+      setSelectedIndex(index !== -1 ? index : 0);
+    } else if (savedFont && fontOptions.some(f => f.id === savedFont)) {
+      // Fallback to saved preference if no font class is applied
+      setSelectedFont(savedFont);
+      const index = fontOptions.findIndex(f => f.id === savedFont);
+      setSelectedIndex(index !== -1 ? index : 0);
+    } else {
+      // Default to first option (Noto Sans JP)
+      setSelectedFont("noto-sans-jp");
+      setSelectedIndex(0);
+    }
+    setIsInitialized(true);
+  }, []);
+
+  // Apply font to root element when selection changes (only after initialization)
+  useEffect(() => {
+    if (!isInitialized || selectedFont === null) return;
+    
+    const root = document.documentElement;
+    
+    // Clean up all font classes
+    const allClasses = [
+      "font-sans", "font-serif", "font-mono", "font-medium", "font-light",
+      "font-noto-sans-jp", "font-helvetica", "font-inter", "font-work-sans",
+      "font-ibm-plex-sans", "font-sf-pro", "font-ibm-plex-mono"
+    ];
     allClasses.forEach(cls => root.classList.remove(cls));
     
-    // Apply new font class if not system default
-    if (selectedFont !== "system") {
-      const fontOption = fontOptions.find(f => f.id === selectedFont);
-      if (fontOption && fontOption.className) {
-        fontOption.className.split(" ").forEach(cls => root.classList.add(cls));
-      }
+    // Apply new font class
+    const fontOption = fontOptions.find(f => f.id === selectedFont);
+    if (fontOption && fontOption.className) {
+      fontOption.className.split(" ").forEach(cls => root.classList.add(cls));
     }
     
     // Save preference to localStorage
     localStorage.setItem("selectedFont", selectedFont);
-  }, [selectedFont]);
-
-  // Load font preference on mount and set selected index
-  useEffect(() => {
-    const savedFont = localStorage.getItem("selectedFont");
-    if (savedFont && fontOptions.some(f => f.id === savedFont)) {
-      setSelectedFont(savedFont);
-      const index = fontOptions.findIndex(f => f.id === savedFont);
-      if (index !== -1) {
-        setSelectedIndex(index);
-      }
-    } else {
-      // Default to first option if no saved preference
-      setSelectedIndex(0);
-    }
-  }, []);
+  }, [selectedFont, isInitialized]);
 
   // Keyboard shortcuts for font selection and navigation
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Check if the key corresponds to a font shortcut (1-6)
-      const keyNum = event.key;
-      if (keyNum >= "1" && keyNum <= "6") {
+      // Check if the key corresponds to a font shortcut (1-7)
+      const key = event.key;
+      if (key >= "1" && key <= "7") {
         event.preventDefault();
-        const fontIndex = parseInt(keyNum) - 1;
+        const fontIndex = parseInt(key) - 1;
         if (fontIndex < fontOptions.length) {
           setSelectedFont(fontOptions[fontIndex].id);
           setSelectedIndex(fontIndex);
@@ -120,14 +149,16 @@ export function FontsSettingsPage() {
                   backgroundColor: isSelected ? "#000000" : "#f9fafb",
                   borderColor: isSelected ? "#000000" : "#d1d5db",
                   color: isSelected ? 'white' : '#000000',
-                  width: '126px',
+                  width: '160px',
                 }}
                 onClick={() => {
                   setSelectedFont(font.id);
                   setSelectedIndex(index);
                 }}
               >
-                <span className="truncate inline-block max-w-full text-left">{font.name}</span>
+                <span className={`truncate inline-block max-w-full text-left ${font.className}`}>
+                  {font.name}
+                </span>
               </button>
             </div>
           );
