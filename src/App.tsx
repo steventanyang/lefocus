@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import "./App.css";
 import { TimerView } from "@/components/timer/TimerView";
 import { ActivitiesView } from "@/components/activities/ActivitiesView";
@@ -15,12 +15,14 @@ const ONBOARDING_COMPLETED_KEY = "lefocus_onboarding_completed";
 
 function App() {
   const [currentView, setCurrentView] = useState<View>("timer");
-  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(() => {
-    // Check localStorage on initial render
-    return localStorage.getItem(ONBOARDING_COMPLETED_KEY) === "true";
-  });
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(
+    () => {
+      // Check localStorage on initial render
+      return localStorage.getItem(ONBOARDING_COMPLETED_KEY) === "true";
+    }
+  );
   const { height } = useWindowSize();
-  const { loading: permissionsLoading, allPermissionsGranted } = usePermissions();
+  const { loading: permissionsLoading } = usePermissions();
 
   // Set up global navigation shortcuts (work from anywhere)
   useGlobalNavigationShortcuts(
@@ -55,7 +57,10 @@ function App() {
         className="flex-1 flex flex-col p-8 bg-white items-center justify-center"
         style={{ height: height > 0 ? `${height}px` : "100vh" }}
       >
-        <OnboardingView onReload={handleReload} onComplete={handleOnboardingComplete} />
+        <OnboardingView
+          onReload={handleReload}
+          onComplete={handleOnboardingComplete}
+        />
       </main>
     );
   }
@@ -73,9 +78,7 @@ function App() {
       {currentView === "activities" && (
         <ActivitiesView onNavigate={setCurrentView} />
       )}
-      {currentView === "stats" && (
-        <StatsView onNavigate={setCurrentView} />
-      )}
+      {currentView === "stats" && <StatsView onNavigate={setCurrentView} />}
       {currentView === "profile" && (
         <ProfileView
           onNavigate={setCurrentView}
