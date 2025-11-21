@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef struct {
     uint32_t windowId;
@@ -35,6 +36,8 @@ void macos_sensing_island_start(int64_t start_uptime_ms, int64_t target_ms, cons
 void macos_sensing_island_sync(int64_t value_ms);
 void macos_sensing_island_reset(void);
 void macos_sensing_island_cleanup(void);
+void macos_sensing_island_update_chime_preferences(bool enabled, const char *sound_id);
+void macos_sensing_island_preview_chime(const char *sound_id);
 
 // Audio monitoring/control
 void macos_sensing_audio_start_monitoring(void);

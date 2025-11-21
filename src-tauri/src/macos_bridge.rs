@@ -56,6 +56,8 @@ extern "C" {
     fn macos_sensing_audio_toggle_playback();
     fn macos_sensing_audio_next_track();
     fn macos_sensing_audio_previous_track();
+    fn macos_sensing_island_update_chime_preferences(enabled: bool, sound_id: *const c_char);
+    fn macos_sensing_island_preview_chime(sound_id: *const c_char);
 
     fn macos_sensing_set_timer_end_callback(callback: extern "C" fn());
     fn macos_sensing_set_timer_cancel_callback(callback: extern "C" fn());
@@ -199,6 +201,36 @@ pub fn audio_start_monitoring() {
         macos_sensing_audio_start_monitoring();
     }
 }
+
+#[cfg(target_os = "macos")]
+pub fn island_update_chime_preferences(enabled: bool, sound_id: &str) {
+    unsafe {
+        if let Ok(c_sound_id) = CString::new(sound_id) {
+            macos_sensing_island_update_chime_preferences(enabled, c_sound_id.as_ptr());
+        } else {
+            log::warn!(
+                "island_update_chime_preferences: sound_id contains null byte; skipping update"
+            );
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub fn island_preview_chime(sound_id: &str) {
+    unsafe {
+        if let Ok(c_sound_id) = CString::new(sound_id) {
+            macos_sensing_island_preview_chime(c_sound_id.as_ptr());
+        } else {
+            log::warn!("island_preview_chime: sound_id contains null byte; skipping preview");
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn island_update_chime_preferences(_enabled: bool, _sound_id: &str) {}
+
+#[cfg(not(target_os = "macos"))]
+pub fn island_preview_chime(_sound_id: &str) {}
 
 // NOTE: These functions are currently unused as media playback is controlled directly
 // through the Island UI in Swift. In the future, we can expose these as Tauri commands

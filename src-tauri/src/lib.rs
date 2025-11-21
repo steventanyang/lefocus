@@ -4,6 +4,7 @@ mod labels;
 mod macos_bridge;
 mod segmentation;
 mod sensing;
+mod settings;
 mod timer;
 mod utils;
 
@@ -17,8 +18,8 @@ use log::warn;
 use macos_bridge::{
     capture_screenshot, get_active_window_metadata, run_ocr, OCRResult, WindowMetadata,
 };
-use tauri::Manager;
-use tauri::State;
+use settings::{IslandSoundSettings, SettingsStore};
+use tauri::{Emitter, Manager, State};
 use timer::{
     commands::{
         cancel_timer, end_timer, get_interruptions_for_segment, get_segments_for_session,
@@ -32,6 +33,7 @@ pub(crate) struct AppState {
     audio: AudioEngineHandle,
     pub(crate) db: Database,
     pub(crate) timer: TimerController,
+    pub(crate) settings: SettingsStore,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -121,6 +123,52 @@ fn test_run_ocr(image_path: String) -> Result<OCRResult, String> {
     run_ocr(&image_data).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn get_island_sound_settings(state: State<AppState>) -> Result<IslandSoundSettings, String> {
+    Ok(state.settings.island_sound())
+}
+
+#[tauri::command]
+fn set_island_sound_settings(
+    settings: IslandSoundSettings,
+    state: State<AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    state
+        .settings
+        .update_island_sound(settings.clone())
+        .map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "macos")]
+    {
+        macos_bridge::island_update_chime_preferences(settings.enabled, &settings.sound_id);
+    }
+
+    app_handle
+        .emit("island-sound-settings-updated", &settings)
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn preview_island_chime(sound_id: Option<String>, sound_id_camel: Option<String>) -> Result<(), String> {
+    let sound_id = sound_id
+        .or(sound_id_camel)
+        .ok_or_else(|| "sound_id is required".to_string())?;
+    #[cfg(target_os = "macos")]
+    {
+        macos_bridge::island_preview_chime(&sound_id);
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = sound_id;
+        Err("Dynamic Island is only available on macOS".into())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize logging (reads RUST_LOG env var)
@@ -163,10 +211,15 @@ pub fn run() {
 
                 let timer_controller = TimerController::new(app.handle().clone(), database.clone());
 
+                let settings_path = app_data_dir.join("settings.json");
+                let settings_store = SettingsStore::new(settings_path)?;
+                let initial_sound_settings = settings_store.island_sound();
+
                 app.manage(AppState {
                     audio: AudioEngineHandle::new(),
                     db: database,
                     timer: timer_controller,
+                    settings: settings_store,
                 });
 
                 // Initialize the island window on macOS to show "00:00" when idle
@@ -176,6 +229,10 @@ pub fn run() {
                     macos_bridge::setup_timer_callbacks();
                     macos_bridge::island_init();
                     macos_bridge::audio_start_monitoring();
+                    macos_bridge::island_update_chime_preferences(
+                        initial_sound_settings.enabled,
+                        &initial_sound_settings.sound_id,
+                    );
                 }
 
                 Ok(())
@@ -206,6 +263,9 @@ pub fn run() {
             update_label,
             delete_label,
             update_session_label,
+            get_island_sound_settings,
+            set_island_sound_settings,
+            preview_island_chime,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
