@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { LabelsSettingsPage } from "./LabelsSettingsPage";
 import { FontsSettingsPage } from "./FontsSettingsPage";
+import { IslandSettingsPage } from "./IslandSettingsPage";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import { KeyBox } from "@/components/ui/KeyBox";
 import { isUserTyping } from "@/utils/keyboardUtils";
@@ -12,7 +13,7 @@ interface ProfileViewProps {
   onNavigate?: (view: ViewName) => void;
 }
 
-type SubPage = "labels" | "fonts";
+type SubPage = "labels" | "fonts" | "island";
 
 export function ProfileView({ onClose }: ProfileViewProps) {
   const [selectedSubPage, setSelectedSubPage] = useState<SubPage>("labels");
@@ -34,6 +35,13 @@ export function ProfileView({ onClose }: ProfileViewProps) {
       if ((event.key === "f" || event.key === "F") && !isModifierPressed) {
         event.preventDefault();
         setSelectedSubPage("fonts");
+        return;
+      }
+
+      // C key: Switch to Completion chime settings
+      if ((event.key === "c" || event.key === "C") && !isModifierPressed) {
+        event.preventDefault();
+        setSelectedSubPage("island");
         return;
       }
     };
@@ -59,10 +67,10 @@ export function ProfileView({ onClose }: ProfileViewProps) {
       {/* Content area with sidebar */}
       <div className="flex gap-8">
         {/* Left sidebar navigation */}
-        <div className="w-48 flex flex-col gap-2">
+        <div className="w-48 flex flex-col gap-1">
           <button
             onClick={() => setSelectedSubPage("labels")}
-            className="flex items-center gap-2 px-4 py-2 text-left transition-colors hover:bg-gray-50"
+            className="flex items-center gap-2 px-4 py-2 text-left transition-colors hover:bg-white"
           >
             <KeyBox
               selected={selectedSubPage === "labels"}
@@ -70,13 +78,13 @@ export function ProfileView({ onClose }: ProfileViewProps) {
             >
               L
             </KeyBox>
-            <span className={selectedSubPage === "labels" ? "font-semibold text-black" : "text-gray-600"}>
+            <span className={selectedSubPage === "labels" ? "font-medium text-black" : "text-gray-600"}>
               Labels
             </span>
           </button>
           <button
             onClick={() => setSelectedSubPage("fonts")}
-            className="flex items-center gap-2 px-4 py-2 text-left transition-colors hover:bg-gray-50"
+            className="flex items-center gap-2 px-4 py-2 text-left transition-colors hover:bg-white"
           >
             <KeyBox
               selected={selectedSubPage === "fonts"}
@@ -84,8 +92,22 @@ export function ProfileView({ onClose }: ProfileViewProps) {
             >
               F
             </KeyBox>
-            <span className={selectedSubPage === "fonts" ? "font-semibold text-black" : "text-gray-600"}>
+            <span className={selectedSubPage === "fonts" ? "font-medium text-black" : "text-gray-600"}>
               Fonts
+            </span>
+          </button>
+          <button
+            onClick={() => setSelectedSubPage("island")}
+            className="flex items-center gap-2 px-4 py-2 text-left transition-colors hover:bg-white"
+          >
+            <KeyBox
+              selected={selectedSubPage === "island"}
+              hovered={false}
+            >
+              C
+            </KeyBox>
+            <span className={selectedSubPage === "island" ? "font-medium text-black" : "text-gray-600"}>
+              Chimes
             </span>
           </button>
         </div>
@@ -94,6 +116,7 @@ export function ProfileView({ onClose }: ProfileViewProps) {
         <div className="flex-1">
           {selectedSubPage === "labels" && <LabelsSettingsPage />}
           {selectedSubPage === "fonts" && <FontsSettingsPage />}
+          {selectedSubPage === "island" && <IslandSettingsPage />}
         </div>
       </div>
     </div>

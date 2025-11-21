@@ -119,13 +119,6 @@ export function FontsSettingsPage() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold">Fonts</h2>
-        {/* New Font button - matching labels page style */}
-        <button
-          className="text-sm font-light text-gray-600 flex items-center gap-2"
-        >
-          <KeyBox hovered={false}>N</KeyBox>
-          <span className="text-sm">New Font</span>
-        </button>
       </div>
 
       {/* Fonts list - single column matching labels page */}
