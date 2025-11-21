@@ -161,6 +161,13 @@ New data paths introduced in this iteration:
 | Stopwatch | Running | Any | Audio (if available) + timer | End + Cancel | End triggers confirmation in React, Cancel stops session. |
 | Break | Running | Any | Timer emphasis | Cancel only | Same as countdown running. |
 
+### 6.1 Visual Reference
+
+- **Completion glow** – uses FaceTime Dynamic Island green (`#34DA4F`, RGB: 52, 218, 79) to match Apple's camera indicator color in the Dynamic Island. This provides visual consistency with system privacy indicators. `/var/folders/dj/34vxgfn95y19by9q0zhj64qw0000gn/T/TemporaryItems/NSIRD_screencaptureui_Rl8iWU/Screenshot 2025-11-21 at 1.21.44 AM.png` for the desired outline/typography.
+- **Color implementation** – defined in `IslandView.swift` as `completionHighlightColor`, applied as a 3 px stroke plus a soft shadow whenever `hasTimerFinished` is true. The timer glyph also switches to this green color on completion. `/var/folders/dj/34vxgfn95y19by9q0zhj64qw0000gn/T/TemporaryItems/NSIRD_screencaptureui_pEUWNk/Screenshot 2025-11-21 at 1.22.10 AM.png` to keep parity with Apple’s timer completion state.
+
+The Swift view applies a 3 px stroke plus a soft shadow using this FaceTime green hue whenever `hasTimerFinished` is true, and the timer glyph switches to the same green.
+
 ---
 
 ## 7. Lifecycle and State Diagrams

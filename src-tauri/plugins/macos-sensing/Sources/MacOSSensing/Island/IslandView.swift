@@ -23,6 +23,26 @@ final class IslandView: NSView {
     var isAudioPlaying: Bool = false
     var waveformBars: [CGFloat] = []
     var hasTimerFinished: Bool = false
+    var completionHighlightColor: NSColor {
+        // FaceTime Dynamic Island green: #34DA4F (RGB: 52, 218, 79)
+        NSColor(calibratedRed: 52.0/255.0, green: 218.0/255.0, blue: 79.0/255.0, alpha: 1.0)
+    }
+    
+    // Animated color that transitions from black to green
+    var animatedCompletionColor: NSColor {
+        if completionColorTransition <= 0.0 {
+            return NSColor.black
+        } else if completionColorTransition >= 1.0 {
+            return completionHighlightColor
+        } else {
+            // Interpolate between black and green
+            let green = completionHighlightColor
+            let red = 0.0 + (52.0/255.0 - 0.0) * completionColorTransition
+            let greenComponent = 0.0 + (218.0/255.0 - 0.0) * completionColorTransition
+            let blue = 0.0 + (79.0/255.0 - 0.0) * completionColorTransition
+            return NSColor(calibratedRed: red, green: greenComponent, blue: blue, alpha: 1.0)
+        }
+    }
     var trackingArea: NSTrackingArea?
     var isExpanded: Bool = false
     var isHovered: Bool = false
@@ -61,6 +81,10 @@ final class IslandView: NSView {
     
     // Progress bar animation
     var progressBarAnimationTimer: Timer?
+    
+    // Completion color transition animation
+    var completionColorTransition: CGFloat = 0.0  // 0.0 = black, 1.0 = green
+    var completionColorAnimationTimer: Timer?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -76,6 +100,7 @@ final class IslandView: NSView {
     // MARK: - Public API
 
     func update(displayMs: Int64, mode: IslandMode?, idle: Bool? = nil) {
+        let wasFinished = self.hasTimerFinished
         self.hasTimerFinished = displayMs <= 0 && !(idle ?? self.isIdle)
         self.displayMs = displayMs
         if let mode {
@@ -84,6 +109,16 @@ final class IslandView: NSView {
         if let idle {
             self.isIdle = idle
         }
+        
+        // Start color transition animation when timer finishes
+        if !wasFinished && self.hasTimerFinished {
+            startCompletionColorAnimation()
+        } else if !self.hasTimerFinished {
+            // Reset transition when timer is no longer finished
+            stopCompletionColorAnimation()
+            completionColorTransition = 0.0
+        }
+        
         needsDisplay = true
     }
 
@@ -137,6 +172,12 @@ final class IslandView: NSView {
         // Clip to the notch path before drawing gradient
         path.addClip()
 
+        if hasTimerFinished {
+            let blur: CGFloat = isExpanded ? 18.0 : 14.0
+            let glowAlpha: CGFloat = isExpanded ? 0.85 : 0.75
+            context.setShadow(offset: .zero, blur: blur, color: animatedCompletionColor.withAlphaComponent(glowAlpha).cgColor)
+        }
+
         if isExpanded {
             // Gradient background: opaque at top, translucent at bottom
             // Start gradient at 50% height, transition from opaque to current translucent value
@@ -162,13 +203,19 @@ final class IslandView: NSView {
             path.fill()
         }
 
+        if hasTimerFinished {
+            context.setShadow(offset: .zero, blur: 0.0, color: nil)
+        }
+
         // Reset clip and draw border
         context.resetClip()
         path.addClip()
 
-        let borderColor = NSColor.black
+        let borderColor = hasTimerFinished ? animatedCompletionColor : NSColor.black
         borderColor.setStroke()
-        path.lineWidth = 0.5
+        // Animate border width transition too
+        let borderWidth = hasTimerFinished ? (0.5 + (4.0 - 0.5) * completionColorTransition) : 0.5
+        path.lineWidth = borderWidth
         path.stroke()
 
         if isExpanded {

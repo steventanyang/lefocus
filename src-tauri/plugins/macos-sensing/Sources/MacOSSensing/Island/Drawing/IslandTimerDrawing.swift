@@ -8,7 +8,11 @@ extension IslandView {
 
         // Darker when not hovered, white when hovered
         let textColor: NSColor
-        if isIdle {
+        if hasTimerFinished {
+            textColor = isHovered
+                ? animatedCompletionColor
+                : animatedCompletionColor.withAlphaComponent(0.85)
+        } else if isIdle {
             textColor = isHovered
                 ? NSColor.white.withAlphaComponent(0.6)
                 : NSColor.white.withAlphaComponent(0.3)
@@ -39,7 +43,7 @@ extension IslandView {
     }
 
     func drawTimerTextCompact() {
-        guard !isIdle else { return }
+        guard !isIdle || hasTimerFinished else { return }
         let timeString = formatTime(ms: displayMs)
 
         // Larger font for expanded view with timer
@@ -47,9 +51,16 @@ extension IslandView {
             return
         }
 
+        let textColor: NSColor
+        if hasTimerFinished {
+            textColor = animatedCompletionColor.withAlphaComponent(0.95 * expandedContentOpacity)
+        } else {
+            textColor = NSColor.white.withAlphaComponent(0.9 * expandedContentOpacity)
+        }
+
         let attributes: [NSAttributedString.Key: Any] = [
             .font: timerFont,
-            .foregroundColor: NSColor.white.withAlphaComponent(0.9 * expandedContentOpacity)
+            .foregroundColor: textColor
         ]
 
         let attributed = NSAttributedString(string: timeString, attributes: attributes)
@@ -189,7 +200,7 @@ extension IslandView {
     }
 
     func drawTimerOnlyExpandedLayout() {
-        if isIdle {
+        if isIdle && !hasTimerFinished {
             return
         }
         drawTimerTextCompact()
