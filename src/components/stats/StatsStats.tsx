@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { SegmentStats as Stats, AppDuration } from "@/types/segment";
 import { getAppColor } from "@/constants/appColors";
 import { AppleLogo, shouldShowAppleLogo } from "@/utils/appUtils";
@@ -6,6 +6,7 @@ import { KeyBox } from "@/components/ui/KeyBox";
 import { Treemap } from "./Treemap";
 import { useListNavigation } from "@/hooks/useListNavigation";
 import { AppDetailsModal } from "./AppDetailsModal";
+import { getDateRangeForWindow, TimeWindow } from "@/utils/dateUtils";
 
 interface StatsStatsProps {
   stats: Stats;
@@ -14,6 +15,7 @@ interface StatsStatsProps {
   viewMode: "list" | "treemap";
   onToggleViewMode: () => void;
   timeWindowSelector?: React.ReactNode;
+  timeWindow: TimeWindow;
 }
 
 function formatDuration(seconds: number): string {
@@ -48,9 +50,24 @@ export function StatsStats({
   viewMode,
   onToggleViewMode,
   timeWindowSelector,
+  timeWindow,
 }: StatsStatsProps) {
-  const [focusedBundleId, setFocusedBundleId] = useState<string | null>(null);
+  const [focusedBundleId, setFocusedBundleId] = useState<string | null>(() => {
+    return stats.topApps.length > 0 ? stats.topApps[0].bundleId : null;
+  });
   const [activeApp, setActiveApp] = useState<AppDuration | null>(null);
+  
+  // Calculate date range for fetching app details
+  const { start: startTime, end: endTime } = useMemo(() => 
+    getDateRangeForWindow(timeWindow), 
+  [timeWindow]);
+
+  // Update focusedBundleId when stats change to ensure we always have a selection
+  useEffect(() => {
+    if (stats.topApps.length > 0 && !focusedBundleId) {
+      setFocusedBundleId(stats.topApps[0].bundleId);
+    }
+  }, [stats.topApps, focusedBundleId]);
 
   // Derive index from focusedBundleId
   const focusedIndex = useMemo(() => {
@@ -87,6 +104,8 @@ export function StatsStats({
       {activeApp && (
         <AppDetailsModal
           app={activeApp}
+          startTime={startTime.toISOString()}
+          endTime={endTime.toISOString()}
           onClose={() => setActiveApp(null)}
         />
       )}

@@ -218,4 +218,46 @@ impl Database {
         })
         .await
     }
+
+    /// Get aggregated window titles for a specific app within a time range.
+    pub async fn get_window_titles_for_app_in_range(
+        &self,
+        bundle_id: &str,
+        start_time: DateTime<Utc>,
+        end_time: DateTime<Utc>,
+    ) -> Result<Vec<(String, i64)>> {
+        const READING_INTERVAL_SECS: i64 = 5;
+        let bundle_id = bundle_id.to_string();
+        self.execute(move |conn| {
+            let mut stmt = conn.prepare(
+                "SELECT window_title, COUNT(*) as reading_count
+                FROM context_readings
+                WHERE bundle_id = ?1
+                AND timestamp >= ?2
+                AND timestamp <= ?3
+                AND window_title IS NOT NULL
+                AND window_title != ''
+                GROUP BY window_title
+                ORDER BY reading_count DESC",
+            )?;
+
+            let titles_iter = stmt.query_map(
+                params![bundle_id, start_time.to_rfc3339(), end_time.to_rfc3339()],
+                |row| {
+                    let title: String = row.get(0)?;
+                    let count: i64 = row.get(1)?;
+                    let duration_secs = count * READING_INTERVAL_SECS;
+                    Ok((title, duration_secs))
+                },
+            )?;
+
+            let mut titles = Vec::new();
+            for title_result in titles_iter {
+                titles.push(title_result?);
+            }
+
+            Ok(titles)
+        })
+        .await
+    }
 }

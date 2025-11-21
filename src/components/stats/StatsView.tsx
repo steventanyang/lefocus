@@ -190,6 +190,7 @@ export function StatsView({ onNavigate }: StatsViewProps) {
             viewMode={viewMode}
             onToggleViewMode={() => setViewMode((prev) => (prev === "list" ? "treemap" : "list"))}
             timeWindowSelector={timeWindowSelector}
+            timeWindow={timeWindow}
           />
         </div>
       )}

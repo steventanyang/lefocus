@@ -159,6 +159,46 @@ export function useSegmentsForSessions(sessions: SessionSummary[]) {
   };
 }
 
+interface AppDetailsResponse {
+  window_titles: Array<[string, number]>;
+}
+
+/**
+ * Fetch aggregated details (window titles) for an app in a time range
+ */
+export function useAppDetails(
+  bundleId: string | null,
+  startTime: string | undefined, // ISO string
+  endTime: string | undefined    // ISO string
+) {
+  return useQuery({
+    queryKey: ['appDetails', bundleId, startTime, endTime],
+    queryFn: async () => {
+      if (!bundleId || !startTime || !endTime) return null;
+
+      console.log(`[useAppDetails] Fetching details for app: ${bundleId} from ${startTime} to ${endTime}`);
+      const result = await invoke<AppDetailsResponse>("get_app_details_in_time_range", {
+        bundleId,
+        startTime,
+        endTime,
+      });
+      
+      // Map window titles to object format to match other hooks
+      const mappedWindowTitles = result.window_titles.map(([title, durationSecs]) => ({ 
+        title, 
+        durationSecs 
+      })) as WindowTitleWithDuration[];
+
+      console.log(`[useAppDetails] Fetched details for app: ${bundleId}`);
+      return {
+        windowTitles: mappedWindowTitles,
+      };
+    },
+    enabled: !!bundleId && !!startTime && !!endTime,
+    staleTime: 60_000, // Cache for 1 minute
+  });
+}
+
 // ============================================================================
 // MUTATION HOOKS (State Changes)
 // ============================================================================
