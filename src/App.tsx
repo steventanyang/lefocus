@@ -13,6 +13,7 @@ type View = "timer" | "activities" | "stats" | "profile" | "onboarding";
 
 function App() {
   const [currentView, setCurrentView] = useState<View>("timer");
+  const [onboardingCompleted, setOnboardingCompleted] = useState(false);
   const { height } = useWindowSize();
   const { loading: permissionsLoading, allPermissionsGranted } = usePermissions();
 
@@ -25,13 +26,18 @@ function App() {
   );
 
   // Show onboarding if permissions are not granted (and we've finished loading)
-  const shouldShowOnboarding = !permissionsLoading && !allPermissionsGranted;
+  // OR if permissions are granted but user hasn't clicked the button yet
+  const shouldShowOnboarding = !permissionsLoading && (!allPermissionsGranted || !onboardingCompleted);
   
   // Timer view should be centered, other views should be scrollable from top
   const isTimerView = currentView === "timer";
 
   const handleReload = () => {
     window.location.reload();
+  };
+
+  const handleOnboardingComplete = () => {
+    setOnboardingCompleted(true);
   };
 
   // Show onboarding if needed, otherwise show the requested view
@@ -41,7 +47,7 @@ function App() {
         className="flex-1 flex flex-col p-8 bg-white items-center justify-center"
         style={{ height: height > 0 ? `${height}px` : "100vh" }}
       >
-        <OnboardingView onReload={handleReload} />
+        <OnboardingView onReload={handleReload} onComplete={handleOnboardingComplete} />
       </main>
     );
   }
