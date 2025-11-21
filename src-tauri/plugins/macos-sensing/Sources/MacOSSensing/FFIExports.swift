@@ -172,6 +172,26 @@ public func macos_sensing_swift_island_cleanup() {
     IslandController.shared.cleanup()
 }
 
+@_cdecl("macos_sensing_swift_island_update_chime_preferences")
+public func macos_sensing_swift_island_update_chime_preferences(
+    _ enabled: Bool,
+    _ soundPtr: UnsafePointer<CChar>
+) {
+    let soundID = String(cString: soundPtr)
+    DispatchQueue.main.async {
+        let prefs = IslandSoundPreferences(enabled: enabled, soundID: soundID)
+        IslandChimePlayer.shared.updatePreferences(prefs)
+    }
+}
+
+@_cdecl("macos_sensing_swift_island_preview_chime")
+public func macos_sensing_swift_island_preview_chime(_ soundPtr: UnsafePointer<CChar>) {
+    let soundID = String(cString: soundPtr)
+    DispatchQueue.main.async {
+        IslandChimePlayer.shared.playPreview(soundID: soundID)
+    }
+}
+
 // MARK: - Audio controls bridge
 
 @_cdecl("macos_sensing_swift_audio_start_monitoring")
