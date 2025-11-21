@@ -1,9 +1,11 @@
-import { useState } from "react";
-import { SegmentStats as Stats } from "@/types/segment";
+import { useState, useMemo } from "react";
+import { SegmentStats as Stats, AppDuration } from "@/types/segment";
 import { getAppColor } from "@/constants/appColors";
 import { AppleLogo, shouldShowAppleLogo } from "@/utils/appUtils";
 import { KeyBox } from "@/components/ui/KeyBox";
 import { Treemap } from "./Treemap";
+import { useListNavigation } from "@/hooks/useListNavigation";
+import { AppDetailsModal } from "./AppDetailsModal";
 
 interface StatsStatsProps {
   stats: Stats;
@@ -47,15 +49,48 @@ export function StatsStats({
   onToggleViewMode,
   timeWindowSelector,
 }: StatsStatsProps) {
-  const [selectedBundleId, setSelectedBundleId] = useState<string | null>(null);
+  const [focusedBundleId, setFocusedBundleId] = useState<string | null>(null);
+  const [activeApp, setActiveApp] = useState<AppDuration | null>(null);
 
-  // Toggle selection handler
-  const handleAppClick = (bundleId: string) => {
-    setSelectedBundleId((prev) => (prev === bundleId ? null : bundleId));
+  // Derive index from focusedBundleId
+  const focusedIndex = useMemo(() => {
+    if (!focusedBundleId) return null;
+    const index = stats.topApps.findIndex(app => app.bundleId === focusedBundleId);
+    return index !== -1 ? index : null;
+  }, [focusedBundleId, stats.topApps]);
+
+  // Handle focus change (navigation)
+  const handleFocus = (bundleId: string) => {
+    setFocusedBundleId(bundleId);
   };
+
+  // Handle selection (action/modal)
+  const handleSelect = (app: AppDuration) => {
+    setActiveApp(app);
+    setFocusedBundleId(app.bundleId); // Ensure it's focused too
+  };
+
+  useListNavigation({
+    items: stats.topApps,
+    selectedIndex: focusedIndex,
+    onSelectIndex: (index) => {
+      if (stats.topApps[index]) {
+        setFocusedBundleId(stats.topApps[index].bundleId);
+      }
+    },
+    onConfirm: (app) => handleSelect(app),
+    isActive: viewMode === "list" && !activeApp, // Disable list nav when modal is open
+  });
 
   return (
     <div className="p-6 flex flex-col gap-6">
+      {activeApp && (
+        <AppDetailsModal
+          app={activeApp}
+          onClose={() => setActiveApp(null)}
+        />
+      )}
+
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-2">
           <div className="text-sm font-normal tracking-wide text-gray-800">
@@ -114,19 +149,24 @@ export function StatsStats({
           {viewMode === "treemap" ? (
             <Treemap
               apps={stats.topApps}
-              onAppClick={handleAppClick}
-              selectedBundleId={selectedBundleId}
+              focusedBundleId={focusedBundleId}
+              onFocus={handleFocus}
+              onSelect={(bundleId) => {
+                const app = stats.topApps.find(a => a.bundleId === bundleId);
+                if (app) handleSelect(app);
+              }}
             />
           ) : (
             <>
               {stats.topApps.map((app) => {
-            const isSelected = selectedBundleId === app.bundleId;
+            const isSelected = focusedBundleId === app.bundleId;
             const appColor = getAppColor(app.bundleId, { iconColor: app.iconColor });
             const lightBgColor = isSelected ? hexToRgba(appColor, 0.15) : undefined;
             return (
               <button
                 key={app.bundleId}
-                onClick={() => handleAppClick(app.bundleId)}
+                onClick={() => handleSelect(app)}
+                onMouseEnter={() => setFocusedBundleId(app.bundleId)}
                 className={`flex items-center gap-3 w-full text-left transition-all duration-200 rounded p-2 -m-2 ${
                   !isSelected ? "hover:bg-gray-50" : ""
                 }`}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import type { ReactNode } from "react";
 import { useSessionsList, useSegmentsForSessions } from "@/hooks/queries";
 import { calculateSegmentStats } from "@/hooks/useSegments";
 import { StatsStats } from "@/components/stats/StatsStats";
@@ -111,6 +112,31 @@ export function StatsView({ onNavigate }: StatsViewProps) {
 
   const isLoading = sessionsLoading || segmentsLoading;
   const timeWindowLabel = getTimeWindowLabel(timeWindow);
+  const timeWindowSelector = (
+    <div className="flex gap-2">
+      <button
+        onClick={() => setTimeWindow("day")}
+        className="text-base font-light flex items-center gap-2 flex-1 justify-center group"
+      >
+        <KeyBox selected={timeWindow === "day"} hovered={false}>D</KeyBox>
+        <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Day</span>
+      </button>
+      <button
+        onClick={() => setTimeWindow("week")}
+        className="text-base font-light flex items-center gap-2 flex-1 justify-center group"
+      >
+        <KeyBox selected={timeWindow === "week"} hovered={false}>W</KeyBox>
+        <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Week</span>
+      </button>
+      <button
+        onClick={() => setTimeWindow("month")}
+        className="text-base font-light flex items-center gap-2 flex-1 justify-center group"
+      >
+        <KeyBox selected={timeWindow === "month"} hovered={false}>M</KeyBox>
+        <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Month</span>
+      </button>
+    </div>
+  );
 
   return (
     <div className="w-full max-w-3xl flex flex-col gap-8">
@@ -127,10 +153,14 @@ export function StatsView({ onNavigate }: StatsViewProps) {
       </div>
 
       {/* Loading state */}
-      {isLoading && (
-        <div className="text-base font-light text-center p-8">
-          Loading stats...
-        </div>
+      {isLoading && !sessionsError && (
+        <StatsSkeleton
+          timeWindowSelector={timeWindowSelector}
+          viewMode={viewMode}
+          onToggleViewMode={() => setViewMode((prev) => (prev === "list" ? "treemap" : "list"))}
+          showAllApps={showAllApps}
+          onToggleShowAll={() => setShowAllApps(!showAllApps)}
+        />
       )}
 
       {/* Error state */}
@@ -159,34 +189,91 @@ export function StatsView({ onNavigate }: StatsViewProps) {
             onToggleShowAll={() => setShowAllApps(!showAllApps)}
             viewMode={viewMode}
             onToggleViewMode={() => setViewMode((prev) => (prev === "list" ? "treemap" : "list"))}
-            timeWindowSelector={
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setTimeWindow("day")}
-                  className="text-base font-light flex items-center gap-2 flex-1 justify-center group"
-                >
-                  <KeyBox selected={timeWindow === "day"} hovered={false}>D</KeyBox>
-                  <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Day</span>
-                </button>
-                <button
-                  onClick={() => setTimeWindow("week")}
-                  className="text-base font-light flex items-center gap-2 flex-1 justify-center group"
-                >
-                  <KeyBox selected={timeWindow === "week"} hovered={false}>W</KeyBox>
-                  <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Week</span>
-                </button>
-                <button
-                  onClick={() => setTimeWindow("month")}
-                  className="text-base font-light flex items-center gap-2 flex-1 justify-center group"
-                >
-                  <KeyBox selected={timeWindow === "month"} hovered={false}>M</KeyBox>
-                  <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Month</span>
-                </button>
-              </div>
-            }
+            timeWindowSelector={timeWindowSelector}
           />
         </div>
       )}
+    </div>
+  );
+}
+
+interface StatsSkeletonProps {
+  timeWindowSelector: ReactNode;
+  viewMode: "list" | "treemap";
+  onToggleViewMode: () => void;
+  showAllApps: boolean;
+  onToggleShowAll: () => void;
+}
+
+const SkeletonBar = ({ className = "" }: { className?: string }) => (
+  <div className={`skeleton-bar bg-gray-200 rounded ${className}`} />
+);
+
+function StatsSkeleton({
+  timeWindowSelector,
+  viewMode,
+  onToggleViewMode,
+  showAllApps,
+  onToggleShowAll,
+}: StatsSkeletonProps) {
+  return (
+    <div className="bg-white">
+      <div className="p-6 flex flex-col gap-6">
+        <div className="flex items-start justify-between">
+          <div className="flex flex-col gap-2">
+            <div className="text-sm font-normal tracking-wide text-gray-800">
+              Total Duration
+            </div>
+            <SkeletonBar className="h-8 w-32" />
+          </div>
+          <div className="flex gap-2 pt-0.5">
+            {timeWindowSelector}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-normal tracking-wide text-gray-800">
+                Top Applications
+              </h3>
+              <button
+                onClick={onToggleShowAll}
+                className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                {showAllApps ? "Hide" : "Show All"}
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={onToggleViewMode} className="flex items-center gap-1">
+                <KeyBox selected={viewMode === "list"} hovered={false}>L</KeyBox>
+                <span className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors">
+                  List
+                </span>
+              </button>
+              <button onClick={onToggleViewMode} className="flex items-center gap-1">
+                <KeyBox selected={viewMode === "treemap"} hovered={false}>T</KeyBox>
+                <span className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors">
+                  Treemap
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div key={index} className="flex items-center gap-3 w-full text-left">
+                <SkeletonBar className="w-8 h-8" />
+                <div className="flex-1 flex flex-col gap-2">
+                  <SkeletonBar className="h-4 w-1/2" />
+                  <SkeletonBar className="h-2 w-full" />
+                </div>
+                <SkeletonBar className="h-5 w-12" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

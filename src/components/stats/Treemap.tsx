@@ -1,15 +1,17 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useMemo } from "react";
 import { AppDuration } from "@/types/segment";
 import { getAppColor } from "@/constants/appColors";
 import { AppleLogo, shouldShowAppleLogo } from "@/utils/appUtils";
+import { useTreemapNavigation } from "@/hooks/useTreemapNavigation";
 
 interface TreemapProps {
   apps: AppDuration[];
-  onAppClick: (bundleId: string) => void;
-  selectedBundleId: string | null;
+  focusedBundleId: string | null;
+  onFocus: (bundleId: string) => void;
+  onSelect: (bundleId: string) => void;
 }
 
-interface TreemapRect {
+export interface TreemapRect {
   app: AppDuration;
   x: number;
   y: number;
@@ -151,7 +153,7 @@ function getTextColor(hexColor: string): string {
   }
 }
 
-export function Treemap({ apps, onAppClick, selectedBundleId }: TreemapProps) {
+export function Treemap({ apps, onFocus, onSelect, focusedBundleId }: TreemapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 700, height: 500 });
 
@@ -170,7 +172,14 @@ export function Treemap({ apps, onAppClick, selectedBundleId }: TreemapProps) {
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
-  const rects = calculateTreemapLayout(apps, dimensions.width, dimensions.height);
+  const rects = useMemo(() => calculateTreemapLayout(apps, dimensions.width, dimensions.height), [apps, dimensions.width, dimensions.height]);
+
+  useTreemapNavigation({
+    rects,
+    selectedBundleId: focusedBundleId,
+    onFocus,
+    onConfirm: onSelect,
+  });
 
   return (
     <div
@@ -182,7 +191,7 @@ export function Treemap({ apps, onAppClick, selectedBundleId }: TreemapProps) {
         const { app, x, y, width, height } = rect;
         const appColor = getAppColor(app.bundleId, { iconColor: app.iconColor });
         const textColor = getTextColor(appColor);
-        const isSelected = selectedBundleId === app.bundleId;
+        const isSelected = focusedBundleId === app.bundleId;
 
         // Add gap between boxes (2px on each side = 4px total gap)
         const GAP = 2;
@@ -194,14 +203,17 @@ export function Treemap({ apps, onAppClick, selectedBundleId }: TreemapProps) {
         // Determine what to show based on block size
         const LOGO_SIZE = 32; // w-8 h-8 = 32px
         const showLogo = adjustedWidth >= LOGO_SIZE && adjustedHeight >= LOGO_SIZE;
-        const showName = adjustedWidth >= 80 && adjustedHeight >= 40;
-        const showPercentage = adjustedWidth >= 60 && adjustedHeight >= 40;
-        const showAllLabels = adjustedWidth >= 120 && adjustedHeight >= 120;
+        const showName = adjustedWidth >= 100 && adjustedHeight >= 40;
+        const showPercentage = adjustedWidth >= 50 && adjustedHeight >= 32;
+        const showAllLabels = adjustedWidth >= 90 && adjustedHeight >= 90;
 
         return (
           <button
             key={app.bundleId}
-            onClick={() => onAppClick(app.bundleId)}
+            onClick={() => {
+              onFocus(app.bundleId);
+              onSelect(app.bundleId);
+            }}
             className="absolute transition-all duration-200 hover:opacity-90"
             style={{
               left: `${adjustedX}px`,
@@ -215,7 +227,10 @@ export function Treemap({ apps, onAppClick, selectedBundleId }: TreemapProps) {
           >
             {/* App Icon - Only show if block is large enough */}
             {showLogo && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ color: textColor }}>
+              <div
+                className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                style={{ color: textColor, zIndex: 10 }}
+              >
                 {shouldShowAppleLogo(app.bundleId, app.appName) ? (
                   <AppleLogo className="w-6 h-6" />
                 ) : app.iconDataUrl ? (
@@ -231,26 +246,29 @@ export function Treemap({ apps, onAppClick, selectedBundleId }: TreemapProps) {
             {/* Text labels - positioned absolutely */}
             {showAllLabels && (
               <>
-                {/* Name - top left */}
+                {/* Top row: name and percentage */}
                 <div
-                  className="absolute top-2 left-2 text-xs font-medium truncate max-w-[calc(100%-3rem)] pointer-events-none"
-                  style={{ color: textColor }}
+                  className="absolute top-2 left-2 right-2 flex items-start justify-between gap-2 pointer-events-none"
+                  style={{ zIndex: 5 }}
                 >
-                  {app.appName || app.bundleId}
-                </div>
-
-                {/* Percentage - top right */}
-                <div
-                  className="absolute top-2 right-2 text-base font-bold pointer-events-none"
-                  style={{ color: textColor }}
-                >
-                  {app.percentage.toFixed(0)}%
+                  <div
+                    className="text-xs font-medium truncate min-w-0 leading-none"
+                    style={{ color: textColor }}
+                  >
+                    {app.appName || app.bundleId}
+                  </div>
+                  <div
+                    className="text-base font-bold flex-shrink-0 leading-none"
+                    style={{ color: textColor }}
+                  >
+                    {app.percentage.toFixed(0)}%
+                  </div>
                 </div>
 
                 {/* Duration - bottom right */}
                 <div
                   className="absolute bottom-2 right-2 text-xs font-medium pointer-events-none"
-                  style={{ color: textColor }}
+                  style={{ color: textColor, zIndex: 5 }}
                 >
                   {formatDuration(app.durationSecs)}
                 </div>
@@ -261,7 +279,7 @@ export function Treemap({ apps, onAppClick, selectedBundleId }: TreemapProps) {
             {!showAllLabels && showName && (
               <div
                 className="absolute top-2 left-2 text-xs font-medium truncate max-w-[calc(100%-1rem)] pointer-events-none"
-                style={{ color: textColor }}
+                style={{ color: textColor, zIndex: 5 }}
               >
                 {app.appName || app.bundleId}
               </div>
@@ -270,7 +288,7 @@ export function Treemap({ apps, onAppClick, selectedBundleId }: TreemapProps) {
             {!showAllLabels && showPercentage && !showName && (
               <div
                 className="absolute top-2 right-2 text-sm font-bold pointer-events-none"
-                style={{ color: textColor }}
+                style={{ color: textColor, zIndex: 5 }}
               >
                 {app.percentage.toFixed(0)}%
               </div>
