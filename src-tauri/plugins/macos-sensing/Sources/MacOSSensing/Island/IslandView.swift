@@ -171,15 +171,19 @@ final class IslandView: NSView {
         path.lineWidth = 0.5
         path.stroke()
 
-        if isExpanded && trackInfo != nil {
-            // Left side: audio controls (title, artist, buttons)
-            // Right side: timer (top) and waveform (below)
-            drawAudioMetadataIfNeeded()
-            drawProgressBarIfNeeded()
-            drawPlaybackButtonsIfNeeded()
-            drawTimerTextCompact()
+        if isExpanded {
+            if trackInfo != nil {
+                // Left side: audio controls (title, artist, buttons)
+                // Right side: timer (top) and waveform (below)
+                drawAudioMetadataIfNeeded()
+                drawProgressBarIfNeeded()
+                drawPlaybackButtonsIfNeeded()
+                drawTimerTextCompact()
+                drawWaveformIfNeeded()
+            } else {
+                drawTimerOnlyExpandedLayout()
+            }
             drawTimerControlButtonsIfNeeded()
-            drawWaveformIfNeeded()
             drawBreakLabel()
         } else {
             // Compact layout: timer and audio indicator

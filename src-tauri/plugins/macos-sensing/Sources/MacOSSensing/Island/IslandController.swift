@@ -19,6 +19,7 @@ public final class IslandController {
     private let stateQueue = DispatchQueue(label: "MacOSSensing.IslandController")
 
     private var latestTimerUpdate: IslandTimerPresenter.DisplayUpdate?
+    private var timerIsIdle: Bool = true
     private var currentTrack: TrackInfo?
     private var waveformBars: [CGFloat] = []
 
@@ -50,10 +51,14 @@ public final class IslandController {
         timerPresenter.onDisplayUpdate = { [weak self] update in
             guard let self else { return }
             self.latestTimerUpdate = update
+            if let idle = update.idle {
+                self.timerIsIdle = idle
+                self.windowManager.updateTimerState(isIdle: idle, animated: true)
+            } else {
+                self.windowManager.updateTimerState(isIdle: self.timerIsIdle, animated: true)
+            }
             self.islandView?.update(displayMs: update.displayMs, mode: update.mode, idle: update.idle)
             // Update window size based on timer state (narrower when idle)
-            // When idle is nil, assume timer is active (not idle)
-            self.windowManager.updateTimerState(isIdle: update.idle ?? false, animated: true)
         }
 
         audioController.delegate = self
@@ -157,7 +162,7 @@ public final class IslandController {
 
     private func setExpanded(_ expanded: Bool, animated: Bool = true) {
         guard isExpanded != expanded else { return }
-        if expanded && currentTrack == nil {
+        if expanded && currentTrack == nil && timerIsIdle {
             return
         }
 
@@ -185,6 +190,8 @@ public final class IslandController {
 
     private func updateAudioUI(for view: IslandView? = nil, waveformBars: [CGFloat]? = nil) {
         let targetView = view ?? islandView
+        let shouldAnimate = (view == nil)
+        windowManager.updateAudioPresence(hasAudio: currentTrack != nil, animated: shouldAnimate)
         if let currentTrack {
             targetView?.updateAudio(track: currentTrack, waveformBars: waveformBars ?? self.waveformBars)
         } else {

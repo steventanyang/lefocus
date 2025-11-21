@@ -4,7 +4,7 @@ import { Segment } from "@/types/segment";
 import { getAppColor } from "@/constants/appColors";
 import { AppleLogo, shouldShowAppleLogo } from "@/utils/appUtils";
 import { LabelTag } from "@/components/labels/LabelTag";
-import type { Label } from "@/types/timer";
+import type { Label } from "@/types/label";
 
 interface SessionCardProps {
   session: SessionSummary;

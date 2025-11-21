@@ -324,7 +324,7 @@ extension IslandView {
     }
 
     func layoutPlaybackButtonRects() {
-        guard isExpanded else {
+        guard isExpanded, trackInfo != nil else {
             resetButtonAreas()
             return
         }
