@@ -36,7 +36,6 @@ final class IslandView: NSView {
             return completionHighlightColor
         } else {
             // Interpolate between black and green
-            let green = completionHighlightColor
             let red = 0.0 + (52.0/255.0 - 0.0) * completionColorTransition
             let greenComponent = 0.0 + (218.0/255.0 - 0.0) * completionColorTransition
             let blue = 0.0 + (79.0/255.0 - 0.0) * completionColorTransition
@@ -85,6 +84,7 @@ final class IslandView: NSView {
     // Completion color transition animation
     var completionColorTransition: CGFloat = 0.0  // 0.0 = black, 1.0 = green
     var completionColorAnimationTimer: Timer?
+    private(set) var waveformGradient: NSGradient?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -142,7 +142,8 @@ final class IslandView: NSView {
         needsDisplay = true
     }
 
-    func updateAudio(track: TrackInfo?, waveformBars: [CGFloat]?) {
+    func updateAudio(track: TrackInfo?, waveformBars: [CGFloat]?, waveformGradient: NSGradient?) {
+        self.waveformGradient = waveformGradient
         let finalTrack = applyPendingSeekIfNeeded(to: track)
 
         self.trackInfo = finalTrack
@@ -245,4 +246,5 @@ final class IslandView: NSView {
         }
         initializeTracking()
     }
+
 }

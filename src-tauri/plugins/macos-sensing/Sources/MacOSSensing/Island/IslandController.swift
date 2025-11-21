@@ -27,6 +27,7 @@ public final class IslandController {
     private var previousDisplayMs: Int64?
     private var currentTrack: TrackInfo?
     private var waveformBars: [CGFloat] = []
+    private var waveformGradient: NSGradient?
     private var hasPlayedCompletionChime: Bool = false
 
     private var isExpanded: Bool = false
@@ -218,9 +219,13 @@ public final class IslandController {
         let shouldAnimate = (view == nil)
         windowManager.updateAudioPresence(hasAudio: currentTrack != nil, animated: shouldAnimate)
         if let currentTrack {
-            targetView?.updateAudio(track: currentTrack, waveformBars: waveformBars ?? self.waveformBars)
+            targetView?.updateAudio(
+                track: currentTrack,
+                waveformBars: waveformBars ?? self.waveformBars,
+                waveformGradient: waveformGradient
+            )
         } else {
-            targetView?.updateAudio(track: nil, waveformBars: nil)
+            targetView?.updateAudio(track: nil, waveformBars: nil, waveformGradient: nil)
         }
     }
 
@@ -305,8 +310,13 @@ extension IslandController: IslandViewInteractionDelegate {
 // MARK: - IslandAudioControllerDelegate
 
 extension IslandController: IslandAudioControllerDelegate {
-    func islandAudioController(_ controller: IslandAudioController, didUpdateTrack track: TrackInfo?) {
+    func islandAudioController(
+        _ controller: IslandAudioController,
+        didUpdateTrack track: TrackInfo?,
+        gradient: NSGradient?
+    ) {
         currentTrack = track
+        waveformGradient = gradient
         if track == nil {
             waveformBars = []
             setExpanded(false)
