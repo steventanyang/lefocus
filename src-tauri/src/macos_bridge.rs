@@ -59,6 +59,12 @@ extern "C" {
     fn macos_sensing_island_update_chime_preferences(enabled: bool, sound_id: *const c_char);
     fn macos_sensing_island_preview_chime(sound_id: *const c_char);
 
+    // Permission checking
+    fn macos_sensing_check_screen_recording_permission() -> bool;
+    fn macos_sensing_check_accessibility_permission() -> bool;
+    fn macos_sensing_open_screen_recording_settings();
+    fn macos_sensing_open_accessibility_settings();
+
     fn macos_sensing_set_timer_end_callback(callback: extern "C" fn());
     fn macos_sensing_set_timer_cancel_callback(callback: extern "C" fn());
     fn macos_sensing_set_focus_app_callback(callback: extern "C" fn());
@@ -231,6 +237,31 @@ pub fn island_update_chime_preferences(_enabled: bool, _sound_id: &str) {}
 
 #[cfg(not(target_os = "macos"))]
 pub fn island_preview_chime(_sound_id: &str) {}
+
+// Permission checking functions
+pub fn check_screen_recording_permission() -> bool {
+    unsafe {
+        macos_sensing_check_screen_recording_permission()
+    }
+}
+
+pub fn check_accessibility_permission() -> bool {
+    unsafe {
+        macos_sensing_check_accessibility_permission()
+    }
+}
+
+pub fn open_screen_recording_settings() {
+    unsafe {
+        macos_sensing_open_screen_recording_settings();
+    }
+}
+
+pub fn open_accessibility_settings() {
+    unsafe {
+        macos_sensing_open_accessibility_settings();
+    }
+}
 
 // NOTE: These functions are currently unused as media playback is controlled directly
 // through the Island UI in Swift. In the future, we can expose these as Tauri commands

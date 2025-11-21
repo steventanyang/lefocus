@@ -169,6 +169,60 @@ fn preview_island_chime(sound_id: Option<String>, sound_id_camel: Option<String>
     }
 }
 
+#[tauri::command]
+fn check_screen_recording_permissions() -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        Ok(macos_bridge::check_screen_recording_permission())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(true) // On non-macOS systems, we don't need screen recording permissions
+    }
+}
+
+#[tauri::command]
+fn check_accessibility_permissions() -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        Ok(macos_bridge::check_accessibility_permission())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(true) // On non-macOS systems, we don't need accessibility permissions
+    }
+}
+
+#[tauri::command]
+fn open_screen_recording_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        macos_bridge::open_screen_recording_settings();
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Screen recording settings are only available on macOS".into())
+    }
+}
+
+#[tauri::command]
+fn open_accessibility_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        macos_bridge::open_accessibility_settings();
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Accessibility settings are only available on macOS".into())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize logging (reads RUST_LOG env var)
@@ -266,6 +320,11 @@ pub fn run() {
             get_island_sound_settings,
             set_island_sound_settings,
             preview_island_chime,
+        // Permission checking commands
+        check_screen_recording_permissions,
+        check_accessibility_permissions,
+        open_screen_recording_settings,
+        open_accessibility_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
