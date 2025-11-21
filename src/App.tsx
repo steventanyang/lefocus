@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./App.css";
 import { TimerView } from "@/components/timer/TimerView";
 import { ActivitiesView } from "@/components/activities/ActivitiesView";
@@ -11,9 +11,14 @@ import { usePermissions } from "@/hooks/usePermissions";
 
 type View = "timer" | "activities" | "stats" | "profile" | "onboarding";
 
+const ONBOARDING_COMPLETED_KEY = "lefocus_onboarding_completed";
+
 function App() {
   const [currentView, setCurrentView] = useState<View>("timer");
-  const [onboardingCompleted, setOnboardingCompleted] = useState(false);
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(() => {
+    // Check localStorage on initial render
+    return localStorage.getItem(ONBOARDING_COMPLETED_KEY) === "true";
+  });
   const { height } = useWindowSize();
   const { loading: permissionsLoading, allPermissionsGranted } = usePermissions();
 
@@ -25,10 +30,11 @@ function App() {
     () => setCurrentView("profile")
   );
 
-  // Show onboarding if permissions are not granted (and we've finished loading)
-  // OR if permissions are granted but user hasn't clicked the button yet
-  const shouldShowOnboarding = !permissionsLoading && (!allPermissionsGranted || !onboardingCompleted);
-  
+  // Show onboarding only on first launch:
+  // - After permissions have finished loading
+  // - And onboarding hasn't been completed before (stored in localStorage)
+  const shouldShowOnboarding = !permissionsLoading && !onboardingCompleted;
+
   // Timer view should be centered, other views should be scrollable from top
   const isTimerView = currentView === "timer";
 
@@ -37,6 +43,8 @@ function App() {
   };
 
   const handleOnboardingComplete = () => {
+    // Save to localStorage so onboarding doesn't show on next launch
+    localStorage.setItem(ONBOARDING_COMPLETED_KEY, "true");
     setOnboardingCompleted(true);
   };
 
