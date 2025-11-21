@@ -4,12 +4,16 @@ import { useTimer } from "@/hooks/useTimer";
 import { useEndTimerMutation } from "@/hooks/queries";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useSessionCompleted } from "@/hooks/useSessionCompleted";
+import { useLabels, useLabelById } from "@/hooks/useLabels";
 import { TimerContent } from "./TimerContent";
 import { PRESETS } from "./DurationPicker";
 import { BREAK_PRESETS } from "./BreakDurationPicker";
 import { SessionResults } from "@/components/session/SessionResults";
 import { KeyBox } from "@/components/ui/KeyBox";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
+import { LabelTag } from "@/components/labels/LabelTag";
+import { LabelDropdown } from "@/components/labels/LabelDropdown";
+import { LabelModal } from "@/components/labels/LabelModal";
 import { isUserTyping, isMac } from "@/utils/keyboardUtils";
 import type { TimerMode } from "@/types/timer";
 import {
@@ -19,13 +23,14 @@ import {
 } from "@/constants/timer";
 
 interface TimerViewProps {
-  onNavigate: (view: "timer" | "activities" | "stats") => void;
+  onNavigate: (view: "timer" | "activities" | "stats" | "profile") => void;
 }
 
 export function TimerView({ onNavigate }: TimerViewProps) {
   const { timerState, error, startTimer, cancelTimer } = useTimer();
   const endTimerMutation = useEndTimerMutation();
   const completedSession = useSessionCompleted();
+  const { labels, lastUsedLabelId, setLastUsedLabelId } = useLabels();
 
   const [selectedDuration, setSelectedDuration] = useState<number>(
     DEFAULT_COUNTDOWN_DURATION_MS
@@ -36,6 +41,18 @@ export function TimerView({ onNavigate }: TimerViewProps) {
   const [selectedMode, setSelectedMode] = useState<TimerMode>("countdown");
   const [dismissedSessionId, setDismissedSessionId] = useState<string | null>(null);
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
+
+  // Label state
+  const [selectedLabelId, setSelectedLabelId] = useState<number | null>(lastUsedLabelId);
+  const [isLabelDropdownOpen, setIsLabelDropdownOpen] = useState(false);
+  const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
+
+  // Update selectedLabelId when lastUsedLabelId changes
+  useEffect(() => {
+    setSelectedLabelId(lastUsedLabelId);
+  }, [lastUsedLabelId]);
+
+  const selectedLabel = useLabelById(selectedLabelId, labels);
 
   // Handle mode switching: reset duration based on mode
   const handleModeChange = (mode: TimerMode) => {
@@ -56,9 +73,16 @@ export function TimerView({ onNavigate }: TimerViewProps) {
   const handleStart = () => {
     if (timerState) {
       const duration = selectedMode === "break" ? selectedBreakDuration : selectedDuration;
-      startTimer(duration, selectedMode);
+      // Pass labelId when starting timer (only for non-break sessions)
+      const labelIdToPass = selectedMode === "break" ? null : selectedLabelId;
+      startTimer(duration, selectedMode, labelIdToPass);
+      // Update lastUsedLabelId for next session
+      if (selectedMode !== "break" && selectedLabelId !== null) {
+        setLastUsedLabelId(selectedLabelId);
+      }
     }
   };
+
 
   // Cycle through presets (left/right arrows)
   const cyclePreset = useCallback((direction: "left" | "right", event?: React.MouseEvent) => {
@@ -167,6 +191,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     isIdle,
     startDisabled,
     isSessionResultsDisplayed: !!displayedSession,
+    isModalOpen: isLabelModalOpen,
   });
 
   // Handle keyboard shortcuts for arrow keys and h key
@@ -177,10 +202,10 @@ export function TimerView({ onNavigate }: TimerViewProps) {
         return;
       }
 
-      // Don't handle arrow keys when SessionResults is displayed
+      // Don't handle keyboard shortcuts when SessionResults is displayed
       // Let SessionResults handle its own keyboard navigation
       const hasDisplayedSession = completedSession && completedSession.id !== dismissedSessionId;
-      if (hasDisplayedSession && (event.key === "ArrowLeft" || event.key === "ArrowRight" || event.key === "ArrowUp" || event.key === "ArrowDown")) {
+      if (hasDisplayedSession) {
         return;
       }
 
@@ -191,6 +216,16 @@ export function TimerView({ onNavigate }: TimerViewProps) {
         if (!isModifierPressed) {
           event.preventDefault();
           setControlsVisible((prev) => !prev);
+        }
+        return;
+      }
+
+      // L key: Open label dropdown (only when idle)
+      if ((event.key === "l" || event.key === "L") && isIdle) {
+        const isModifierPressed = isMac() ? event.metaKey : event.ctrlKey;
+        if (!isModifierPressed) {
+          event.preventDefault();
+          setIsLabelDropdownOpen((prev) => !prev);
         }
         return;
       }
@@ -272,6 +307,55 @@ export function TimerView({ onNavigate }: TimerViewProps) {
 
   return (
     <div className="w-full max-w-md flex flex-col items-center gap-12">
+      {/* Label section in top right */}
+      {state.status === "idle" && (
+        <div
+          className={`fixed top-8 right-8 z-10 transition-opacity duration-300 ${
+            controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
+        >
+          <div className="flex flex-col items-end gap-2 relative">
+            <button
+              onClick={() => setIsLabelDropdownOpen((prev) => !prev)}
+              className="flex items-center gap-2 group"
+            >
+              <KeyBox hovered={false}>L</KeyBox>
+              <LabelTag label={selectedLabel} />
+            </button>
+            <LabelDropdown
+              isOpen={isLabelDropdownOpen}
+              onClose={() => setIsLabelDropdownOpen(false)}
+              labels={labels}
+              currentLabelId={selectedLabelId}
+              onSelectLabel={(labelId) => {
+                setSelectedLabelId(labelId);
+                if (labelId !== null) {
+                  setLastUsedLabelId(labelId);
+                }
+                setIsLabelDropdownOpen(false);
+              }}
+              onAddNew={() => {
+                setIsLabelDropdownOpen(false);
+                setIsLabelModalOpen(true);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Label Modal */}
+      <LabelModal
+        isOpen={isLabelModalOpen}
+        onClose={() => setIsLabelModalOpen(false)}
+        mode="create"
+        autoAssignToSessionId={undefined}
+        existingLabels={labels}
+        onLabelCreated={(labelId) => {
+          setSelectedLabelId(labelId);
+          setLastUsedLabelId(labelId);
+        }}
+      />
+
       {/* Navigation buttons in top left */}
       <div
         className={`fixed top-8 left-8 flex flex-col gap-4 z-10 transition-opacity duration-300 ${
@@ -320,6 +404,13 @@ export function TimerView({ onNavigate }: TimerViewProps) {
             >
               <KeyboardShortcut keyLetter="s" hovered={false} />
               <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Stats</span>
+            </button>
+            <button
+              className="text-base font-light text-gray-600 flex items-center gap-2 group"
+              onClick={() => onNavigate("profile")}
+            >
+              <KeyboardShortcut keyLetter="p" hovered={false} />
+              <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Profile</span>
             </button>
           </div>
         </div>
@@ -393,6 +484,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
         onEnd={handleEnd}
         onCancel={cancelTimer}
         controlsVisible={controlsVisible}
+        isLabelDropdownOpen={isLabelDropdownOpen}
       />
 
       {error && (

@@ -13,6 +13,7 @@ import { useQuery, useMutation, useQueryClient, useQueries, useInfiniteQuery } f
 import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary, SessionInfo } from "@/types/timer";
 import type { Segment, Interruption, WindowTitleWithDuration } from "@/types/segment";
+import type { Label, LabelInput } from "@/types/label";
 
 // ============================================================================
 // QUERY HOOKS (Data Fetching)
@@ -195,5 +196,98 @@ export function useEndTimerMutation() {
 export function useCancelTimerMutation() {
   return useMutation({
     mutationFn: () => invoke("cancel_timer"),
+  });
+}
+
+// ============================================================================
+// LABEL QUERY HOOKS
+// ============================================================================
+
+/**
+ * Fetch all labels (non-deleted, ordered by orderIndex)
+ */
+export function useLabelsQuery() {
+  return useQuery({
+    queryKey: ['labels'],
+    queryFn: async () => {
+      console.log('[useLabelsQuery] Fetching labels...');
+      const result = await invoke<Label[]>("get_labels");
+      console.log('[useLabelsQuery] Fetched labels:', result.length, 'labels');
+      return result;
+    },
+    staleTime: 300_000, // Consider fresh for 5 minutes (labels don't change often)
+  });
+}
+
+/**
+ * Create a new label
+ * Automatically invalidates labels query to refresh the list
+ */
+export function useCreateLabelMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: LabelInput) => invoke<Label>("create_label", { input }),
+    onSuccess: () => {
+      // Invalidate labels list to refetch
+      queryClient.invalidateQueries({ queryKey: ['labels'] });
+    },
+  });
+}
+
+/**
+ * Update an existing label
+ * Automatically updates the label in the cache
+ */
+export function useUpdateLabelMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ labelId, name, color }: { labelId: number; name?: string; color?: string }) =>
+      invoke<Label>("update_label", { labelId, name, color }),
+    onSuccess: (updatedLabel) => {
+      // Update the label in the cache
+      queryClient.setQueryData<Label[]>(['labels'], (old) => {
+        if (!old) return old;
+        return old.map(label => label.id === updatedLabel.id ? updatedLabel : label);
+      });
+    },
+  });
+}
+
+/**
+ * Delete a label (soft delete)
+ * Automatically invalidates labels and sessions queries
+ */
+export function useDeleteLabelMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (labelId: number) => invoke<void>("delete_label", { labelId }),
+    onSuccess: () => {
+      // Invalidate labels list
+      queryClient.invalidateQueries({ queryKey: ['labels'] });
+      // Invalidate sessions since their labelId may have been set to null
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['sessions', 'infinite'] });
+    },
+  });
+}
+
+/**
+ * Update a session's label
+ * Automatically invalidates sessions queries
+ */
+export function useUpdateSessionLabelMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ sessionId, labelId }: { sessionId: string; labelId: number | null }) =>
+      invoke<void>("update_session_label", { sessionId, labelId }),
+    onSuccess: () => {
+      // Invalidate sessions to refetch with updated label
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['sessions', 'infinite'] });
+    },
   });
 }

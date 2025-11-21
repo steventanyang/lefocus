@@ -90,7 +90,7 @@ impl TimerController {
         }
     }
 
-    pub async fn start_timer(&self, target_ms: u64, mode: Option<TimerMode>) -> Result<TimerState> {
+    pub async fn start_timer(&self, target_ms: u64, mode: Option<TimerMode>, label_id: Option<i64>) -> Result<TimerState> {
         let mode = mode.unwrap_or(TimerMode::Countdown);
 
         // For stopwatch mode, use i64::MAX as target (essentially unlimited, but SQLite-safe)
@@ -98,13 +98,17 @@ impl TimerController {
         let actual_target_ms = match mode {
             TimerMode::Countdown => {
                 if target_ms == 0 {
-                    return Err(anyhow!("target_ms must be greater than zero for countdown mode"));
+                    return Err(anyhow!(
+                        "target_ms must be greater than zero for countdown mode"
+                    ));
                 }
                 target_ms
             }
             TimerMode::Break => {
                 if target_ms == 0 {
-                    return Err(anyhow!("target_ms must be greater than zero for break mode"));
+                    return Err(anyhow!(
+                        "target_ms must be greater than zero for break mode"
+                    ));
                 }
                 target_ms
             }
@@ -130,6 +134,7 @@ impl TimerController {
                 status: SessionStatus::Running,
                 target_ms: actual_target_ms,
                 active_ms: 0,
+                label_id,
                 created_at: started_at,
                 updated_at: started_at,
             };
@@ -140,7 +145,13 @@ impl TimerController {
         // Initialize state without the anchor yet
         {
             let mut state = self.state.lock().await;
-            state.begin_session(session_id.clone(), actual_target_ms, mode, started_at, Instant::now());
+            state.begin_session(
+                session_id.clone(),
+                actual_target_ms,
+                mode,
+                started_at,
+                Instant::now(),
+            );
         }
 
         // Skip sensing start for Break mode
@@ -225,6 +236,7 @@ impl TimerController {
                     status: SessionStatus::Completed,
                     target_ms,
                     active_ms,
+                    label_id: None,
                     created_at: started_at,
                     updated_at: stopped_at,
                 },
@@ -247,7 +259,7 @@ impl TimerController {
         if is_break_mode {
             // Emit state change before returning so frontend knows timer is back to idle
             self.emit_state_changed().await?;
-            
+
             return Ok(SessionInfo {
                 id: session_snapshot.id,
                 started_at: session_snapshot.started_at,
@@ -255,6 +267,7 @@ impl TimerController {
                 status: SessionStatus::Completed,
                 target_ms: session_snapshot.target_ms,
                 active_ms: session_snapshot.active_ms,
+                label_id: None,
             });
         }
 
@@ -274,31 +287,56 @@ impl TimerController {
 
             let session_id = session_snapshot.id.clone();
 
-            match self
-                .db
-                .get_context_readings_for_session(&session_id)
-                .await
-            {
+            match self.db.get_context_readings_for_session(&session_id).await {
                 Ok(readings) => match segment_session(readings, &SegmentationConfig::default()) {
                     Ok((segments, interruptions)) => {
                         // Insert segments and interruptions atomically in a single transaction
                         // This prevents race conditions where segments might be deleted before interruptions are inserted
-                        if let Err(e) = self.db.insert_segments_and_interruptions(&session_id, &segments, &interruptions).await {
+                        if let Err(e) = self
+                            .db
+                            .insert_segments_and_interruptions(
+                                &session_id,
+                                &segments,
+                                &interruptions,
+                            )
+                            .await
+                        {
                             error!("Failed to insert segments and interruptions: {}", e);
-                            error!("Segments count: {}, Interruptions count: {}", segments.len(), interruptions.len());
+                            error!(
+                                "Segments count: {}, Interruptions count: {}",
+                                segments.len(),
+                                interruptions.len()
+                            );
                             if !segments.is_empty() {
-                                error!("Segment IDs: {:?}", segments.iter().map(|s| &s.id).collect::<Vec<_>>());
+                                error!(
+                                    "Segment IDs: {:?}",
+                                    segments.iter().map(|s| &s.id).collect::<Vec<_>>()
+                                );
                             }
                             if !interruptions.is_empty() {
-                                error!("Interruption segment_ids: {:?}", interruptions.iter().map(|i| &i.segment_id).collect::<Vec<_>>());
+                                error!(
+                                    "Interruption segment_ids: {:?}",
+                                    interruptions
+                                        .iter()
+                                        .map(|i| &i.segment_id)
+                                        .collect::<Vec<_>>()
+                                );
                             }
                         } else {
                             // Update context_readings with segment_ids
-                            let segment_tuples: Vec<(String, chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)> = segments
+                            let segment_tuples: Vec<(
+                                String,
+                                chrono::DateTime<chrono::Utc>,
+                                chrono::DateTime<chrono::Utc>,
+                            )> = segments
                                 .iter()
                                 .map(|s| (s.id.clone(), s.start_time, s.end_time))
                                 .collect();
-                            if let Err(e) = self.db.update_readings_with_segment_ids(&session_id, &segment_tuples).await {
+                            if let Err(e) = self
+                                .db
+                                .update_readings_with_segment_ids(&session_id, &segment_tuples)
+                                .await
+                            {
                                 error!("Failed to update readings with segment_ids: {}", e);
                             } else {
                                 info!(
@@ -322,8 +360,11 @@ impl TimerController {
 
         self.emit_state_changed().await?;
 
-        let session_info = SessionInfo::from(session_snapshot);
-        
+        // Fetch the actual session from DB to get the correct label_id
+        // (session_snapshot has label_id: None because it's a snapshot from the timer state)
+        let session_from_db = self.db.get_session(&session_snapshot.id).await?;
+        let session_info = SessionInfo::from(session_from_db);
+
         // Skip session_completed event for Break mode (no results modal)
         if !is_break_mode {
             self.emit_session_completed(&session_info).await?;
@@ -417,7 +458,9 @@ impl TimerController {
                 }
 
                 // Auto-stop in countdown and break modes when timer reaches 0
-                if remaining <= 0 && (snapshot.mode == TimerMode::Countdown || snapshot.mode == TimerMode::Break) {
+                if remaining <= 0
+                    && (snapshot.mode == TimerMode::Countdown || snapshot.mode == TimerMode::Break)
+                {
                     let final_snapshot = {
                         let mut guard = state.lock().await;
                         guard.sync_active_from_anchor();
@@ -426,17 +469,17 @@ impl TimerController {
                         guard.clone()
                     };
 
-                #[cfg(target_os = "macos")]
-                {
-                    island_reset();
-                }
-
-                // Stop sensing immediately (skip for Break mode)
-                if final_snapshot.mode != TimerMode::Break {
-                    if let Err(e) = sensing.lock().await.stop_sensing().await {
-                        error!("Failed to stop sensing on timer completion: {}", e);
+                    #[cfg(target_os = "macos")]
+                    {
+                        island_reset();
                     }
-                }
+
+                    // Stop sensing immediately (skip for Break mode)
+                    if final_snapshot.mode != TimerMode::Break {
+                        if let Err(e) = sensing.lock().await.stop_sensing().await {
+                            error!("Failed to stop sensing on timer completion: {}", e);
+                        }
+                    }
 
                     emit_timer_state(&app_handle, final_snapshot.clone());
 

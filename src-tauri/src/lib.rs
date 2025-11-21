@@ -1,5 +1,6 @@
 mod audio;
 mod db;
+mod labels;
 mod macos_bridge;
 mod segmentation;
 mod sensing;
@@ -9,6 +10,9 @@ mod utils;
 use audio::AudioEngineHandle;
 use chrono::Utc;
 use db::Database;
+use labels::commands::{
+    create_label, delete_label, get_labels, update_label, update_session_label,
+};
 use log::warn;
 use macos_bridge::{
     capture_screenshot, get_active_window_metadata, run_ocr, OCRResult, WindowMetadata,
@@ -123,9 +127,9 @@ pub fn run() {
     env_logger::Builder::from_default_env()
         .filter_level(log::LevelFilter::Info)
         .init();
-    
+
     log::info!("LeFocus starting up...");
-    
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -196,6 +200,11 @@ pub fn run() {
             get_window_titles_for_segment,
             list_sessions,
             list_sessions_paginated,
+            create_label,
+            get_labels,
+            update_label,
+            delete_label,
+            update_session_label,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

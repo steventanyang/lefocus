@@ -5,7 +5,7 @@ use std::process::Command;
 
 fn main() {
     println!("cargo:warning=[BUILD] Starting build process...");
-    
+
     // Build Swift plugin and place dylib before tauri_build validates resources
     #[cfg(target_os = "macos")]
     {
@@ -24,17 +24,21 @@ fn compile_macos_sensing() {
     let manifest_dir =
         PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR missing"));
     let plugin_dir = manifest_dir.join("plugins/macos-sensing");
-    let workspace_root = manifest_dir
-        .parent()
-        .expect("workspace root should exist");
+    let workspace_root = manifest_dir.parent().expect("workspace root should exist");
     let swift_build_dir = workspace_root.join(".swift-build/macos-sensing");
     let module_cache_dir = swift_build_dir.join("ModuleCache");
 
     println!("cargo:warning=[SWIFT] Building Swift plugin...");
-    println!("cargo:warning=[SWIFT]   Package path: {}", plugin_dir.display());
-    println!("cargo:warning=[SWIFT]   Build dir: {}", swift_build_dir.display());
+    println!(
+        "cargo:warning=[SWIFT]   Package path: {}",
+        plugin_dir.display()
+    );
+    println!(
+        "cargo:warning=[SWIFT]   Build dir: {}",
+        swift_build_dir.display()
+    );
     let _ = fs::create_dir_all(&module_cache_dir);
-    
+
     let status = Command::new("swift")
         .args([
             "build",
@@ -46,15 +50,21 @@ fn compile_macos_sensing() {
             "--product",
             "MacOSSensing",
             "--scratch-path",
-            swift_build_dir.to_str().expect("scratch path invalid UTF-8"),
+            swift_build_dir
+                .to_str()
+                .expect("scratch path invalid UTF-8"),
         ])
         .env(
             "SWIFT_MODULECACHE_PATH",
-            module_cache_dir.to_str().expect("module cache path invalid UTF-8"),
+            module_cache_dir
+                .to_str()
+                .expect("module cache path invalid UTF-8"),
         )
         .env(
             "CLANG_MODULE_CACHE_PATH",
-            module_cache_dir.to_str().expect("module cache path invalid UTF-8"),
+            module_cache_dir
+                .to_str()
+                .expect("module cache path invalid UTF-8"),
         )
         .env("SWIFTPM_DISABLE_SANDBOX", "1")
         .status()
@@ -64,16 +74,19 @@ fn compile_macos_sensing() {
         println!("cargo:warning=[SWIFT] ❌ Build failed!");
         panic!("Swift plugin build failed");
     }
-    
+
     println!("cargo:warning=[SWIFT] ✅ Swift build successful");
 
     let build_output = swift_build_dir.join("release");
     let dylib_name = "libMacOSSensing.dylib";
     let dylib_path = build_output.join(dylib_name);
-    
+
     println!("cargo:warning=[RUST] Configuring Rust linker...");
-    println!("cargo:warning=[RUST]   Library path: {}", build_output.display());
-    
+    println!(
+        "cargo:warning=[RUST]   Library path: {}",
+        build_output.display()
+    );
+
     println!(
         "cargo:rustc-link-search=native={}",
         build_output.to_str().expect("link path invalid UTF-8")
@@ -92,14 +105,17 @@ fn compile_macos_sensing() {
     let resources_dir = manifest_dir.join("resources");
     let target_resource = resources_dir.join(dylib_name);
     let _ = fs::create_dir_all(&resources_dir);
-    
+
     println!("cargo:warning=[COPY]   Source: {}", dylib_path.display());
-    println!("cargo:warning=[COPY]   Target: {}", target_resource.display());
-    
+    println!(
+        "cargo:warning=[COPY]   Target: {}",
+        target_resource.display()
+    );
+
     // Best-effort copy; panic if missing source
     fs::copy(&dylib_path, &target_resource)
         .expect("Failed to copy libMacOSSensing.dylib into resources/");
-    
+
     println!("cargo:warning=[COPY] ✅ Dylib copied successfully");
 
     println!("cargo:warning=[WATCH] Registering file watchers for Swift files...");

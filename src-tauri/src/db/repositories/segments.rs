@@ -16,10 +16,18 @@ fn row_to_segment(row: &Row) -> Result<Segment, rusqlite::Error> {
     Ok(Segment {
         id: row.get("id")?,
         session_id: row.get("session_id")?,
-        start_time: parse_datetime(&start_time_str, "start_time")
-            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))))?,
-        end_time: parse_datetime(&end_time_str, "end_time")
-            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))))?,
+        start_time: parse_datetime(&start_time_str, "start_time").map_err(|e| {
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                e.to_string(),
+            )))
+        })?,
+        end_time: parse_datetime(&end_time_str, "end_time").map_err(|e| {
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                e.to_string(),
+            )))
+        })?,
         duration_secs: row.get("duration_secs")?,
         bundle_id: row.get("bundle_id")?,
         app_name: row.get("app_name")?,
@@ -45,8 +53,12 @@ fn row_to_interruption(row: &Row) -> Result<Interruption, rusqlite::Error> {
         segment_id: row.get("segment_id")?,
         bundle_id: row.get("bundle_id")?,
         app_name: row.get("app_name")?,
-        timestamp: parse_datetime(&timestamp_str, "timestamp")
-            .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))))?,
+        timestamp: parse_datetime(&timestamp_str, "timestamp").map_err(|e| {
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                e.to_string(),
+            )))
+        })?,
         duration_secs: row.get("duration_secs")?,
         icon_data_url: row.get("icon_data_url").ok(),
         icon_color: row.get("icon_color").ok(),
@@ -92,7 +104,10 @@ fn spawn_icon_fetch_task(db: Database, bundle_ids: HashSet<String>) {
                     } else {
                         Some(icon_color.as_str())
                     };
-                    if let Err(e) = db.update_app_icon(&bundle_id, &icon_data_url, color_opt).await {
+                    if let Err(e) = db
+                        .update_app_icon(&bundle_id, &icon_data_url, color_opt)
+                        .await
+                    {
                         log::warn!("Failed to store icon for {}: {}", bundle_id, e);
                     } else {
                         log::debug!("Stored icon and color for {}", bundle_id);
@@ -355,10 +370,7 @@ impl Database {
 
     /// Load all segments for a session, ordered by start_time.
     /// Includes icon data from the apps table via LEFT JOIN.
-    pub async fn get_segments_for_session(
-        &self,
-        session_id: &str,
-    ) -> Result<Vec<Segment>> {
+    pub async fn get_segments_for_session(&self, session_id: &str) -> Result<Vec<Segment>> {
         let session_id = session_id.to_string();
         self.execute(move |conn| {
             let mut stmt = conn.prepare(
@@ -387,9 +399,7 @@ impl Database {
                 ORDER BY segments.start_time ASC",
             )?;
 
-            let segments_iter = stmt.query_map(params![session_id], |row| {
-                row_to_segment(row)
-            })?;
+            let segments_iter = stmt.query_map(params![session_id], |row| row_to_segment(row))?;
 
             let mut segments = Vec::new();
             for segment_result in segments_iter {
@@ -425,9 +435,8 @@ impl Database {
                 ORDER BY interruptions.timestamp ASC",
             )?;
 
-            let interruptions_iter = stmt.query_map(params![segment_id], |row| {
-                row_to_interruption(row)
-            })?;
+            let interruptions_iter =
+                stmt.query_map(params![segment_id], |row| row_to_interruption(row))?;
 
             let mut interruptions = Vec::new();
             for interruption_result in interruptions_iter {
@@ -472,17 +481,15 @@ impl Database {
                  LIMIT ?3",
             )?;
 
-            let apps_iter = stmt.query_map(
-                params![&session_id, total_duration, limit as i64],
-                |row| {
+            let apps_iter =
+                stmt.query_map(params![&session_id, total_duration, limit as i64], |row| {
                     Ok(TopApp {
                         bundle_id: row.get("bundle_id")?,
                         app_name: row.get("app_name")?,
                         duration_secs: row.get::<_, i64>("total_duration")? as u32,
                         percentage: row.get("percentage")?,
                     })
-                },
-            )?;
+                })?;
 
             let mut apps = Vec::new();
             for app_result in apps_iter {

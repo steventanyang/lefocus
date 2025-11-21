@@ -12,15 +12,17 @@ interface TimerDisplayProps {
   isEditable?: boolean;
   onTimeChange?: (ms: number) => void;
   initialMs?: number;
+  isLabelDropdownOpen?: boolean;
 }
 
-export function TimerDisplay({ 
-  remainingMs, 
-  isRunning, 
+export function TimerDisplay({
+  remainingMs,
+  isRunning,
   mode,
   isEditable = false,
   onTimeChange,
-  initialMs
+  initialMs,
+  isLabelDropdownOpen = false,
 }: TimerDisplayProps) {
   const displayMs = useSmoothCountdown(remainingMs, isRunning, mode === "stopwatch");
   // Initialize editableValue from initialMs if provided and editable
@@ -42,6 +44,7 @@ export function TimerDisplay({
     onTimeChange,
     displayRef,
     lastSentMsRef,
+    isLabelDropdownOpen,
   });
 
   // Sync editableValue with external initialMs changes

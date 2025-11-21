@@ -5,4 +5,3 @@ pub mod scoring;
 
 pub use algorithm::segment_session;
 pub use config::SegmentationConfig;
-

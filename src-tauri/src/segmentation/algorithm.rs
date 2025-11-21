@@ -37,7 +37,10 @@ struct SegmentWithReadings {
 pub fn segment_session(
     readings: Vec<ContextReading>,
     config: &SegmentationConfig,
-) -> Result<(Vec<crate::db::models::Segment>, Vec<crate::db::models::Interruption>)> {
+) -> Result<(
+    Vec<crate::db::models::Segment>,
+    Vec<crate::db::models::Interruption>,
+)> {
     use crate::db::models::Segment;
     use crate::segmentation::{merge::sandwich_merge, scoring::compute_unique_phash_count};
 
@@ -53,7 +56,9 @@ pub fn segment_session(
 
     // Edge case: very short session (<30s) - create single segment
     if session_duration < config.min_segment_duration_secs {
-        return Ok(create_single_segment_for_session(readings, session_id, config));
+        return Ok(create_single_segment_for_session(
+            readings, session_id, config,
+        ));
     }
 
     // Edge case: no switches (all same bundle_id)
@@ -61,7 +66,9 @@ pub fn segment_session(
         .iter()
         .all(|r| r.window_metadata.bundle_id == readings[0].window_metadata.bundle_id);
     if all_same_bundle {
-        return Ok(create_single_segment_for_session(readings, session_id, config));
+        return Ok(create_single_segment_for_session(
+            readings, session_id, config,
+        ));
     }
 
     // Step 1: Group readings by bundle_id
@@ -93,9 +100,7 @@ pub fn segment_session(
         // Find readings that belong to this segment (by time range)
         let segment_readings: Vec<&ContextReading> = all_readings
             .iter()
-            .filter(|r| {
-                r.timestamp >= segment.start_time && r.timestamp <= segment.end_time
-            })
+            .filter(|r| r.timestamp >= segment.start_time && r.timestamp <= segment.end_time)
             .collect();
 
         // Compute unique_phash_count
@@ -103,7 +108,7 @@ pub fn segment_session(
             segment_readings.iter().map(|r| (*r).clone()).collect();
         let unique_phash_count = compute_unique_phash_count(&segment_readings_vec);
         segment.unique_phash_count = Some(unique_phash_count);
-        
+
         // Update reading_count based on actual readings in this segment (accounts for merged segments)
         segment.reading_count = segment_readings.len() as i64;
 
@@ -130,7 +135,10 @@ fn create_single_segment_for_session(
     readings: Vec<ContextReading>,
     session_id: String,
     config: &SegmentationConfig,
-) -> (Vec<crate::db::models::Segment>, Vec<crate::db::models::Interruption>) {
+) -> (
+    Vec<crate::db::models::Segment>,
+    Vec<crate::db::models::Interruption>,
+) {
     use crate::db::models::Segment;
     use crate::segmentation::scoring::compute_unique_phash_count;
     use uuid::Uuid;
@@ -166,16 +174,12 @@ fn create_single_segment_for_session(
         unique_phash_count: Some(unique_phash_count),
         segment_summary: None,
         icon_data_url: None, // Populated later by database query
-        icon_color: None, // Populated later by database query
+        icon_color: None,    // Populated later by database query
     };
 
     // Compute scores
     let (confidence, duration_score, stability_score, visual_score, ocr_score) =
-        crate::segmentation::scoring::compute_confidence(
-            &segment,
-            &readings,
-            config,
-        );
+        crate::segmentation::scoring::compute_confidence(&segment, &readings, config);
 
     segment.confidence = confidence;
     segment.duration_score = Some(duration_score);
@@ -185,7 +189,6 @@ fn create_single_segment_for_session(
 
     (vec![segment], Vec::new())
 }
-
 
 /// Group consecutive readings by bundle_id.
 pub fn group_readings(readings: Vec<ContextReading>) -> Vec<ReadingGroup> {
@@ -227,11 +230,8 @@ pub fn group_readings(readings: Vec<ContextReading>) -> Vec<ReadingGroup> {
     groups
 }
 
-
 /// Convert ReadingGroups to Segments with readings tracked.
-fn create_initial_segments_with_readings(
-    groups: Vec<ReadingGroup>,
-) -> Vec<SegmentWithReadings> {
+fn create_initial_segments_with_readings(groups: Vec<ReadingGroup>) -> Vec<SegmentWithReadings> {
     use crate::db::models::Segment;
     use uuid::Uuid;
 
@@ -264,7 +264,7 @@ fn create_initial_segments_with_readings(
                     unique_phash_count: None, // Will be computed later
                     segment_summary: None,
                     icon_data_url: None, // Populated later by database query
-                    icon_color: None, // Populated later by database query
+                    icon_color: None,    // Populated later by database query
                 },
                 readings: group.readings.clone(),
             }

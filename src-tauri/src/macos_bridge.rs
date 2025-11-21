@@ -8,9 +8,9 @@ use tauri::{AppHandle, Manager};
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 
 pub fn set_app_handle(handle: AppHandle) {
-    APP_HANDLE.set(handle).expect(
-        "set_app_handle called twice; this indicates a bug in initialization"
-    );
+    APP_HANDLE
+        .set(handle)
+        .expect("set_app_handle called twice; this indicates a bug in initialization");
 }
 
 fn get_app_handle() -> Option<&'static AppHandle> {
@@ -49,7 +49,7 @@ extern "C" {
 
     fn macos_sensing_island_init();
     fn macos_sensing_island_start(start_uptime_ms: i64, target_ms: i64, mode: *const c_char);
-   fn macos_sensing_island_sync(value_ms: i64);
+    fn macos_sensing_island_sync(value_ms: i64);
     fn macos_sensing_island_reset();
     fn macos_sensing_island_cleanup();
     fn macos_sensing_audio_start_monitoring();
@@ -342,7 +342,7 @@ pub fn get_app_icon_and_color(bundle_id: &str) -> Option<(String, String)> {
 
         let c_str = CStr::from_ptr(ptr);
         let json_str = c_str.to_str().ok()?;
-        
+
         // Parse JSON response
         let icon_and_color: IconAndColor = match serde_json::from_str(json_str) {
             Ok(data) => data,

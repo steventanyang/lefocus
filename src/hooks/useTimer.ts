@@ -6,10 +6,10 @@ import type { SessionInfo, TimerMode } from "@/types/timer";
 export function useTimer() {
   const { timerState, error, setError } = useTimerSnapshot();
 
-  const startTimer = useCallback(async (durationMs: number, mode: TimerMode) => {
+  const startTimer = useCallback(async (durationMs: number, mode: TimerMode, labelId?: number | null) => {
     try {
       setError("");
-      await invoke("start_timer", { targetMs: durationMs, mode });
+      await invoke("start_timer", { targetMs: durationMs, mode, labelId });
     } catch (err) {
       setError(`Failed to start timer: ${err}`);
     }

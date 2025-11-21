@@ -18,7 +18,13 @@ pub fn compute_confidence(
         + config.weight_visual * visual_score
         + config.weight_ocr * ocr_score;
 
-    (confidence, duration_score, stability_score, visual_score, ocr_score)
+    (
+        confidence,
+        duration_score,
+        stability_score,
+        visual_score,
+        ocr_score,
+    )
 }
 
 /// Score duration using sigmoid function.
