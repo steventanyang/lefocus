@@ -1,23 +1,31 @@
 import { useState } from "react";
-import { SegmentStats as Stats, Segment } from "@/types/segment";
+import { SegmentStats as Stats } from "@/types/segment";
 import { getAppColor } from "@/constants/appColors";
 import { AppleLogo, shouldShowAppleLogo } from "@/utils/appUtils";
+import { KeyBox } from "@/components/ui/KeyBox";
+import { Treemap } from "./Treemap";
 
 interface StatsStatsProps {
   stats: Stats;
-  segments: Segment[];
-  onSegmentClick: (segment: Segment) => void;
   showAllApps: boolean;
   onToggleShowAll: () => void;
+  viewMode: "list" | "treemap";
+  onToggleViewMode: () => void;
   timeWindowSelector?: React.ReactNode;
 }
 
 function formatDuration(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
   const secs = seconds % 60;
-  if (mins === 0) return `${secs}s`;
-  if (secs === 0) return `${mins}m`;
-  return `${mins}m ${secs}s`;
+  
+  if (hours === 0 && mins === 0) return `${secs}s`;
+  if (hours === 0 && secs === 0) return `${mins}m`;
+  if (hours === 0) return `${mins}m ${secs}s`;
+  if (mins === 0 && secs === 0) return `${hours}h`;
+  if (mins === 0) return `${hours}h ${secs}s`;
+  if (secs === 0) return `${hours}h ${mins}m`;
+  return `${hours}h ${mins}m ${secs}s`;
 }
 
 // Convert hex color to rgba with opacity for light background
@@ -33,18 +41,13 @@ function hexToRgba(hex: string, opacity: number): string {
 
 export function StatsStats({
   stats,
-  segments,
-  onSegmentClick,
   showAllApps,
   onToggleShowAll,
+  viewMode,
+  onToggleViewMode,
   timeWindowSelector,
 }: StatsStatsProps) {
   const [selectedBundleId, setSelectedBundleId] = useState<string | null>(null);
-
-  // Filter segments based on selected app
-  const filteredSegments = selectedBundleId
-    ? segments.filter((seg) => seg.bundleId === selectedBundleId)
-    : segments;
 
   // Toggle selection handler
   const handleAppClick = (bundleId: string) => {
@@ -71,18 +74,52 @@ export function StatsStats({
 
       {stats.topApps.length > 0 && (
         <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-normal tracking-wide text-gray-800">
-              Top Applications
-            </h3>
-            <button
-              onClick={onToggleShowAll}
-              className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors"
-            >
-              {showAllApps ? "Hide" : "Show All"}
-            </button>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-normal tracking-wide text-gray-800">
+                Top Applications
+              </h3>
+              <button
+                onClick={onToggleShowAll}
+                className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                {showAllApps ? "Hide" : "Show All"}
+              </button>
+            </div>
+
+            {/* View mode toggles on the right */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onToggleViewMode}
+                className="flex items-center gap-1"
+              >
+                <KeyBox selected={viewMode === "list"} hovered={false}>L</KeyBox>
+                <span className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors">
+                  List
+                </span>
+              </button>
+              <button
+                onClick={onToggleViewMode}
+                className="flex items-center gap-1"
+              >
+                <KeyBox selected={viewMode === "treemap"} hovered={false}>T</KeyBox>
+                <span className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors">
+                  Treemap
+                </span>
+              </button>
+            </div>
           </div>
-          {stats.topApps.map((app) => {
+
+          {/* Conditional rendering based on viewMode */}
+          {viewMode === "treemap" ? (
+            <Treemap
+              apps={stats.topApps}
+              onAppClick={handleAppClick}
+              selectedBundleId={selectedBundleId}
+            />
+          ) : (
+            <>
+              {stats.topApps.map((app) => {
             const isSelected = selectedBundleId === app.bundleId;
             const appColor = getAppColor(app.bundleId, { iconColor: app.iconColor });
             const lightBgColor = isSelected ? hexToRgba(appColor, 0.15) : undefined;
@@ -144,6 +181,8 @@ export function StatsStats({
               </button>
             );
           })}
+            </>
+          )}
         </div>
       )}
     </div>

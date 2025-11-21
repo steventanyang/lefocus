@@ -20,6 +20,7 @@ interface StatsViewProps {
 export function StatsView({ onNavigate }: StatsViewProps) {
   const [timeWindow, setTimeWindow] = useState<TimeWindow>("day");
   const [showAllApps, setShowAllApps] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<"list" | "treemap">("list");
 
   // Fetch all sessions
   const { data: sessions = [], isLoading: sessionsLoading, error: sessionsError } = useSessionsList();
@@ -27,7 +28,7 @@ export function StatsView({ onNavigate }: StatsViewProps) {
   // Fetch all segments for all sessions
   const { segmentsBySession, isLoading: segmentsLoading } = useSegmentsForSessions(sessions);
 
-  // Handle keyboard shortcuts for time window selection (d/w/m)
+  // Handle keyboard shortcuts for time window selection (d/w/m) and view mode (t/l)
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Ignore shortcuts when user is typing
@@ -35,9 +36,29 @@ export function StatsView({ onNavigate }: StatsViewProps) {
         return;
       }
 
-      // Only handle d/w/m when no modifier keys are pressed
-      const isModifierPressed = event.metaKey || event.ctrlKey || event.altKey || event.shiftKey;
-      if (isModifierPressed) {
+      // Check for Cmd/Ctrl/Alt modifiers (but allow Shift)
+      // We want to avoid conflicts with global shortcuts like Cmd+T
+      const isModifierPressed = event.metaKey || event.ctrlKey || event.altKey;
+      
+      // Handle view mode shortcuts first (t/l) - these should work even with Shift
+      // t: switch to treemap view (only without Cmd/Ctrl/Alt modifiers)
+      if ((event.key === "t" || event.key === "T") && !isModifierPressed) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setViewMode("treemap");
+        return;
+      }
+
+      // l: switch to list view (only without Cmd/Ctrl/Alt modifiers)
+      if ((event.key === "l" || event.key === "L") && !isModifierPressed) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setViewMode("list");
+        return;
+      }
+
+      // Only handle d/w/m when no modifier keys are pressed (including Shift)
+      if (isModifierPressed || event.shiftKey) {
         return;
       }
 
@@ -59,10 +80,11 @@ export function StatsView({ onNavigate }: StatsViewProps) {
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
+    // Use capture phase to ensure this runs before other handlers
+    window.addEventListener("keydown", handleKeyDown, true);
 
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown, true);
     };
   }, []);
 
@@ -136,10 +158,10 @@ export function StatsView({ onNavigate }: StatsViewProps) {
         <div className="bg-white">
           <StatsStats
             stats={stats}
-            segments={filteredSegments}
-            onSegmentClick={() => {}} // No-op for now, could navigate to segment details later
             showAllApps={showAllApps}
             onToggleShowAll={() => setShowAllApps(!showAllApps)}
+            viewMode={viewMode}
+            onToggleViewMode={() => setViewMode((prev) => (prev === "list" ? "treemap" : "list"))}
             timeWindowSelector={
               <div className="flex gap-2">
                 <button
