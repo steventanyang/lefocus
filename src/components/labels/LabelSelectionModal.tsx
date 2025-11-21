@@ -10,6 +10,9 @@ interface LabelSelectionModalProps {
   currentLabelId: number | null;
   onSelectLabel: (labelId: number | null) => void;
   onAddNew: () => void;
+  showAddNew?: boolean;
+  showNoLabel?: boolean;
+  noLabelText?: string;
 }
 
 export function LabelSelectionModal({
@@ -19,6 +22,9 @@ export function LabelSelectionModal({
   currentLabelId,
   onSelectLabel,
   onAddNew,
+  showAddNew = true,
+  showNoLabel = true,
+  noLabelText = "No Label",
 }: LabelSelectionModalProps) {
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -59,14 +65,14 @@ export function LabelSelectionModal({
       }
 
       // 0: select "No Label"
-      if (event.key === "0") {
+      if (event.key === "0" && showNoLabel) {
         stopEvent(event);
         onSelectLabel(null);
         return;
       }
 
-      // N: add new label (only if less than 8 labels)
-      if ((event.key === "n" || event.key === "N") && labels.length < 8) {
+      // N: add new label (only if less than 8 labels and allowed)
+      if ((event.key === "n" || event.key === "N") && labels.length < 8 && showAddNew) {
         stopEvent(event);
         onAddNew();
         return;
@@ -76,7 +82,7 @@ export function LabelSelectionModal({
     // Capture phase prevents underlying views from responding to keys while the modal is open
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [isOpen, labels, onSelectLabel, onClose, onAddNew]);
+  }, [isOpen, labels, onSelectLabel, onClose, onAddNew, showAddNew, showNoLabel]);
 
   if (!isOpen) return null;
 
@@ -107,20 +113,22 @@ export function LabelSelectionModal({
         {/* Labels list - centered */}
         <div className="flex flex-col gap-3 items-center">
           {/* No Label Option */}
-          <div
-            className="flex items-center gap-2 cursor-pointer"
-            onClick={() => onSelectLabel(null)}
-          >
-            <KeyBox hovered={false}>0</KeyBox>
-            <button
-              className={`border border-gray-300 px-3 py-1 text-sm font-medium whitespace-nowrap flex items-center justify-center ${
-                currentLabelId === null ? "text-gray-400" : "text-gray-400 opacity-60"
-              } hover:opacity-100`}
-              style={{ width: '126px', backgroundColor: 'transparent' }}
+          {showNoLabel && (
+            <div
+              className="flex items-center gap-2 cursor-pointer"
+              onClick={() => onSelectLabel(null)}
             >
-              No Label
-            </button>
-          </div>
+              <KeyBox hovered={false}>0</KeyBox>
+              <button
+                className={`border border-gray-300 px-3 py-1 text-sm font-medium whitespace-nowrap flex items-center justify-center ${
+                  currentLabelId === null ? "text-gray-400" : "text-gray-400 opacity-60"
+                } hover:opacity-100`}
+                style={{ width: '126px', backgroundColor: 'transparent' }}
+              >
+                {noLabelText}
+              </button>
+            </div>
+          )}
 
           {/* Label Options */}
           {labels.map((label, index) => {
@@ -153,7 +161,7 @@ export function LabelSelectionModal({
           })}
 
           {/* Add New Option */}
-          {labels.length < 8 && (
+          {showAddNew && labels.length < 8 && (
             <div
               className="flex items-center gap-2 mt-3 cursor-pointer"
               onClick={onAddNew}

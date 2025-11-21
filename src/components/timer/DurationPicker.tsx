@@ -1,4 +1,5 @@
 import { TIMER_PRESETS_MS } from "@/constants/timer";
+import { areDurationsEqual } from "@/utils/formatUtils";
 
 interface DurationPickerProps {
   onSelect: (durationMs: number) => void;
@@ -15,8 +16,7 @@ export function DurationPicker({ onSelect, selectedDuration }: DurationPickerPro
   return (
     <div className="flex gap-4 justify-center">
       {PRESETS.map((preset) => {
-        // Compare with small tolerance to handle any rounding differences
-        const isSelected = selectedDuration !== null && Math.abs(selectedDuration - preset.ms) < 100;
+        const isSelected = selectedDuration !== null && areDurationsEqual(selectedDuration, preset.ms);
         return (
           <button
             key={preset.ms}

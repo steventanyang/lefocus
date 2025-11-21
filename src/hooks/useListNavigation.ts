@@ -42,8 +42,10 @@ export function useListNavigation<T>({
         onSelectIndex(newIndex);
       } else if (event.key === "Enter") {
         event.preventDefault();
-        if (selectedIndex !== null && items[selectedIndex]) {
-          onConfirm(items[selectedIndex]);
+        // Auto-select first item if none is selected when Enter is pressed
+        const indexToUse = selectedIndex !== null ? selectedIndex : 0;
+        if (items[indexToUse]) {
+          onConfirm(items[indexToUse]);
         }
       }
     };
