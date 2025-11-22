@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { LabelsSettingsPage } from "./LabelsSettingsPage";
 import { FontsSettingsPage } from "./FontsSettingsPage";
-import { IslandSettingsPage } from "./IslandSettingsPage";
+import { ChimeSettingsPage } from "./IslandSettingsPage";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import { KeyBox } from "@/components/ui/KeyBox";
 import { isUserTyping } from "@/utils/keyboardUtils";
@@ -78,7 +78,7 @@ export function ProfileView({ onClose }: ProfileViewProps) {
             >
               L
             </KeyBox>
-            <span className={selectedSubPage === "labels" ? "font-medium text-black" : "text-gray-600"}>
+            <span className={selectedSubPage === "labels" ? "font-normal text-black" : "text-gray-600"}>
               Labels
             </span>
           </button>
@@ -92,7 +92,7 @@ export function ProfileView({ onClose }: ProfileViewProps) {
             >
               F
             </KeyBox>
-            <span className={selectedSubPage === "fonts" ? "font-medium text-black" : "text-gray-600"}>
+            <span className={selectedSubPage === "fonts" ? "font-normal text-black" : "text-gray-600"}>
               Fonts
             </span>
           </button>
@@ -106,7 +106,7 @@ export function ProfileView({ onClose }: ProfileViewProps) {
             >
               C
             </KeyBox>
-            <span className={selectedSubPage === "island" ? "font-medium text-black" : "text-gray-600"}>
+            <span className={selectedSubPage === "island" ? "font-normal text-black" : "text-gray-600"}>
               Chimes
             </span>
           </button>
@@ -116,7 +116,7 @@ export function ProfileView({ onClose }: ProfileViewProps) {
         <div className="flex-1">
           {selectedSubPage === "labels" && <LabelsSettingsPage />}
           {selectedSubPage === "fonts" && <FontsSettingsPage />}
-          {selectedSubPage === "island" && <IslandSettingsPage />}
+          {selectedSubPage === "island" && <ChimeSettingsPage />}
         </div>
       </div>
     </div>

@@ -292,6 +292,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
 
   const { state, remaining_ms } = timerState;
   const isRunning = state.status === "running";
+  const showCommandControls = controlsVisible && state.status === "idle";
 
   const handleEnd = async () => {
     // For break mode, just end the timer without showing results
@@ -388,11 +389,12 @@ export function TimerView({ onNavigate }: TimerViewProps) {
       )}
 
       {/* Navigation buttons - aligned with top of clock */}
-      <div
-        className={`fixed left-8 top-52 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
-          controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
-      >
+      {state.status === "idle" && (
+        <div
+          className={`fixed left-8 top-52 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
+            showCommandControls ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
+        >
         <button
           className="text-base font-light text-gray-600 flex items-center gap-2 group"
           onClick={() => onNavigate("activities")}
@@ -414,12 +416,13 @@ export function TimerView({ onNavigate }: TimerViewProps) {
           <KeyboardShortcut keyLetter="p" hovered={false} />
           <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Profile</span>
         </button>
-      </div>
+        </div>
+      )}
 
       {/* General controls in bottom left */}
       <div
         className={`fixed bottom-8 left-8 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
-          controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+          showCommandControls ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
       >
         <button
@@ -449,7 +452,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
       {/* Start button in bottom right */}
       {state.status === "idle" && (
         <div className="fixed bottom-8 right-8 flex flex-col items-start gap-2 z-10">
-          <div className={`transition-opacity duration-300 ${controlsVisible ? "opacity-100" : "opacity-0"}`}>
+          <div className={`transition-opacity duration-300 ${showCommandControls ? "opacity-100" : "opacity-0"}`}>
             <KeyBox className="w-16 h-6 px-2 py-1">return</KeyBox>
           </div>
           <button
