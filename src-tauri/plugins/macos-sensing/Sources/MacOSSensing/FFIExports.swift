@@ -1,5 +1,7 @@
 
 import Foundation
+import ApplicationServices
+import Cocoa
 
 @_cdecl("macos_sensing_swift_get_window")
 public func macos_sensing_swift_get_window() -> UnsafeMutablePointer<WindowMetadataFFI>? {
@@ -220,5 +222,29 @@ public func macos_sensing_swift_audio_previous_track() {
     DispatchQueue.main.async {
         MediaMonitor.shared.skipToPrevious()
     }
+}
+
+// MARK: - Permission checking bridge
+
+@_cdecl("macos_sensing_swift_check_screen_recording_permission")
+public func macos_sensing_swift_check_screen_recording_permission() -> Bool {
+    return CGPreflightScreenCaptureAccess()
+}
+
+@_cdecl("macos_sensing_swift_check_accessibility_permission")
+public func macos_sensing_swift_check_accessibility_permission() -> Bool {
+    return AXIsProcessTrusted()
+}
+
+@_cdecl("macos_sensing_swift_open_screen_recording_settings")
+public func macos_sensing_swift_open_screen_recording_settings() {
+    let screenCaptureURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!
+    NSWorkspace.shared.open(screenCaptureURL)
+}
+
+@_cdecl("macos_sensing_swift_open_accessibility_settings")
+public func macos_sensing_swift_open_accessibility_settings() {
+    let accessibilityURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+    NSWorkspace.shared.open(accessibilityURL)
 }
 
