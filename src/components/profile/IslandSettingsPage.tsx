@@ -3,7 +3,7 @@ import { useIslandSoundSettings } from "@/hooks/useIslandSoundSettings";
 import { KeyBox } from "@/components/ui/KeyBox";
 import { isUserTyping } from "@/utils/keyboardUtils";
 
-export function IslandSettingsPage() {
+export function ChimeSettingsPage() {
   const {
     settings,
     isLoading,
@@ -144,7 +144,7 @@ export function IslandSettingsPage() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-lg font-semibold">Completion chimes</h2>
+          <h2 className="text-lg font-normal">Completion chimes</h2>
         </div>
         <button
           disabled={disabled || isSaving}

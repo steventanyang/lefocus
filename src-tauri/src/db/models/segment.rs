@@ -7,7 +7,7 @@
 //! Segments represent continuous time intervals where the user focused on a single context (app/window).
 //! Interruptions represent brief context switches that were merged into a parent segment.
 
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,9 +38,9 @@ pub struct Segment {
 }
 
 impl Segment {
-    pub fn duration(&self) -> Duration {
-        Duration::seconds(self.duration_secs)
-    }
+    // pub fn duration(&self) -> Duration {
+    //     Duration::seconds(self.duration_secs)
+    // }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,7 +61,7 @@ pub struct Interruption {
 }
 
 impl Interruption {
-    pub fn duration(&self) -> Duration {
-        Duration::seconds(self.duration_secs)
-    }
+    // pub fn duration(&self) -> Duration {
+    //     Duration::seconds(self.duration_secs)
+    // }
 }

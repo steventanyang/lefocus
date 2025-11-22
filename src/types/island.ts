@@ -22,7 +22,7 @@ export const ISLAND_SOUND_OPTIONS: IslandSoundOption[] = [
   },
   {
     id: "island_soft",
-    label: "Soft chime",
+    label: "Loud chime",
     description: "Gentler 660Hz tone with quick fade-out",
   },
 ];

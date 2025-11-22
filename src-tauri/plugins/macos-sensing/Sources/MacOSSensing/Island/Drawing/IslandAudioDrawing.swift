@@ -317,7 +317,7 @@ extension IslandView {
 
         // No circle background, just SF Symbol icon
         // Scale icon larger when hovered
-        let basePointSize: CGFloat = emphasized ? 18.0 : 16.0
+        let basePointSize: CGFloat = emphasized ? 22.0 : 16.0
         let pointSize = button.isHovered ? basePointSize * 1.2 : basePointSize
 
         // Use SF Symbols with weight and size configuration
@@ -351,7 +351,7 @@ extension IslandView {
         }
 
         let buttonSize = CGSize(width: 42.0, height: 42.0)
-        let spacing: CGFloat = 18.0
+        let spacing: CGFloat = 12.0
         
         // Position based on timer state
         let bottomY: CGFloat
