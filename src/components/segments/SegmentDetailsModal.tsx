@@ -10,11 +10,6 @@ interface SegmentDetailsModalProps {
   onClose: () => void;
 }
 
-function formatTime(isoString: string): string {
-  const date = new Date(isoString);
-  return date.toLocaleTimeString();
-}
-
 function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;

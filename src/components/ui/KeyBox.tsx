@@ -19,8 +19,8 @@ export function KeyBox({ children, className = "", selected = false, hovered = f
         hasCustomColor
           ? "text-white"
           : selected || hovered
-          ? "bg-black text-white border-black"
-          : "text-gray-400 border-gray-400 group-hover:bg-black group-hover:text-white group-hover:border-black group-hover:transition-none transition-colors duration-200"
+          ? "bg-gray-900 text-white border-gray-900"
+          : "text-gray-400 border-gray-400 group-hover:bg-gray-900 group-hover:text-white group-hover:border-gray-900 group-hover:transition-none transition-colors duration-200"
       } ${className}`}
       style={{
         transform: 'translateY(-1px)',

@@ -91,5 +91,45 @@ extension IslandView {
         progressBarAnimationTimer?.invalidate()
         progressBarAnimationTimer = nil
     }
+    
+    // MARK: - Completion Color Animation
+    
+    func startCompletionColorAnimation() {
+        stopCompletionColorAnimation()
+        completionColorTransition = 0.0
+        
+        let duration: TimeInterval = 0.8 // 800ms smooth transition
+        let fps: Double = 60.0
+        let frameDuration = 1.0 / fps
+        let totalFrames = Int(duration / frameDuration)
+        var currentFrame = 0
+        
+        completionColorAnimationTimer = Timer.scheduledTimer(withTimeInterval: frameDuration, repeats: true) { [weak self] timer in
+            guard let self = self else {
+                timer.invalidate()
+                return
+            }
+            
+            currentFrame += 1
+            let progress = min(1.0, CGFloat(currentFrame) / CGFloat(totalFrames))
+            
+            // Ease-out animation for smoother feel
+            self.completionColorTransition = self.easeOutQuad(progress)
+            
+            self.needsDisplay = true
+            
+            if currentFrame >= totalFrames {
+                self.completionColorTransition = 1.0
+                self.needsDisplay = true
+                timer.invalidate()
+                self.completionColorAnimationTimer = nil
+            }
+        }
+    }
+    
+    func stopCompletionColorAnimation() {
+        completionColorAnimationTimer?.invalidate()
+        completionColorAnimationTimer = nil
+    }
 }
 

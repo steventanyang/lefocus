@@ -1,15 +1,18 @@
 import { useState, useEffect, useMemo } from "react";
-import { useSessionsList, useSegmentsForSessions } from "@/hooks/queries";
+import type { ReactNode } from "react";
+import { useSessionsList, useSegmentsForSessions, useLabelsQuery } from "@/hooks/queries";
 import { calculateSegmentStats } from "@/hooks/useSegments";
 import { StatsStats } from "@/components/stats/StatsStats";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import { KeyBox } from "@/components/ui/KeyBox";
 import { isUserTyping } from "@/utils/keyboardUtils";
+import { LabelSelectionModal } from "@/components/labels/LabelSelectionModal";
+import { LabelTag } from "@/components/labels/LabelTag";
+import { CustomDateRangeModal } from "@/components/stats/CustomDateRangeModal";
 import { 
   TimeWindow, 
   getDateRangeForWindow, 
-  isDateInRange,
-  getTimeWindowLabel 
+  isDateInRange
 } from "@/utils/dateUtils";
 import type { Segment } from "@/types/segment";
 
@@ -20,28 +23,78 @@ interface StatsViewProps {
 export function StatsView({ onNavigate }: StatsViewProps) {
   const [timeWindow, setTimeWindow] = useState<TimeWindow>("day");
   const [showAllApps, setShowAllApps] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<"list" | "treemap">("list");
+  const [selectedLabelId, setSelectedLabelId] = useState<number | null>(null);
+  const [isLabelModalOpen, setIsLabelModalOpen] = useState<boolean>(false);
+  const [isCustomModalOpen, setIsCustomModalOpen] = useState<boolean>(false);
+  const [customDateRange, setCustomDateRange] = useState<{ start: Date; end: Date } | null>(null);
 
   // Fetch all sessions
   const { data: sessions = [], isLoading: sessionsLoading, error: sessionsError } = useSessionsList();
 
-  // Fetch all segments for all sessions
-  const { segmentsBySession, isLoading: segmentsLoading } = useSegmentsForSessions(sessions);
+  // Fetch labels for the modal
+  const { data: labels = [] } = useLabelsQuery();
 
-  // Handle keyboard shortcuts for time window selection (d/w/m)
+  // Get current label object
+  const currentLabel = useMemo(() => 
+    labels.find(l => l.id === selectedLabelId) || null
+  , [labels, selectedLabelId]);
+
+  // Filter sessions by selected label
+  const filteredSessions = useMemo(() => {
+    if (selectedLabelId === null) return sessions;
+    return sessions.filter(session => session.labelId === selectedLabelId);
+  }, [sessions, selectedLabelId]);
+
+  // Fetch segments for filtered sessions
+  const { segmentsBySession, isLoading: segmentsLoading } = useSegmentsForSessions(filteredSessions);
+
+  // Handle keyboard shortcuts for time window selection (d/w/m), view mode (t), show all toggle (v), and label filter (l)
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Ignore shortcuts when user is typing
-      if (isUserTyping()) {
+      // Ignore shortcuts when user is typing or custom modal is open
+      if (isUserTyping() || isCustomModalOpen) {
         return;
       }
 
-      // Only handle d/w/m when no modifier keys are pressed
-      const isModifierPressed = event.metaKey || event.ctrlKey || event.altKey || event.shiftKey;
-      if (isModifierPressed) {
+      // Check for Cmd/Ctrl/Alt modifiers (but allow Shift)
+      // We want to avoid conflicts with global shortcuts like Cmd+T
+      const isModifierPressed = event.metaKey || event.ctrlKey || event.altKey;
+      
+      // Handle view mode shortcuts first
+      // t: switch to treemap view (only without Cmd/Ctrl/Alt modifiers)
+      if ((event.key === "t" || event.key === "T") && !isModifierPressed) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setViewMode("treemap");
         return;
       }
 
-      // d: day, w: week, m: month
+      // Handle 'l' key for both List view and Label modal
+      if (event.key === "l" || event.key === "L") {
+        // Cmd+L or Ctrl+L: open label modal
+        if (event.metaKey || event.ctrlKey) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          setIsLabelModalOpen(true);
+          return;
+        }
+        
+        // L (no modifiers, allowing Shift): switch to list view
+        if (!isModifierPressed) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          setViewMode("list");
+          return;
+        }
+      }
+
+      // Only handle d/w/m/y/c/v when no modifier keys are pressed (including Shift)
+      if (isModifierPressed || event.shiftKey) {
+        return;
+      }
+
+      // d: day, w: week, m: month, y: year, c: custom
       if (event.key === "d" || event.key === "D") {
         event.preventDefault();
         setTimeWindow("day");
@@ -57,18 +110,40 @@ export function StatsView({ onNavigate }: StatsViewProps) {
         setTimeWindow("month");
         return;
       }
+      if (event.key === "y" || event.key === "Y") {
+        event.preventDefault();
+        setTimeWindow("year");
+        return;
+      }
+      if (event.key === "c" || event.key === "C") {
+        event.preventDefault();
+        setIsCustomModalOpen(true);
+        return;
+      }
+      if (event.key === "v" || event.key === "V") {
+        event.preventDefault();
+        setShowAllApps(!showAllApps);
+        return;
+      }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
+    // Use capture phase to ensure this runs before other handlers
+    window.addEventListener("keydown", handleKeyDown, true);
 
     return () => {
-      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, []);
+  }, [showAllApps, isCustomModalOpen]);
 
   // Filter segments by time window
   const filteredSegments = useMemo(() => {
-    const dateRange = getDateRangeForWindow(timeWindow);
+    let dateRange;
+    if (timeWindow === "custom" && customDateRange) {
+      dateRange = customDateRange;
+    } else {
+      dateRange = getDateRangeForWindow(timeWindow);
+    }
+    
     const allSegments: Segment[] = [];
 
     // Collect all segments from all sessions
@@ -80,7 +155,7 @@ export function StatsView({ onNavigate }: StatsViewProps) {
     return allSegments.filter((segment) => 
       isDateInRange(segment.startTime, dateRange)
     );
-  }, [segmentsBySession, timeWindow]);
+  }, [segmentsBySession, timeWindow, customDateRange]);
 
   // Calculate stats from filtered segments (show 5 by default, or all if showAllApps is true)
   const stats = useMemo(() => {
@@ -88,16 +163,101 @@ export function StatsView({ onNavigate }: StatsViewProps) {
   }, [filteredSegments, showAllApps]);
 
   const isLoading = sessionsLoading || segmentsLoading;
-  const timeWindowLabel = getTimeWindowLabel(timeWindow);
 
-  const buttonPrimaryClass =
-    "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-gray-300 hover:text-black";
+  // Handle custom date modal actions
+  const handleCustomDateSubmit = (range: { start: Date; end: Date }) => {
+    setCustomDateRange(range);
+    setTimeWindow("custom");
+    setIsCustomModalOpen(false);
+  };
+  
+  // Time window buttons for header
+  const timeWindowButtons = (
+    <div className="flex gap-4">
+      <button
+        onClick={() => setTimeWindow("day")}
+        className="text-base font-light flex items-center gap-2 group"
+      >
+        <KeyBox selected={timeWindow === "day"} hovered={false}>D</KeyBox>
+        <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Day</span>
+      </button>
+      <button
+        onClick={() => setTimeWindow("week")}
+        className="text-base font-light flex items-center gap-2 group"
+      >
+        <KeyBox selected={timeWindow === "week"} hovered={false}>W</KeyBox>
+        <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Week</span>
+      </button>
+      <button
+        onClick={() => setTimeWindow("month")}
+        className="text-base font-light flex items-center gap-2 group"
+      >
+        <KeyBox selected={timeWindow === "month"} hovered={false}>M</KeyBox>
+        <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Month</span>
+      </button>
+      <button
+        onClick={() => setTimeWindow("year")}
+        className="text-base font-light flex items-center gap-2 group"
+      >
+        <KeyBox selected={timeWindow === "year"} hovered={false}>Y</KeyBox>
+        <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Year</span>
+      </button>
+      <button
+        onClick={() => setIsCustomModalOpen(true)}
+        className="text-base font-light flex items-center gap-2 group"
+      >
+        <KeyBox selected={timeWindow === "custom"} hovered={false}>C</KeyBox>
+        <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Custom</span>
+      </button>
+    </div>
+  );
+
+  // Label filter selector (used in StatsStats)
+  const labelFilterSelector = (
+    <div className="flex items-center justify-end">
+      <button 
+        onClick={() => setIsLabelModalOpen(true)}
+        className="flex items-center gap-2 group"
+      >
+        <KeyBox selected={isLabelModalOpen} hovered={false}>⌘</KeyBox>
+        <KeyBox selected={isLabelModalOpen} hovered={false}>L</KeyBox>
+        {selectedLabelId === null ? (
+           <div
+            className="flex items-center justify-center border border-gray-300 px-3 py-1 text-sm text-gray-400 font-medium"
+            style={{ width: '126px', backgroundColor: 'transparent' }}
+          >
+            All Labels
+          </div>
+        ) : (
+          <LabelTag label={currentLabel} size="medium" selected={true} />
+        )}
+      </button>
+    </div>
+  );
 
   return (
     <div className="w-full max-w-3xl flex flex-col gap-8">
+      {/* Label Selection Modal */}
+      <LabelSelectionModal
+        isOpen={isLabelModalOpen}
+        onClose={() => setIsLabelModalOpen(false)}
+        labels={labels}
+        currentLabelId={selectedLabelId}
+        onSelectLabel={(id) => {
+          setSelectedLabelId(id);
+          setIsLabelModalOpen(false);
+        }}
+        onAddNew={() => {}} // Not needed here as we hide the add new button
+        showAddNew={false}
+        noLabelText="All Labels"
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-light tracking-wide">Stats</h1>
+        <div className="flex-1 flex justify-center" style={{marginLeft: '60px'}}>
+          {timeWindowButtons}
+        </div>
         <button
           className="text-base font-light text-gray-600 flex items-center gap-2 group"
           onClick={() => onNavigate("timer")}
@@ -108,10 +268,14 @@ export function StatsView({ onNavigate }: StatsViewProps) {
       </div>
 
       {/* Loading state */}
-      {isLoading && (
-        <div className="text-base font-light text-center p-8">
-          Loading stats...
-        </div>
+      {isLoading && !sessionsError && (
+        <StatsSkeleton
+          labelFilterSelector={labelFilterSelector}
+          viewMode={viewMode}
+          onToggleViewMode={() => setViewMode((prev) => (prev === "list" ? "treemap" : "list"))}
+          showAllApps={showAllApps}
+          onToggleShowAll={() => setShowAllApps(!showAllApps)}
+        />
       )}
 
       {/* Error state */}
@@ -121,53 +285,110 @@ export function StatsView({ onNavigate }: StatsViewProps) {
         </div>
       )}
 
-      {/* Empty state */}
-      {!isLoading && !sessionsError && filteredSegments.length === 0 && (
-        <div className="text-center p-12 px-8 flex flex-col gap-4 border border-black">
-          <p className="text-base font-normal">No data for {timeWindowLabel.toLowerCase()}</p>
-          <p className="text-sm font-light text-gray-600">
-            Complete focus sessions to see stats here
-          </p>
-        </div>
-      )}
-
       {/* Stats display */}
-      {!isLoading && !sessionsError && filteredSegments.length > 0 && (
+      {!isLoading && !sessionsError && (
         <div className="bg-white">
           <StatsStats
             stats={stats}
-            segments={filteredSegments}
-            onSegmentClick={() => {}} // No-op for now, could navigate to segment details later
             showAllApps={showAllApps}
             onToggleShowAll={() => setShowAllApps(!showAllApps)}
-            timeWindowSelector={
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setTimeWindow("day")}
-                  className="text-base font-light flex items-center gap-2 flex-1 justify-center group"
-                >
-                  <KeyBox selected={timeWindow === "day"} hovered={false}>D</KeyBox>
-                  <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Day</span>
-                </button>
-                <button
-                  onClick={() => setTimeWindow("week")}
-                  className="text-base font-light flex items-center gap-2 flex-1 justify-center group"
-                >
-                  <KeyBox selected={timeWindow === "week"} hovered={false}>W</KeyBox>
-                  <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Week</span>
-                </button>
-                <button
-                  onClick={() => setTimeWindow("month")}
-                  className="text-base font-light flex items-center gap-2 flex-1 justify-center group"
-                >
-                  <KeyBox selected={timeWindow === "month"} hovered={false}>M</KeyBox>
-                  <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Month</span>
-                </button>
-              </div>
-            }
+            viewMode={viewMode}
+            onToggleViewMode={() => setViewMode((prev) => (prev === "list" ? "treemap" : "list"))}
+            labelFilterSelector={labelFilterSelector}
+            timeWindow={timeWindow}
+            customDateRange={customDateRange}
           />
         </div>
       )}
+
+      {/* Custom Date Range Modal */}
+      <CustomDateRangeModal
+        isOpen={isCustomModalOpen}
+        onClose={() => setIsCustomModalOpen(false)}
+        onSubmit={handleCustomDateSubmit}
+      />
+    </div>
+  );
+}
+
+interface StatsSkeletonProps {
+  labelFilterSelector: ReactNode;
+  viewMode: "list" | "treemap";
+  onToggleViewMode: () => void;
+  showAllApps: boolean;
+  onToggleShowAll: () => void;
+}
+
+const SkeletonBar = ({ className = "" }: { className?: string }) => (
+  <div className={`skeleton-bar bg-gray-200 rounded ${className}`} />
+);
+
+function StatsSkeleton({
+  labelFilterSelector,
+  viewMode,
+  onToggleViewMode,
+  showAllApps,
+  onToggleShowAll,
+}: StatsSkeletonProps) {
+  return (
+    <div className="bg-white">
+      <div className="p-6 flex flex-col gap-6">
+        <div className="flex items-start justify-between">
+          <div className="flex flex-col gap-2">
+            <div className="text-xl font-light tracking-wide text-gray-800">
+              Total Duration
+            </div>
+            <SkeletonBar className="h-8 w-32" />
+          </div>
+          <div className="flex gap-2 pt-0.5">
+            {labelFilterSelector}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-normal tracking-wide text-gray-800">
+                Top Applications
+              </h3>
+              <button
+                onClick={onToggleShowAll}
+                className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-1"
+              >
+                <KeyBox selected={showAllApps} hovered={false}>V</KeyBox>
+                {showAllApps ? "View Top Apps" : "View All"}
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={onToggleViewMode} className="flex items-center gap-1">
+                <KeyBox selected={viewMode === "list"} hovered={false}>L</KeyBox>
+                <span className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors">
+                  List
+                </span>
+              </button>
+              <button onClick={onToggleViewMode} className="flex items-center gap-1">
+                <KeyBox selected={viewMode === "treemap"} hovered={false}>T</KeyBox>
+                <span className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors">
+                  Treemap
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div key={index} className="flex items-center gap-3 w-full text-left">
+                <SkeletonBar className="w-8 h-8" />
+                <div className="flex-1 flex flex-col gap-2">
+                  <SkeletonBar className="h-4 w-1/2" />
+                  <SkeletonBar className="h-2 w-full" />
+                </div>
+                <SkeletonBar className="h-5 w-12" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -156,12 +156,12 @@ export function LabelDropdown({
         <KeyBox hovered={false}>0</KeyBox>
         <button
           onClick={() => onSelectLabel(null)}
-          className={`border border-gray-300 px-3 py-1 text-sm font-medium transition-opacity whitespace-nowrap flex items-center justify-center ${
+          className={`border border-gray-300 px-3 py-1 text-sm font-medium transition-opacity flex items-center justify-center min-w-0 ${
             currentLabelId === null ? "text-gray-400" : "text-gray-400 opacity-60"
           } hover:opacity-100`}
           style={{ width: '126px', backgroundColor: 'transparent' }}
         >
-          No Label
+          <span className="truncate inline-block max-w-full text-left">No Label</span>
         </button>
       </div>
 
@@ -185,7 +185,7 @@ export function LabelDropdown({
             <KeyBox hovered={false}>{index + 1}</KeyBox>
             <button
               onClick={() => onSelectLabel(label.id)}
-              className={`border px-3 py-1 text-sm font-medium transition-opacity whitespace-nowrap flex items-center justify-center ${
+              className={`border px-3 py-1 text-sm font-medium transition-opacity flex items-center justify-center min-w-0 ${
                 isSelected ? "" : "opacity-60"
               } hover:opacity-100`}
               style={{
@@ -195,7 +195,7 @@ export function LabelDropdown({
                 width: '126px',
               }}
             >
-              {label.name}
+              <span className="truncate inline-block max-w-full text-left">{label.name}</span>
             </button>
           </div>
         );

@@ -40,6 +40,7 @@ final class IslandWindowManager {
     private var isExpanded: Bool = false
     private var isHovering: Bool = false
     private var isTimerIdle: Bool = true
+    private var hasAudioContent: Bool = false
 
     init(configuration: IslandWindowConfiguration) {
         self.configuration = configuration
@@ -159,6 +160,12 @@ final class IslandWindowManager {
         updateIslandWindowSize(animated: animated, duration: isExpanded ? 0.25 : 0.15)
     }
 
+    func updateAudioPresence(hasAudio: Bool, animated: Bool = true) {
+        guard hasAudioContent != hasAudio else { return }
+        hasAudioContent = hasAudio
+        updateIslandWindowSize(animated: animated, duration: isExpanded ? 0.25 : 0.15)
+    }
+
     func repositionForCurrentScreen() {
         guard let panel = parentWindow else { return }
         guard let screen = panel.screen ?? NSScreen.lf_preferredIslandDisplay ?? NSScreen.main else {
@@ -192,8 +199,13 @@ final class IslandWindowManager {
 
     private func currentIslandSize() -> NSSize {
         if isExpanded {
-            // Use configured widths and heights based on timer state
-            let expandedWidth: CGFloat = isTimerIdle ? configuration.expandedIdleWidth : configuration.expandedTimerWidth
+            // Use configured widths and heights based on timer and audio state
+            let expandedWidth: CGFloat
+            if isTimerIdle {
+                expandedWidth = configuration.expandedIdleWidth
+            } else {
+                expandedWidth = hasAudioContent ? configuration.expandedTimerWidth : configuration.expandedIdleWidth
+            }
             let expandedHeight: CGFloat = isTimerIdle ? configuration.expandedIdleHeight : configuration.expandedTimerHeight
             return NSSize(width: expandedWidth, height: expandedHeight)
         }

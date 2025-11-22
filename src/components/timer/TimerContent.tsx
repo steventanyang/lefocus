@@ -64,7 +64,7 @@ export function TimerContent({
 
       {/* Always reserve space to prevent clock shifting */}
       <div className="flex flex-col items-center w-full">
-        <div className="mt-4 mb-4 min-h-[48px]">
+        <div className="mt-4 mb-4 h-[52px] flex items-center justify-center">
           {isIdle && selectedMode === "countdown" && (
             <DurationPicker
               selectedDuration={selectedDuration}
@@ -78,7 +78,7 @@ export function TimerContent({
             />
           )}
           {isIdle && selectedMode === "stopwatch" && (
-            <div aria-hidden="true" />
+            <div aria-hidden="true" className="h-full" />
           )}
         </div>
       </div>

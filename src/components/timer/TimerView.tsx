@@ -356,64 +356,64 @@ export function TimerView({ onNavigate }: TimerViewProps) {
         }}
       />
 
-      {/* Navigation buttons in top left */}
+      {/* Timer mode buttons in top left */}
+      {state.status === "idle" && (
+        <div
+          className={`fixed top-8 left-8 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
+            controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
+        >
+          <button
+            onClick={() => handleModeChange("countdown")}
+            className="text-base font-light text-gray-600 flex items-center gap-2 group"
+          >
+            <KeyBox selected={selectedMode === "countdown"} hovered={false}>T</KeyBox>
+            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Timer</span>
+          </button>
+          <button
+            onClick={() => handleModeChange("stopwatch")}
+            className="text-base font-light text-gray-600 flex items-center gap-2 group"
+          >
+            <KeyBox selected={selectedMode === "stopwatch"} hovered={false}>S</KeyBox>
+            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Stopwatch</span>
+          </button>
+          <button
+            onClick={() => handleModeChange("break")}
+            className="text-base font-light text-gray-600 flex items-center gap-2 group"
+          >
+            <KeyBox selected={selectedMode === "break"} hovered={false}>B</KeyBox>
+            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Break</span>
+          </button>
+        </div>
+      )}
+
+      {/* Navigation buttons - centered vertically */}
       <div
-        className={`fixed top-8 left-8 flex flex-col gap-4 z-10 transition-opacity duration-300 ${
+        className={`fixed left-8 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
           controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
       >
-        {/* Main navigation block */}
-        <div className="flex flex-col gap-2">
-          {state.status === "idle" && (
-            <>
-              <button
-                onClick={() => handleModeChange("countdown")}
-                className="text-base font-light text-gray-600 dark:text-stone-400 flex items-center gap-2 group"
-              >
-                <KeyBox selected={selectedMode === "countdown"} hovered={false}>T</KeyBox>
-                <span className="group-hover:text-black dark:group-hover:text-stone-50 transition-colors duration-200 group-hover:transition-none">Timer</span>
-              </button>
-              <button
-                onClick={() => handleModeChange("stopwatch")}
-                className="text-base font-light text-gray-600 dark:text-stone-400 flex items-center gap-2 group"
-              >
-                <KeyBox selected={selectedMode === "stopwatch"} hovered={false}>S</KeyBox>
-                <span className="group-hover:text-black dark:group-hover:text-stone-50 transition-colors duration-200 group-hover:transition-none">Stopwatch</span>
-              </button>
-              <button
-                onClick={() => handleModeChange("break")}
-                className="text-base font-light text-gray-600 dark:text-stone-400 flex items-center gap-2 group"
-              >
-                <KeyBox selected={selectedMode === "break"} hovered={false}>B</KeyBox>
-                <span className="group-hover:text-black dark:group-hover:text-stone-50 transition-colors duration-200 group-hover:transition-none">Break</span>
-              </button>
-            </>
-          )}
-          {/* Navigation section - separated from timer modes */}
-          <div className="flex flex-col gap-2 mt-4">
-            <button
-              className="text-base font-light text-gray-600 flex items-center gap-2 group"
-              onClick={() => onNavigate("activities")}
-            >
-              <KeyboardShortcut keyLetter="a" hovered={false} />
-              <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Activities</span>
-            </button>
-            <button
-              className="text-base font-light text-gray-600 flex items-center gap-2 group"
-              onClick={() => onNavigate("stats")}
-            >
-              <KeyboardShortcut keyLetter="s" hovered={false} />
-              <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Stats</span>
-            </button>
-            <button
-              className="text-base font-light text-gray-600 flex items-center gap-2 group"
-              onClick={() => onNavigate("profile")}
-            >
-              <KeyboardShortcut keyLetter="p" hovered={false} />
-              <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Profile</span>
-            </button>
-          </div>
-        </div>
+        <button
+          className="text-base font-light text-gray-600 flex items-center gap-2 group"
+          onClick={() => onNavigate("activities")}
+        >
+          <KeyboardShortcut keyLetter="a" hovered={false} />
+          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Activities</span>
+        </button>
+        <button
+          className="text-base font-light text-gray-600 flex items-center gap-2 group"
+          onClick={() => onNavigate("stats")}
+        >
+          <KeyboardShortcut keyLetter="s" hovered={false} />
+          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Stats</span>
+        </button>
+        <button
+          className="text-base font-light text-gray-600 flex items-center gap-2 group"
+          onClick={() => onNavigate("profile")}
+        >
+          <KeyboardShortcut keyLetter="p" hovered={false} />
+          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Profile</span>
+        </button>
       </div>
 
       {/* General controls in bottom left */}

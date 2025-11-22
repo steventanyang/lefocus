@@ -149,7 +149,6 @@ export function useActivitiesKeyboard({
 
         if (event.key === "ArrowDown") {
           event.preventDefault();
-          const nextRowInGroup = currentRowInGroup + 1;
           const nextPositionInGroup = positionInGroup + COLUMNS;
           
           if (nextPositionInGroup < currentGroup.sessions.length) {

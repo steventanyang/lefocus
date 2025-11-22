@@ -4,12 +4,13 @@ import type { SessionSummary } from "@/types/timer";
 
 interface BlockViewProps {
   sessions: SessionSummary[];
+  labels?: any[];
   onClick: (session: SessionSummary) => void;
   selectedIndex: number | null;
   cardRefs: React.MutableRefObject<(HTMLButtonElement | null)[]>;
 }
 
-export function BlockView({ sessions, onClick, selectedIndex, cardRefs }: BlockViewProps) {
+export function BlockView({ sessions, labels, onClick, selectedIndex, cardRefs }: BlockViewProps) {
   const dayGroups = groupSessionsByDay(sessions);
   
   // Flatten sessions to calculate index
@@ -35,6 +36,7 @@ export function BlockView({ sessions, onClick, selectedIndex, cardRefs }: BlockV
                     cardRefs.current[currentIndex] = el;
                   }}
                   session={session}
+                  labels={labels}
                   onClick={onClick}
                   isSelected={selectedIndex === currentIndex}
                 />

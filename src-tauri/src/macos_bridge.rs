@@ -59,6 +59,7 @@ extern "C" {
 
     fn macos_sensing_set_timer_end_callback(callback: extern "C" fn());
     fn macos_sensing_set_timer_cancel_callback(callback: extern "C" fn());
+    fn macos_sensing_set_focus_app_callback(callback: extern "C" fn());
 
     // App icon fetching
     // fn macos_sensing_swift_get_app_icon(bundle_id: *const c_char) -> *mut c_char; // Unused - replaced by get_app_icon_and_color
@@ -294,11 +295,39 @@ extern "C" fn rust_timer_cancel_callback() {
     handle_island_cancel_timer();
 }
 
+extern "C" fn rust_focus_app_callback() {
+    focus_main_window();
+}
+
 // Initialize timer callbacks
 pub fn setup_timer_callbacks() {
     unsafe {
         macos_sensing_set_timer_end_callback(rust_timer_end_callback);
         macos_sensing_set_timer_cancel_callback(rust_timer_cancel_callback);
+        macos_sensing_set_focus_app_callback(rust_focus_app_callback);
+    }
+}
+
+fn focus_main_window() {
+    if let Some(app_handle) = get_app_handle() {
+        match app_handle.get_webview_window("main") {
+            Some(window) => {
+                if let Err(e) = window.show() {
+                    log::error!("Failed to show main window: {}", e);
+                }
+                if let Err(e) = window.unminimize() {
+                    log::warn!("Failed to unminimize main window: {}", e);
+                }
+                if let Err(e) = window.set_focus() {
+                    log::error!("Failed to focus main window: {}", e);
+                }
+            }
+            None => {
+                log::error!("Main window not found when attempting to focus app");
+            }
+        }
+    } else {
+        log::error!("Failed to get app handle when focusing main window");
     }
 }
 

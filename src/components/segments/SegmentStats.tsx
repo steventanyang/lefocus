@@ -239,7 +239,7 @@ export function SegmentStats({
           )}
           <div 
             ref={timelineContainerRef}
-            className="flex h-[60px] gap-[3px] overflow-hidden"
+            className="flex h-[60px] gap-[1.5px] overflow-hidden"
           >
           {filteredSegments.map((segment, index) => {
             const widthPercent = totalDuration > 0 

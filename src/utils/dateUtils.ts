@@ -4,7 +4,7 @@
 
 import type { SessionSummary } from "@/types/timer";
 
-export type TimeWindow = "day" | "week" | "month";
+export type TimeWindow = "day" | "week" | "month" | "year" | "custom";
 
 export interface DateRange {
   start: Date;
@@ -46,6 +46,16 @@ export function getMonthRange(): DateRange {
 }
 
 /**
+ * Get the start and end of the current year
+ */
+export function getYearRange(): DateRange {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+  const end = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+  return { start, end };
+}
+
+/**
  * Get date range for a given time window
  */
 export function getDateRangeForWindow(window: TimeWindow): DateRange {
@@ -56,6 +66,10 @@ export function getDateRangeForWindow(window: TimeWindow): DateRange {
       return getWeekRange();
     case "month":
       return getMonthRange();
+    case "year":
+      return getYearRange();
+    default:
+      return getDayRange(); // Fallback for custom
   }
 }
 
@@ -78,6 +92,10 @@ export function getTimeWindowLabel(window: TimeWindow): string {
       return "This Week";
     case "month":
       return "This Month";
+    case "year":
+      return "This Year";
+    case "custom":
+      return "Custom Range";
   }
 }
 
@@ -143,5 +161,69 @@ export function groupSessionsByDay(sessions: SessionSummary[]): DayGroup[] {
 
   // Sort day groups by date descending (today first)
   return dayGroups.sort((a, b) => b.date.getTime() - a.date.getTime());
+}
+
+/**
+ * Format date range for display with proper suffixes (1st, 2nd, 3rd, etc.)
+ */
+export function formatDateRange(timeWindow: TimeWindow): string {
+  const { start, end } = getDateRangeForWindow(timeWindow);
+  
+  
+  
+  const formatDateNoYear = (date: Date) => {
+    const month = date.toLocaleDateString('en-US', { month: 'short' });
+    const day = date.getDate();
+    const dayWithSuffix = day + (day === 1 || day === 21 || day === 31 ? 'st' : 
+                                  day === 2 || day === 22 ? 'nd' : 
+                                  day === 3 || day === 23 ? 'rd' : 'th');
+    return `${month} ${dayWithSuffix}`;
+  };
+  
+  // For single day (today), just show the date
+  if (timeWindow === "day" && start.toDateString() === end.toDateString()) {
+    return formatDateNoYear(start);
+  }
+  
+  // For year, just show the year number
+  if (timeWindow === "year") {
+    return start.getFullYear().toString();
+  }
+  
+  // For ranges, show "Month Day - Month Day" without years
+  const startFormatted = formatDateNoYear(start);
+  const endFormatted = formatDateNoYear(end);
+  
+  return `${startFormatted} - ${endFormatted}`;
+}
+
+/**
+ * Parse date string in DD/MM/YYYY or DD/MM/YY format
+ */
+export function parseCustomDate(dateStr: string): Date | null {
+  const parts = dateStr.split('/');
+  if (parts.length !== 3) return null;
+  
+  const day = parseInt(parts[0]);
+  const month = parseInt(parts[1]) - 1; // JS months are 0-indexed
+  let year = parseInt(parts[2]);
+  
+  // Handle 2-digit year (e.g., 24 -> 2024)
+  if (year < 100) {
+    year += 2000;
+  }
+  
+  if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
+  
+  const date = new Date(year, month, day);
+  return date;
+}
+
+/**
+ * Validate DD/MM/YYYY or DD/MM/YY date string
+ */
+export function validateCustomDate(dateStr: string): boolean {
+  const date = parseCustomDate(dateStr);
+  return date !== null && !isNaN(date.getTime());
 }
 

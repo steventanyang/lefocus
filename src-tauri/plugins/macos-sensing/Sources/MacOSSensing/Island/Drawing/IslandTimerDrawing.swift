@@ -8,7 +8,11 @@ extension IslandView {
 
         // Darker when not hovered, white when hovered
         let textColor: NSColor
-        if isIdle {
+        if hasTimerFinished {
+            textColor = isHovered
+                ? animatedCompletionColor
+                : animatedCompletionColor.withAlphaComponent(0.85)
+        } else if isIdle {
             textColor = isHovered
                 ? NSColor.white.withAlphaComponent(0.6)
                 : NSColor.white.withAlphaComponent(0.3)
@@ -39,7 +43,7 @@ extension IslandView {
     }
 
     func drawTimerTextCompact() {
-        guard !isIdle else { return }
+        guard !isIdle || hasTimerFinished else { return }
         let timeString = formatTime(ms: displayMs)
 
         // Larger font for expanded view with timer
@@ -47,24 +51,20 @@ extension IslandView {
             return
         }
 
+        let textColor: NSColor
+        if hasTimerFinished {
+            textColor = animatedCompletionColor.withAlphaComponent(0.95 * expandedContentOpacity)
+        } else {
+            textColor = NSColor.white.withAlphaComponent(0.9 * expandedContentOpacity)
+        }
+
         let attributes: [NSAttributedString.Key: Any] = [
             .font: timerFont,
-            .foregroundColor: NSColor.white.withAlphaComponent(0.9)
+            .foregroundColor: textColor
         ]
 
         let attributed = NSAttributedString(string: timeString, attributes: attributes)
         let textSize = attributed.size()
-
-        // Calculate the available space for timer on the right side
-        // Mirror the left section padding for symmetry:
-        // Left section: 16px padding on left, ends at 50% - 16px
-        // Right section: starts at 50% + 16px, 16px padding on right
-        let rightSectionStartX = bounds.width * 0.5 + 22.0
-        let rightSectionEndX = bounds.maxX - 22.0
-        let availableWidth = rightSectionEndX - rightSectionStartX
-
-        // Center timer in the available right section
-        let centerX = rightSectionStartX + availableWidth / 2.0
 
         // Align timer top with title top
         // Title rect is at y: bounds.height - 56.0 with height 18.0
@@ -73,15 +73,24 @@ extension IslandView {
         let titleTop = bounds.height - 44.0
         let timerY = titleTop - textSize.height
 
-        let origin = NSPoint(
-            x: centerX - textSize.width / 2.0,
-            y: timerY
-        )
+        let originX: CGFloat
+        if trackInfo == nil {
+            originX = bounds.midX - textSize.width / 2.0
+        } else {
+            // Calculate the available space for timer on the right side to mirror audio section
+            let rightSectionStartX = bounds.width * 0.5 + 22.0
+            let rightSectionEndX = bounds.maxX - 22.0
+            let availableWidth = rightSectionEndX - rightSectionStartX
+            let centerX = rightSectionStartX + availableWidth / 2.0
+            originX = centerX - textSize.width / 2.0
+        }
+
+        let origin = NSPoint(x: originX, y: timerY)
         attributed.draw(at: origin)
     }
 
     func drawTimerControlButtonsIfNeeded() {
-        guard isExpanded, !isIdle else {
+        guard isExpanded, (!isIdle || hasTimerFinished) else {
             timerEndButton = ButtonArea()
             timerCancelButton = ButtonArea()
             return
@@ -91,8 +100,15 @@ extension IslandView {
 
         if mode == .stopwatch {
             drawTextButton(timerEndButton, text: "End", emphasized: true)
+            drawTextButton(timerCancelButton, text: "Cancel", emphasized: false)
+            return
         }
-        drawTextButton(timerCancelButton, text: "Cancel", emphasized: false)
+
+        if hasTimerFinished {
+            drawTextButton(timerEndButton, text: "End", emphasized: true)
+        } else {
+            drawTextButton(timerCancelButton, text: "Cancel", emphasized: false)
+        }
     }
 
     func drawTextButton(_ button: ButtonArea, text: String, emphasized: Bool) {
@@ -115,24 +131,32 @@ extension IslandView {
     }
 
     func layoutTimerControlButtonRects() {
-        guard isExpanded, !isIdle else {
+        guard isExpanded, (!isIdle || hasTimerFinished) else {
             timerEndButton = ButtonArea()
             timerCancelButton = ButtonArea()
             return
         }
 
-        // Timer control buttons centered below the timer in the right section
+        // Timer control buttons centered below the timer area
         // Align bottom edge with audio controls (which are at 10px from bottom)
         let buttonWidth: CGFloat = 64.0
         let buttonHeight: CGFloat = 26.0
         let spacing: CGFloat = 10.0
         let bottomY: CGFloat = 18.0
 
-        // Calculate right section center (same as timer positioning)
-        // Mirror left section: starts at 50% + 16px, ends at right edge - 16px
-        let rightSectionStartX = bounds.width * 0.5 + 20.0
-        let rightSectionEndX = bounds.maxX - 20.0
-        let centerX = (rightSectionStartX + rightSectionEndX) / 2.0
+        // Determine the horizontal region the buttons should occupy
+        let horizontalPadding: CGFloat = 20.0
+        let usingFullWidth = trackInfo == nil
+        let sectionStartX: CGFloat
+        let sectionEndX: CGFloat
+        if usingFullWidth {
+            sectionStartX = horizontalPadding
+            sectionEndX = bounds.maxX - horizontalPadding
+        } else {
+            sectionStartX = bounds.width * 0.5 + horizontalPadding
+            sectionEndX = bounds.maxX - horizontalPadding
+        }
+        let centerX = (sectionStartX + sectionEndX) / 2.0
 
         // For stopwatch: show both End and Cancel, centered as a group
         // For countdown and break: show only Cancel, centered
@@ -153,8 +177,18 @@ extension IslandView {
                 width: buttonWidth,
                 height: buttonHeight
             )
+            return
+        }
+
+        if hasTimerFinished {
+            timerEndButton.rect = NSRect(
+                x: centerX - buttonWidth / 2.0,
+                y: bottomY,
+                width: buttonWidth,
+                height: buttonHeight
+            )
+            timerCancelButton.rect = .zero
         } else {
-            // Countdown and break modes: only Cancel button, centered under timer
             timerCancelButton.rect = NSRect(
                 x: centerX - buttonWidth / 2.0,
                 y: bottomY,
@@ -163,6 +197,13 @@ extension IslandView {
             )
             timerEndButton.rect = .zero
         }
+    }
+
+    func drawTimerOnlyExpandedLayout() {
+        if isIdle && !hasTimerFinished {
+            return
+        }
+        drawTimerTextCompact()
     }
 
     func drawBreakLabel() {

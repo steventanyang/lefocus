@@ -23,7 +23,7 @@ use timer::{
     commands::{
         cancel_timer, end_timer, get_interruptions_for_segment, get_segments_for_session,
         get_timer_state, get_window_titles_for_segment, list_sessions, list_sessions_paginated,
-        start_timer,
+        start_timer, get_app_details_in_time_range,
     },
     TimerController,
 };
@@ -198,6 +198,7 @@ pub fn run() {
             get_segments_for_session,
             get_interruptions_for_segment,
             get_window_titles_for_segment,
+            get_app_details_in_time_range,
             list_sessions,
             list_sessions_paginated,
             create_label,

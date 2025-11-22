@@ -324,7 +324,7 @@ extension IslandView {
     }
 
     func layoutPlaybackButtonRects() {
-        guard isExpanded else {
+        guard isExpanded, trackInfo != nil else {
             resetButtonAreas()
             return
         }
@@ -378,7 +378,7 @@ extension IslandView {
         let titleFont = NSFont.systemFont(ofSize: 14, weight: .semibold)
         let titleHeight = titleFont.ascender - titleFont.descender
         let artistFont = NSFont.systemFont(ofSize: 12, weight: .regular)
-        let artistHeight = artistFont.ascender - artistFont.descender
+        _ = artistFont.ascender - artistFont.descender
         let lineSpacing: CGFloat = 2.0
         // Calculate gap between title and artist
         // Title bottom is at blockTop - titleHeight
