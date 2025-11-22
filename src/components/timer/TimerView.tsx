@@ -387,9 +387,9 @@ export function TimerView({ onNavigate }: TimerViewProps) {
         </div>
       )}
 
-      {/* Navigation buttons - centered vertically */}
+      {/* Navigation buttons - aligned with top of clock */}
       <div
-        className={`fixed left-8 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
+        className={`fixed left-8 top-52 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
           controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
       >

@@ -23,8 +23,11 @@ public final class IslandController {
 
     private var latestTimerUpdate: IslandTimerPresenter.DisplayUpdate?
     private var timerIsIdle: Bool = true
+    private var activeMode: IslandMode = .countdown
+    private var previousDisplayMs: Int64?
     private var currentTrack: TrackInfo?
     private var waveformBars: [CGFloat] = []
+    private var hasPlayedCompletionChime: Bool = false
 
     private var isExpanded: Bool = false
     private var isHovering: Bool = false
@@ -54,12 +57,21 @@ public final class IslandController {
         timerPresenter.onDisplayUpdate = { [weak self] update in
             guard let self else { return }
             self.latestTimerUpdate = update
+            if let mode = update.mode {
+                self.activeMode = mode
+            }
+
+            let priorDisplayMs = self.previousDisplayMs
+            self.previousDisplayMs = update.displayMs
+
             if let idle = update.idle {
                 self.timerIsIdle = idle
                 self.windowManager.updateTimerState(isIdle: idle, animated: true)
             } else {
                 self.windowManager.updateTimerState(isIdle: self.timerIsIdle, animated: true)
             }
+
+            self.handleCompletionChimeIfNeeded(update: update, previousDisplayMs: priorDisplayMs)
             self.islandView?.update(displayMs: update.displayMs, mode: update.mode, idle: update.idle)
             // Update window size based on timer state (narrower when idle)
         }
@@ -76,6 +88,7 @@ public final class IslandController {
                 self.windowManager.ensureWindowHierarchy()
                 self.audioController.startMonitoring()
                 self.timerPresenter.initializeIdleState()
+                IslandChimePlayer.shared.bootstrap()
             }
         }
     }
@@ -87,6 +100,9 @@ public final class IslandController {
                 self.windowManager.ensureWindowHierarchy()
                 self.audioController.startMonitoring()
                 self.timerPresenter.start(with: payload)
+                self.activeMode = payload.mode
+                self.previousDisplayMs = nil
+                IslandChimePlayer.shared.bootstrap()
             }
         }
     }
@@ -105,6 +121,7 @@ public final class IslandController {
             guard let self else { return }
             DispatchQueue.main.async {
                 self.timerPresenter.reset()
+                self.previousDisplayMs = nil
             }
         }
     }
@@ -204,6 +221,25 @@ public final class IslandController {
             targetView?.updateAudio(track: currentTrack, waveformBars: waveformBars ?? self.waveformBars)
         } else {
             targetView?.updateAudio(track: nil, waveformBars: nil)
+        }
+    }
+
+    private func handleCompletionChimeIfNeeded(update: IslandTimerPresenter.DisplayUpdate, previousDisplayMs: Int64?) {
+        let pendingIdle = update.idle ?? timerIsIdle
+        let modeAllowsChime = (activeMode == .countdown || activeMode == .break)
+        let crossedZero: Bool = {
+            guard let previous = previousDisplayMs else { return false }
+            return previous > 0 && update.displayMs <= 0
+        }()
+        let isFinished = modeAllowsChime && crossedZero && !pendingIdle
+
+        if isFinished {
+            if !hasPlayedCompletionChime {
+                hasPlayedCompletionChime = true
+                IslandChimePlayer.shared.playCompletionIfNeeded()
+            }
+        } else {
+            hasPlayedCompletionChime = false
         }
     }
 }

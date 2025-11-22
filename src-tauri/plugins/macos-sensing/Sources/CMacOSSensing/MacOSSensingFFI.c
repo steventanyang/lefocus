@@ -15,6 +15,8 @@ extern void macos_sensing_swift_island_start(int64_t start_uptime_ms, int64_t ta
 extern void macos_sensing_swift_island_sync(int64_t value_ms);
 extern void macos_sensing_swift_island_reset(void);
 extern void macos_sensing_swift_island_cleanup(void);
+extern void macos_sensing_swift_island_update_chime_preferences(bool enabled, const char *sound_id);
+extern void macos_sensing_swift_island_preview_chime(const char *sound_id);
 extern void macos_sensing_swift_audio_start_monitoring(void);
 extern void macos_sensing_swift_audio_toggle_playback(void);
 extern void macos_sensing_swift_audio_next_track(void);
@@ -66,6 +68,14 @@ void macos_sensing_island_reset(void) {
 
 void macos_sensing_island_cleanup(void) {
     macos_sensing_swift_island_cleanup();
+}
+
+void macos_sensing_island_update_chime_preferences(bool enabled, const char *sound_id) {
+    macos_sensing_swift_island_update_chime_preferences(enabled, sound_id);
+}
+
+void macos_sensing_island_preview_chime(const char *sound_id) {
+    macos_sensing_swift_island_preview_chime(sound_id);
 }
 
 void macos_sensing_audio_start_monitoring(void) {

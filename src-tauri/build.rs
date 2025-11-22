@@ -1,6 +1,6 @@
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
@@ -118,6 +118,29 @@ fn compile_macos_sensing() {
 
     println!("cargo:warning=[COPY] ✅ Dylib copied successfully");
 
+    // Copy SwiftPM resource bundle so Bundle.module assets are available at runtime
+    let bundle_name = "MacOSSensing_MacOSSensing.bundle";
+    let bundle_source = build_output.join(bundle_name);
+    let bundle_target = resources_dir.join(bundle_name);
+
+    if bundle_source.exists() {
+        println!(
+            "cargo:warning=[COPY] Copying resource bundle...\n"
+        );
+        println!("cargo:warning=[COPY]   Source: {}", bundle_source.display());
+        println!("cargo:warning=[COPY]   Target: {}", bundle_target.display());
+
+        copy_dir_recursive(&bundle_source, &bundle_target)
+            .expect("Failed to copy MacOSSensing resource bundle");
+
+        println!("cargo:warning=[COPY] ✅ Resource bundle copied successfully");
+    } else {
+        println!(
+            "cargo:warning=[COPY] ⚠️ Swift resource bundle missing at {}; completion chime assets may not load",
+            bundle_source.display()
+        );
+    }
+
     println!("cargo:warning=[WATCH] Registering file watchers for Swift files...");
     println!(
         "cargo:rerun-if-changed={}",
@@ -132,4 +155,25 @@ fn compile_macos_sensing() {
         plugin_dir.join("Package.swift").to_str().unwrap()
     );
     println!("cargo:warning=[WATCH] ✅ File watchers registered");
+}
+
+#[cfg(target_os = "macos")]
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    if dst.exists() {
+        fs::remove_dir_all(dst)?;
+    }
+    fs::create_dir_all(dst)?;
+
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let target_path = dst.join(entry.file_name());
+        if file_type.is_dir() {
+            copy_dir_recursive(&entry.path(), &target_path)?;
+        } else if file_type.is_file() {
+            fs::copy(entry.path(), target_path)?;
+        }
+    }
+
+    Ok(())
 }
