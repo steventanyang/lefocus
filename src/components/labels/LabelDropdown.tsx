@@ -213,7 +213,7 @@ export function LabelDropdown({
         >
           <KeyBox hovered={false}>N</KeyBox>
           <div
-            className="border border-gray-300 px-3 py-1 text-sm text-gray-500 hover:border-gray-400 hover:text-gray-600 flex items-center justify-center cursor-pointer transition-colors"
+            className="px-3 py-1 text-sm text-gray-500 hover:text-gray-600 flex items-center justify-center cursor-pointer transition-colors"
             style={{ width: '126px' }}
             onClick={onAddNew}
           >

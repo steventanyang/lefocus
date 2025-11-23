@@ -35,7 +35,7 @@ export function SessionResults({
   sessionId,
   session,
   onBack,
-  backButtonText = "View Timer",
+  backButtonText = "view timer",
 }: SessionResultsProps) {
   const { data: segments = [], isLoading: loading, error } = useSegments(sessionId);
   const updateSessionLabelMutation = useUpdateSessionLabelMutation();
@@ -82,7 +82,7 @@ export function SessionResults({
         return;
       }
 
-      if (backButtonText === "View Activities") {
+      if (backButtonText === "view activities") {
         // Cmd+A (Mac) or Ctrl+A (non-Mac): Close the session (go back to activities list)
         if (event.key === "a" && isModifierPressed) {
           event.preventDefault();
@@ -90,7 +90,7 @@ export function SessionResults({
           onBack();
           return;
         }
-      } else if (backButtonText === "View Timer") {
+      } else if (backButtonText === "view timer") {
         // Cmd+T (Mac) or Ctrl+T (non-Mac): Close the session (go back to timer)
         if (event.key === "t" && isModifierPressed) {
           event.preventDefault();
@@ -141,7 +141,7 @@ export function SessionResults({
   }
 
   // Determine which shortcut to show based on backButtonText
-  const shortcutKey = backButtonText === "View Activities" ? "a" : "t";
+  const shortcutKey = backButtonText === "view activities" ? "a" : "t";
   
   const backButton = (
     <button
@@ -158,7 +158,7 @@ export function SessionResults({
     labelTag: (
       <button
         onClick={() => setIsLabelSelectionModalOpen(true)}
-        className="group"
+        className="group ml-1.5 mr-11"
       >
         <LabelTag label={currentLabel} showEmptyFrame />
       </button>

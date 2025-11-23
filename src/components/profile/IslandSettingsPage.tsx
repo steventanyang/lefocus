@@ -144,7 +144,7 @@ export function ChimeSettingsPage() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-lg font-normal">completion chimes</h2>
+          <h2 className="text-base font-normal tracking-wide text-gray-800">completion chimes</h2>
         </div>
         <button
           disabled={disabled || isSaving}
@@ -154,10 +154,10 @@ export function ChimeSettingsPage() {
               // error handled in hook
             });
           }}
-          className={`flex items-center gap-2 text-gray-600 hover:text-black disabled:opacity-30 disabled:cursor-not-allowed`}
+          className={`flex items-center gap-2 text-base font-light text-gray-600 hover:text-black disabled:opacity-30 disabled:cursor-not-allowed group`}
         >
           <KeyBox hovered={false} selected={settings?.enabled ?? false}>T</KeyBox>
-          <span className="text-sm">{settings?.enabled ? "turn off" : "turn on"}</span>
+          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">{settings?.enabled ? "turn off" : "turn on"}</span>
         </button>
       </div>
 
@@ -187,7 +187,7 @@ export function ChimeSettingsPage() {
                 }}
               >
                 <div
-                  className={`border px-3 py-1 text-sm font-medium transition-opacity flex items-center justify-center min-w-0 ${
+                  className={`border px-3 py-1 text-sm font-normal transition-opacity flex items-center justify-center min-w-0 ${
                     isSelected || isCurrent ? "bg-black text-white border-black" : "bg-white text-gray-700 border-gray-300 opacity-60"
                   } hover:opacity-100 hover:bg-black hover:text-white hover:border-black`}
                   style={{ width: "200px" }}
@@ -197,7 +197,7 @@ export function ChimeSettingsPage() {
 
                 {/* Actions - only show when selected */}
                 {isSelected && (
-                  <div className="flex items-center justify-center px-2 gap-2">
+                  <div className="flex items-center justify-start pl-4 gap-2">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -215,7 +215,7 @@ export function ChimeSettingsPage() {
                         }
                       }}
                       disabled={previewState === "playing"}
-                      className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:text-black disabled:opacity-50"
+                      className="flex items-center gap-2 px-2 py-1 text-sm font-light text-gray-600 hover:text-black disabled:opacity-50"
                     >
                       <KeyBox selected={previewState === "success" && isSelected}>P</KeyBox>
                       <span>{previewState === "playing" && isSelected ? "playing..." : "preview"}</span>

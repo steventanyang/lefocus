@@ -198,14 +198,14 @@ export function formatDateRange(timeWindow: TimeWindow): string {
 }
 
 /**
- * Parse date string in DD/MM/YYYY or DD/MM/YY format
+ * Parse date string in MM/DD/YYYY or MM/DD/YY format
  */
 export function parseCustomDate(dateStr: string): Date | null {
   const parts = dateStr.split('/');
   if (parts.length !== 3) return null;
   
-  const day = parseInt(parts[0]);
-  const month = parseInt(parts[1]) - 1; // JS months are 0-indexed
+  const month = parseInt(parts[0]) - 1; // JS months are 0-indexed
+  const day = parseInt(parts[1]);
   let year = parseInt(parts[2]);
   
   // Handle 2-digit year (e.g., 24 -> 2024)
@@ -220,7 +220,7 @@ export function parseCustomDate(dateStr: string): Date | null {
 }
 
 /**
- * Validate DD/MM/YYYY or DD/MM/YY date string
+ * Validate MM/DD/YYYY or MM/DD/YY date string
  */
 export function validateCustomDate(dateStr: string): boolean {
   const date = parseCustomDate(dateStr);

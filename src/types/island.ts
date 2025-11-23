@@ -17,12 +17,12 @@ export interface IslandSoundOption {
 export const ISLAND_SOUND_OPTIONS: IslandSoundOption[] = [
   {
     id: "island_default",
-    label: "Default chime",
+    label: "default chime",
     description: "Bright ding inspired by Apple's Dynamic Island",
   },
   {
     id: "island_soft",
-    label: "Loud chime",
+    label: "loud chime",
     description: "Gentler 660Hz tone with quick fade-out",
   },
 ];

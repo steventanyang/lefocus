@@ -81,7 +81,7 @@ export function CustomDateRangeModal({
     // Remove any non-digit characters
     let digits = value.replace(/\D/g, '');
     
-    // Limit to 8 digits (DDMMYYYY)
+    // Limit to 8 digits (MMDDYYYY)
     if (digits.length > 8) {
       digits = digits.slice(0, 8);
     }
@@ -194,7 +194,7 @@ export function CustomDateRangeModal({
     const day = String(today.getDate()).padStart(2, '0');
     const month = String(today.getMonth() + 1).padStart(2, '0'); // JavaScript months are 0-indexed
     const year = today.getFullYear();
-    const formattedDate = `${day}/${month}/${year}`;
+    const formattedDate = `${month}/${day}/${year}`;
     setCustomEndDate(formattedDate);
     setCustomDateError("");
   };
@@ -227,7 +227,7 @@ export function CustomDateRangeModal({
               value={customStartDate}
               onChange={handleStartDateChange}
               onKeyDown={handleStartDateKeyDown}
-              placeholder="DD/MM/YYYY"
+              placeholder="MM/DD/YYYY"
               className="w-full text-3xl font-semibold focus:outline-none placeholder-gray-400"
               maxLength={10}
             />
@@ -282,7 +282,7 @@ export function CustomDateRangeModal({
               value={customEndDate}
               onChange={handleEndDateChange}
               onKeyDown={handleEndDateKeyDown}
-              placeholder="DD/MM/YYYY"
+              placeholder="MM/DD/YYYY"
               className="w-full text-3xl font-semibold focus:outline-none placeholder-gray-400"
               maxLength={10}
             />

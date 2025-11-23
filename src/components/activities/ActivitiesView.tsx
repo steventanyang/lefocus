@@ -295,7 +295,7 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
         <KeyBox selected={isLabelModalOpen} hovered={false}>⌘</KeyBox>
         <KeyBox selected={isLabelModalOpen} hovered={false}>L</KeyBox>
       </div>
-      <div className="flex items-center justify-start min-w-[126px] ml-1">
+      <div className="flex items-center justify-start min-w-[126px] ml-1 mr-4">
         {labelDisplay}
       </div>
     </button>
@@ -334,39 +334,38 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
       />
 
       {/* Header */}
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-light tracking-wide">activities</h1>
-          <button
-            className="text-base font-light text-gray-600 hover:opacity-70 transition-opacity flex items-center gap-2"
-            onClick={() => onNavigate("timer")}
-          >
-            <KeyboardShortcut keyLetter="t" />
-            <span>view timer</span>
-          </button>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-light tracking-wide">activities</h1>
+        <div className="flex-1 flex justify-center" style={{marginLeft: '60px'}}>
+          {labelFilterSelector}
         </div>
-        <div className="flex items-center justify-between">
-          <div></div>
-          <div className="flex items-center gap-8 pr-1">
-            {labelFilterSelector}
-            {/* View mode shortcuts */}
-            <div className="flex items-center gap-2 -ml-1">
-              <button
-                onClick={() => setViewMode("list")}
-                className="text-base font-light text-gray-600 flex items-center gap-2"
-              >
-                <KeyBox selected={viewMode === "list"}>L</KeyBox>
-                <span>list</span>
-              </button>
-              <button
-                onClick={() => setViewMode("block")}
-                className="text-base font-light text-gray-600 flex items-center gap-2"
-              >
-                <KeyBox selected={viewMode === "block"}>B</KeyBox>
-                <span>block</span>
-              </button>
-            </div>
-          </div>
+        <button
+          className="text-base font-light text-gray-600 hover:opacity-70 transition-opacity flex items-center gap-2"
+          onClick={() => onNavigate("timer")}
+        >
+          <KeyboardShortcut keyLetter="t" />
+          <span>view timer</span>
+        </button>
+      </div>
+
+      {/* View mode selector row */}
+      <div className="flex items-center justify-end">
+        {/* View mode shortcuts */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setViewMode("list")}
+            className="text-base font-light text-gray-600 flex items-center gap-2"
+          >
+            <KeyBox selected={viewMode === "list"}>L</KeyBox>
+            <span>list</span>
+          </button>
+          <button
+            onClick={() => setViewMode("block")}
+            className="text-base font-light text-gray-600 flex items-center gap-2"
+          >
+            <KeyBox selected={viewMode === "block"}>B</KeyBox>
+            <span>block</span>
+          </button>
         </div>
       </div>
 

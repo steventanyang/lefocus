@@ -24,7 +24,7 @@ export function LabelTag({
 
   if (!label) {
     const baseContent = (
-      <span className={`${maxWidth ? 'truncate inline-block max-w-full text-left' : ''} text-black font-light`}>
+      <span className={`${maxWidth ? 'truncate inline-block max-w-full text-left' : ''} text-gray-500`}>
         {emptyText}
       </span>
     );

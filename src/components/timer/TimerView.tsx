@@ -318,7 +318,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
           <div className="flex flex-col items-end gap-2 relative">
             <button
               onClick={() => setIsLabelDropdownOpen((prev) => !prev)}
-              className="flex items-center gap-1.5 group"
+              className="flex items-center gap-2 group"
             >
               <KeyBox hovered={false}>L</KeyBox>
               <LabelTag label={selectedLabel} showEmptyFrame />

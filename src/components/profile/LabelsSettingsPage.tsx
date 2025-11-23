@@ -134,8 +134,8 @@ export function LabelsSettingsPage() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-normal">labels</h2>
-          <span className="text-sm text-gray-500">
+          <h2 className="text-base font-normal tracking-wide text-gray-800">labels</h2>
+          <span className="text-sm font-light text-gray-500">
             {labels.length} / 8
           </span>
         </div>
@@ -147,10 +147,10 @@ export function LabelsSettingsPage() {
               setIsModalOpen(true);
             }}
             disabled={labels.length >= 8}
-            className="flex items-center gap-2 text-gray-600 hover:text-black disabled:opacity-30 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 text-base font-light text-gray-600 hover:text-black disabled:opacity-30 disabled:cursor-not-allowed group"
           >
             <KeyBox hovered={false}>N</KeyBox>
-            <span className="text-sm">new label</span>
+            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">new label</span>
           </button>
         )}
       </div>
@@ -162,7 +162,7 @@ export function LabelsSettingsPage() {
             <KeyBox hovered={false}>N</KeyBox>
             <div className="flex">
               <div
-                className="border border-gray-300 px-3 py-1 text-sm text-gray-500 hover:border-gray-400 hover:text-gray-600 flex items-center justify-center cursor-pointer transition-colors"
+                className="border border-gray-300 px-3 py-1 text-sm font-light text-gray-500 hover:border-gray-400 hover:text-gray-600 flex items-center justify-center cursor-pointer transition-colors"
                 style={{ width: '126px' }}
                 onClick={() => {
                   setModalMode("create");
@@ -199,7 +199,7 @@ export function LabelsSettingsPage() {
                     const subtleText = isSelected ? "white" : darkenHex(label.color, 0.35);
                     return (
                       <button
-                        className={`border px-3 py-1 text-sm font-medium transition-opacity flex items-center justify-center min-w-0 ${
+                        className={`border px-3 py-1 text-sm font-normal transition-opacity flex items-center justify-center min-w-0 ${
                           isSelected ? "" : "opacity-60"
                         } hover:opacity-100`}
                         style={{
@@ -220,9 +220,9 @@ export function LabelsSettingsPage() {
 
                   {/* Actions container - only show when selected */}
                   {isSelected && (
-                    <div className="flex items-center justify-center px-2" style={{ minWidth: '200px' }}>
+                    <div className="flex items-center justify-start pl-4 gap-2" style={{ minWidth: '200px' }}>
                       {isDeleteConfirm ? (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <div className="flex items-center gap-2 text-sm font-light text-gray-600">
                           <KeyBox>D</KeyBox>
                           <span>to confirm</span>
                         </div>
@@ -235,7 +235,7 @@ export function LabelsSettingsPage() {
                               setEditingLabel(label);
                               setIsModalOpen(true);
                             }}
-                            className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:text-black"
+                            className="flex items-center gap-2 px-2 py-1 text-sm font-light text-gray-600 hover:text-black"
                           >
                             <KeyBox>E</KeyBox>
                             <span>edit</span>
@@ -247,7 +247,7 @@ export function LabelsSettingsPage() {
                               deleteLabelMutation.mutate(label.id);
                               setSelectedIndex(null);
                             }}
-                            className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:text-red-600"
+                            className="flex items-center gap-2 px-2 py-1 text-sm font-light text-gray-600 hover:text-red-600"
                           >
                             <KeyBox>D</KeyBox>
                             <span>delete</span>

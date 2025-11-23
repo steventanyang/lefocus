@@ -176,35 +176,35 @@ export function StatsView({ onNavigate }: StatsViewProps) {
     <div className="flex gap-4">
       <button
         onClick={() => setTimeWindow("day")}
-        className="text-base font-light flex items-center gap-2 group"
+        className="text-base font-light text-gray-600 flex items-center gap-2 group"
       >
         <KeyBox selected={timeWindow === "day"} hovered={false}>D</KeyBox>
         <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">day</span>
       </button>
       <button
         onClick={() => setTimeWindow("week")}
-        className="text-base font-light flex items-center gap-2 group"
+        className="text-base font-light text-gray-600 flex items-center gap-2 group"
       >
         <KeyBox selected={timeWindow === "week"} hovered={false}>W</KeyBox>
         <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">week</span>
       </button>
       <button
         onClick={() => setTimeWindow("month")}
-        className="text-base font-light flex items-center gap-2 group"
+        className="text-base font-light text-gray-600 flex items-center gap-2 group"
       >
         <KeyBox selected={timeWindow === "month"} hovered={false}>M</KeyBox>
         <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">month</span>
       </button>
       <button
         onClick={() => setTimeWindow("year")}
-        className="text-base font-light flex items-center gap-2 group"
+        className="text-base font-light text-gray-600 flex items-center gap-2 group"
       >
         <KeyBox selected={timeWindow === "year"} hovered={false}>Y</KeyBox>
         <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">year</span>
       </button>
       <button
         onClick={() => setIsCustomModalOpen(true)}
-        className="text-base font-light flex items-center gap-2 group"
+        className="text-base font-light text-gray-600 flex items-center gap-2 group"
       >
         <KeyBox selected={timeWindow === "custom"} hovered={false}>C</KeyBox>
         <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">custom</span>
@@ -235,7 +235,7 @@ export function StatsView({ onNavigate }: StatsViewProps) {
           <KeyBox selected={isLabelModalOpen} hovered={false}>⌘</KeyBox>
           <KeyBox selected={isLabelModalOpen} hovered={false}>L</KeyBox>
         </div>
-        <div className="flex items-center justify-start min-w-[126px] ml-1">
+        <div className="flex items-center justify-end ml-1 mr-7">
           {labelDisplay}
         </div>
       </button>
@@ -260,10 +260,10 @@ export function StatsView({ onNavigate }: StatsViewProps) {
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between px-6">
         <h1 className="text-2xl font-light tracking-wide">stats</h1>
         <div className="flex-1 flex justify-center" style={{marginLeft: '60px'}}>
-          {timeWindowButtons}
+          {labelFilterSelector}
         </div>
         <button
           className="text-base font-light text-gray-600 flex items-center gap-2 group"
@@ -277,7 +277,7 @@ export function StatsView({ onNavigate }: StatsViewProps) {
       {/* Loading state */}
       {isLoading && !sessionsError && (
         <StatsSkeleton
-          labelFilterSelector={labelFilterSelector}
+          timeWindowButtons={timeWindowButtons}
           viewMode={viewMode}
           onToggleViewMode={() => setViewMode((prev) => (prev === "list" ? "treemap" : "list"))}
           showAllApps={showAllApps}
@@ -301,7 +301,7 @@ export function StatsView({ onNavigate }: StatsViewProps) {
             onToggleShowAll={() => setShowAllApps(!showAllApps)}
             viewMode={viewMode}
             onToggleViewMode={() => setViewMode((prev) => (prev === "list" ? "treemap" : "list"))}
-            labelFilterSelector={labelFilterSelector}
+            timeWindowSelector={timeWindowButtons}
             timeWindow={timeWindow}
             customDateRange={customDateRange}
           />
@@ -319,7 +319,7 @@ export function StatsView({ onNavigate }: StatsViewProps) {
 }
 
 interface StatsSkeletonProps {
-  labelFilterSelector: ReactNode;
+  timeWindowButtons: ReactNode;
   viewMode: "list" | "treemap";
   onToggleViewMode: () => void;
   showAllApps: boolean;
@@ -331,7 +331,7 @@ const SkeletonBar = ({ className = "" }: { className?: string }) => (
 );
 
 function StatsSkeleton({
-  labelFilterSelector,
+  timeWindowButtons,
   viewMode,
   onToggleViewMode,
   showAllApps,
@@ -348,7 +348,7 @@ function StatsSkeleton({
             <SkeletonBar className="h-8 w-32" />
           </div>
           <div className="flex gap-2 pt-0.5">
-            {labelFilterSelector}
+            {timeWindowButtons}
           </div>
         </div>
 

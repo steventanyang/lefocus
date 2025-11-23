@@ -78,7 +78,7 @@ export const SessionCard = forwardRef<HTMLButtonElement, SessionCardProps>(
       <button
         ref={ref}
         onClick={() => onClick(session)}
-        className={`w-full border p-4 flex flex-col gap-4 hover:bg-gray-50 cursor-pointer transition-colors text-left relative ${
+        className={`w-full border p-4 flex flex-col gap-4 hover:bg-gray-50 cursor-pointer transition-colors text-left relative min-h-[200px] ${
           isSelected ? "bg-gray-100 border-gray-500" : "border-gray-300"
         }`}
       >
@@ -91,7 +91,7 @@ export const SessionCard = forwardRef<HTMLButtonElement, SessionCardProps>(
       <div className="absolute top-4 right-4 flex items-center gap-2">
         {/* Label tag on the left of status badge */}
         {currentLabel ? (
-          <LabelTag label={currentLabel} size="small" selected={false} />
+          <LabelTag label={currentLabel} size="small" selected={true} />
         ) : (
           <LabelTag label={null} size="small" selected={false} showEmptyFrame={false} />
         )}
@@ -161,7 +161,11 @@ export const SessionCard = forwardRef<HTMLButtonElement, SessionCardProps>(
             );
           })}
         </div>
-      ) : null}
+      ) : (
+        <div className="flex h-8 w-full">
+          <div className="flex-1 bg-transparent border border-gray-200"></div>
+        </div>
+      )}
 
       {/* Top apps list */}
       {session.topApps.length > 0 ? (
@@ -200,7 +204,7 @@ export const SessionCard = forwardRef<HTMLButtonElement, SessionCardProps>(
           </div>
         </div>
       ) : (
-        <div className="text-sm font-light text-gray-500 text-center py-4">
+        <div className="absolute bottom-4 left-4 text-sm font-light text-gray-500">
           No apps tracked
         </div>
       )}
