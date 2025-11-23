@@ -54,13 +54,13 @@ export function ProfileView({ onClose }: ProfileViewProps) {
     <div className="w-full max-w-4xl flex flex-col gap-8">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-light tracking-wide">Profile</h1>
+        <h1 className="text-2xl font-light tracking-wide">profile</h1>
         <button
           onClick={onClose}
           className="text-base font-light text-gray-600 flex items-center gap-2 hover:text-black"
         >
           <KeyboardShortcut keyLetter="t" />
-          <span>View Timer</span>
+          <span>view timer</span>
         </button>
       </div>
 
@@ -79,7 +79,7 @@ export function ProfileView({ onClose }: ProfileViewProps) {
               L
             </KeyBox>
             <span className={selectedSubPage === "labels" ? "font-normal text-black" : "text-gray-600"}>
-              Labels
+              labels
             </span>
           </button>
           <button
@@ -93,7 +93,7 @@ export function ProfileView({ onClose }: ProfileViewProps) {
               F
             </KeyBox>
             <span className={selectedSubPage === "fonts" ? "font-normal text-black" : "text-gray-600"}>
-              Fonts
+              fonts
             </span>
           </button>
           <button
@@ -107,7 +107,7 @@ export function ProfileView({ onClose }: ProfileViewProps) {
               C
             </KeyBox>
             <span className={selectedSubPage === "island" ? "font-normal text-black" : "text-gray-600"}>
-              Chimes
+              chimes
             </span>
           </button>
         </div>

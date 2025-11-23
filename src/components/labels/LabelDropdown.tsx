@@ -161,7 +161,7 @@ export function LabelDropdown({
           }`}
           style={{ width: '126px', backgroundColor: 'transparent' }}
         >
-          <span className="truncate inline-block max-w-full text-left">No Label</span>
+          <span className="truncate inline-block max-w-full text-left">no label</span>
         </div>
       </div>
 
@@ -217,7 +217,7 @@ export function LabelDropdown({
             style={{ width: '126px' }}
             onClick={onAddNew}
           >
-            + New Label
+            + new label
           </div>
         </div>
       )}

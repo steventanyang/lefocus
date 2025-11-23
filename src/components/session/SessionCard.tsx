@@ -93,9 +93,7 @@ export const SessionCard = forwardRef<HTMLButtonElement, SessionCardProps>(
         {currentLabel ? (
           <LabelTag label={currentLabel} size="small" selected={false} />
         ) : (
-          <div className="flex items-center justify-center border border-gray-300 px-2 py-1 text-xs text-gray-400 font-medium bg-transparent">
-            No Label
-          </div>
+          <LabelTag label={null} size="small" selected={false} showEmptyFrame={false} />
         )}
         
         <span
@@ -168,8 +166,8 @@ export const SessionCard = forwardRef<HTMLButtonElement, SessionCardProps>(
       {/* Top apps list */}
       {session.topApps.length > 0 ? (
         <div className="flex flex-col gap-2">
-          <span className="text-xs font-light uppercase tracking-wide">
-            Top Apps
+          <span className="text-xs font-light tracking-wide">
+            top apps
           </span>
           <div className="flex items-center gap-3">
             {session.topApps.slice(0, 3).map((app) => {

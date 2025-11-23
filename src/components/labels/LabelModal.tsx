@@ -67,7 +67,7 @@ export function LabelModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full text-3xl font-semibold focus:outline-none placeholder-gray-400"
-              placeholder="New label name"
+              placeholder="new label name"
               maxLength={50}
             />
             {/* Error banner with fixed height */}
@@ -86,7 +86,7 @@ export function LabelModal({
                   onClick={onClose}
                   className="w-full bg-transparent border border-black text-black px-6 py-3 text-base font-semibold cursor-pointer hover:bg-black hover:text-white hover:transition-none transition-all duration-200"
                 >
-                  Cancel
+                  cancel
                 </button>
               </div>
               <div className="flex-1 flex flex-col items-start gap-2">
@@ -95,7 +95,7 @@ export function LabelModal({
                   onClick={handleNameSubmit}
                   className="w-full bg-transparent border border-black text-black px-6 py-3 text-base font-semibold cursor-pointer hover:bg-black hover:text-white hover:transition-none transition-all duration-200"
                 >
-                  Next
+                  next
                 </button>
               </div>
             </div>
@@ -140,7 +140,7 @@ export function LabelModal({
                   onClick={() => setStep("name")}
                   className="w-full bg-transparent border border-black text-black px-6 py-3 text-base font-semibold cursor-pointer hover:bg-black hover:text-white hover:transition-none transition-all duration-200"
                 >
-                  Back
+                  back
                 </button>
               </div>
               <div className="flex-1 flex flex-col items-start gap-2">
@@ -150,7 +150,7 @@ export function LabelModal({
                   disabled={isSubmitting}
                   className="w-full bg-transparent border border-black text-black px-6 py-3 text-base font-semibold cursor-pointer hover:bg-black hover:text-white hover:transition-none transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-black"
                 >
-                  {isSubmitting ? "Saving..." : "Save"}
+                  {isSubmitting ? "saving..." : "save"}
                 </button>
               </div>
             </div>

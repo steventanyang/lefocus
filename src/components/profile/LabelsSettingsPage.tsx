@@ -107,7 +107,7 @@ export function LabelsSettingsPage() {
   }, [labels, selectedIndex, deleteConfirmId, isModalOpen, deleteLabelMutation]);
 
   if (isLoading) {
-    return <div className="text-gray-500">Loading labels...</div>;
+    return <div className="text-gray-500">loading labels...</div>;
   }
 
   // Helper to convert hex to rgba for light backgrounds
@@ -134,7 +134,7 @@ export function LabelsSettingsPage() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-normal">Labels</h2>
+          <h2 className="text-lg font-normal">labels</h2>
           <span className="text-sm text-gray-500">
             {labels.length} / 8
           </span>
@@ -150,7 +150,7 @@ export function LabelsSettingsPage() {
             className="flex items-center gap-2 text-gray-600 hover:text-black disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <KeyBox hovered={false}>N</KeyBox>
-            <span className="text-sm">New Label</span>
+            <span className="text-sm">new label</span>
           </button>
         )}
       </div>
@@ -170,7 +170,7 @@ export function LabelsSettingsPage() {
                   setIsModalOpen(true);
                 }}
               >
-                + New Label
+                + new label
               </div>
             </div>
           </div>
@@ -238,7 +238,7 @@ export function LabelsSettingsPage() {
                             className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:text-black"
                           >
                             <KeyBox>E</KeyBox>
-                            <span>Edit</span>
+                            <span>edit</span>
                           </button>
                           <button
                             onClick={(e) => {
@@ -250,7 +250,7 @@ export function LabelsSettingsPage() {
                             className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:text-red-600"
                           >
                             <KeyBox>D</KeyBox>
-                            <span>Delete</span>
+                            <span>delete</span>
                           </button>
                         </>
                       )}

@@ -135,7 +135,7 @@ export function ChimeSettingsPage() {
   }, [settings, userSelectedIndex, options, previewSound, previewState, updateSettings, setError, isLoading]);
 
   if (isLoading && !settings) {
-    return <div className="text-gray-500">Loading completion chime settings...</div>;
+    return <div className="text-gray-500">loading completion chime settings...</div>;
   }
 
   const disabled = !settings || isLoading;
@@ -144,7 +144,7 @@ export function ChimeSettingsPage() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-lg font-normal">Completion chimes</h2>
+          <h2 className="text-lg font-normal">completion chimes</h2>
         </div>
         <button
           disabled={disabled || isSaving}
@@ -157,7 +157,7 @@ export function ChimeSettingsPage() {
           className={`flex items-center gap-2 text-gray-600 hover:text-black disabled:opacity-30 disabled:cursor-not-allowed`}
         >
           <KeyBox hovered={false} selected={settings?.enabled ?? false}>T</KeyBox>
-          <span className="text-sm">{settings?.enabled ? "Turn off" : "Turn on"}</span>
+          <span className="text-sm">{settings?.enabled ? "turn off" : "turn on"}</span>
         </button>
       </div>
 
@@ -218,7 +218,7 @@ export function ChimeSettingsPage() {
                       className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:text-black disabled:opacity-50"
                     >
                       <KeyBox selected={previewState === "success" && isSelected}>P</KeyBox>
-                      <span>{previewState === "playing" && isSelected ? "Playing..." : "Preview"}</span>
+                      <span>{previewState === "playing" && isSelected ? "playing..." : "preview"}</span>
                     </button>
                   </div>
                 )}
@@ -237,7 +237,7 @@ export function ChimeSettingsPage() {
             }}
             className="underline text-red-700/80"
           >
-            Dismiss
+            dismiss
           </button>
         </div>
       )}

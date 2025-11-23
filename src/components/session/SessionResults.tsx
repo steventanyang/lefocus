@@ -160,7 +160,7 @@ export function SessionResults({
         onClick={() => setIsLabelSelectionModalOpen(true)}
         className="group"
       >
-        <LabelTag label={currentLabel} />
+        <LabelTag label={currentLabel} showEmptyFrame />
       </button>
     ),
   };

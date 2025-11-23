@@ -143,14 +143,14 @@ export function StatsStats({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-normal tracking-wide text-gray-800">
-              Top Applications
+              top applications
             </h3>
             <button
               onClick={onToggleShowAll}
               className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-1"
             >
               <KeyBox selected={showAllApps} hovered={false}>{showAllApps ? "V" : "V"}</KeyBox>
-              {showAllApps ? "View Top Apps" : "View All"}
+              {showAllApps ? "view top apps" : "view all"}
             </button>
           </div>
 
@@ -162,7 +162,7 @@ export function StatsStats({
             >
               <KeyBox selected={viewMode === "list"} hovered={false}>L</KeyBox>
               <span className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors">
-                List
+                list
               </span>
             </button>
             <button
@@ -171,7 +171,7 @@ export function StatsStats({
             >
               <KeyBox selected={viewMode === "treemap"} hovered={false}>T</KeyBox>
               <span className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors">
-                Treemap
+                treemap
               </span>
             </button>
           </div>

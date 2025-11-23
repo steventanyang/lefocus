@@ -274,23 +274,30 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
   };
 
   // Label filter selector (used in header)
+  const labelDisplay = currentLabel ? (
+    <LabelTag
+      label={currentLabel}
+      size="medium"
+      selected={true}
+      maxWidth="126px"
+      showEmptyFrame
+    />
+  ) : (
+    <span className="text-base font-light text-gray-600">all labels</span>
+  );
+
   const labelFilterSelector = (
     <button 
       onClick={() => setIsLabelModalOpen(true)}
-      className="flex items-center gap-1 group"
+      className="flex items-center gap-1.5 group"
     >
-      <KeyBox selected={isLabelModalOpen} hovered={false}>⌘</KeyBox>
-      <KeyBox selected={isLabelModalOpen} hovered={false}>L</KeyBox>
-      {selectedLabelId === null ? (
-         <div
-          className="flex items-center justify-center border border-gray-300 px-3 py-1 text-sm text-gray-400 font-medium"
-          style={{ width: '126px', backgroundColor: 'transparent' }}
-        >
-          All Labels
-        </div>
-      ) : (
-        <LabelTag label={currentLabel} size="medium" selected={true} />
-      )}
+      <div className="flex items-center gap-1">
+        <KeyBox selected={isLabelModalOpen} hovered={false}>⌘</KeyBox>
+        <KeyBox selected={isLabelModalOpen} hovered={false}>L</KeyBox>
+      </div>
+      <div className="flex items-center justify-start min-w-[126px] ml-1">
+        {labelDisplay}
+      </div>
     </button>
   );
 
@@ -304,7 +311,7 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
         sessionId={selectedSession.id}
         session={selectedSession}
         onBack={handleBack}
-        backButtonText="View Activities"
+        backButtonText="view activities"
       />
     );
   }
@@ -323,19 +330,19 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
         }}
         onAddNew={() => {}} // Not needed here as we hide the add new button
         showAddNew={false}
-        noLabelText="All Labels"
+        noLabelText="all labels"
       />
 
       {/* Header */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-light tracking-wide">Activities</h1>
+          <h1 className="text-2xl font-light tracking-wide">activities</h1>
           <button
             className="text-base font-light text-gray-600 hover:opacity-70 transition-opacity flex items-center gap-2"
             onClick={() => onNavigate("timer")}
           >
             <KeyboardShortcut keyLetter="t" />
-            <span>View Timer</span>
+            <span>view timer</span>
           </button>
         </div>
         <div className="flex items-center justify-between">
@@ -349,14 +356,14 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
                 className="text-base font-light text-gray-600 flex items-center gap-2"
               >
                 <KeyBox selected={viewMode === "list"}>L</KeyBox>
-                <span>List</span>
+                <span>list</span>
               </button>
               <button
                 onClick={() => setViewMode("block")}
                 className="text-base font-light text-gray-600 flex items-center gap-2"
               >
                 <KeyBox selected={viewMode === "block"}>B</KeyBox>
-                <span>Block</span>
+                <span>block</span>
               </button>
             </div>
           </div>
@@ -366,14 +373,14 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
       {/* Loading state */}
       {loading && sessions.length === 0 && (
         <div className="text-base font-light text-center p-8">
-          Loading sessions...
+          loading sessions...
         </div>
       )}
 
       {/* Error state */}
       {error && (
         <div className="text-sm font-normal text-center p-4 border border-black bg-transparent max-w-full">
-          {error instanceof Error ? error.message : "Failed to load sessions"}
+          {error instanceof Error ? error.message : "failed to load sessions"}
         </div>
       )}
 
@@ -381,28 +388,28 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
       {!loading && !error && (
         (filteredSessions.length === 0 && sessions.length > 0 ? (
           <div className="text-center p-12 px-8 flex flex-col gap-4 border border-black">
-            <p className="text-base font-normal">No sessions with this label</p>
+            <p className="text-base font-normal">no sessions with this label</p>
             <p className="text-sm font-light text-gray-600">
-              Try a different label or view all sessions
+              try a different label or view all sessions
             </p>
             <button
               className={buttonPrimaryClass}
               onClick={() => setSelectedLabelId(null)}
             >
-              View All Sessions
+              view all sessions
             </button>
           </div>
         ) : sessions.length === 0 ? (
           <div className="text-center p-12 px-8 flex flex-col gap-4 border border-black">
-            <p className="text-base font-normal">No past sessions yet</p>
+            <p className="text-base font-normal">no past sessions yet</p>
             <p className="text-sm font-light text-gray-600">
-              Complete a focus session to see it here
+              complete a focus session to see it here
             </p>
             <button
               className={buttonPrimaryClass}
               onClick={() => onNavigate("timer")}
             >
-              Start New Session
+              start new session
             </button>
           </div>
         ) : null)
@@ -455,7 +462,7 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
               {/* Loading indicator for next page */}
               {isFetchingNextPage && (
                 <div className="text-base font-light text-center p-4">
-                  Loading more sessions...
+                  loading more sessions...
                 </div>
               )}
             </>

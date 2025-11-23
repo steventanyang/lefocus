@@ -118,7 +118,7 @@ export function FontsSettingsPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-normal">Fonts</h2>
+        <h2 className="text-lg font-normal">fonts</h2>
       </div>
 
       {/* Fonts list - single column matching labels page */}

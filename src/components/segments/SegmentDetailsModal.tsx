@@ -118,9 +118,9 @@ export function SegmentDetailsModal({
             <button
               className="bg-transparent border-none text-base font-normal cursor-pointer p-0 transition-opacity duration-200 hover:opacity-70"
               onClick={onClose}
-              aria-label="Close"
+              aria-label="close"
             >
-              Close
+              close
             </button>
           </div>
         </div>
@@ -130,12 +130,12 @@ export function SegmentDetailsModal({
           {/* Window List with Bar Charts */}
           {windowTitlesLoading ? (
             <div className="text-base font-light text-center p-8">
-              Loading window titles...
+              loading window titles...
             </div>
           ) : windowTitlesWithPercentages.length > 0 ? (
             <div className="flex flex-col gap-4">
               <h3 className="text-sm font-normal tracking-wide text-gray-800">
-                Windows
+                windows
               </h3>
               <div className="flex flex-col gap-3">
                 {windowTitlesWithPercentages.map((wt, index) => (
@@ -192,7 +192,7 @@ export function SegmentDetailsModal({
             </div>
           ) : (
             <div className="text-base font-light text-center p-8">
-              No window titles found
+              no window titles found
             </div>
           )}
 
@@ -200,11 +200,11 @@ export function SegmentDetailsModal({
           {deduplicatedInterruptions.length > 0 && (
             <div className="flex flex-col gap-4">
               <h3 className="text-sm font-normal tracking-wide text-gray-800">
-                Interruptions
+                interruptions
               </h3>
               {interruptionsLoading ? (
                 <div className="text-base font-light text-center p-4">
-                  Loading interruptions...
+                  loading interruptions...
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">

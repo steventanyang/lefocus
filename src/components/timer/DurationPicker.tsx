@@ -27,7 +27,7 @@ export function DurationPicker({ onSelect, selectedDuration }: DurationPickerPro
             className={
               isSelected
                 ? "bg-black text-white px-6 py-3 text-base font-semibold cursor-pointer transition-all duration-200"
-                : "bg-transparent border border-transparent text-black px-6 py-3 text-base font-normal cursor-pointer transition-all duration-200 hover:border-black"
+                : "bg-transparent border border-transparent text-black px-6 py-3 text-base font-semibold cursor-pointer transition-all duration-200 hover:border-black"
             }
           >
             {preset.label}

@@ -5,25 +5,52 @@ interface LabelTagProps {
   size?: "small" | "medium";
   selected?: boolean;
   maxWidth?: string;
+  showEmptyFrame?: boolean;
+  emptyText?: string;
 }
 
-export function LabelTag({ label, size = "medium", selected = true, maxWidth }: LabelTagProps) {
+export function LabelTag({
+  label,
+  size = "medium",
+  selected = true,
+  maxWidth,
+  showEmptyFrame = true,
+  emptyText = "no label",
+}: LabelTagProps) {
   const sizeClasses = {
-    small: "px-2 py-1 text-xs",
-    medium: "px-3 py-1 text-sm",
-  };
+    small: "px-2 py-1 text-xs leading-tight",
+    medium: "px-3 py-1 text-sm leading-tight",
+  } as const;
 
   if (!label) {
-    // No label - grey border with transparent background
+    const baseContent = (
+      <span className={`${maxWidth ? 'truncate inline-block max-w-full text-left' : ''} text-black font-light`}>
+        {emptyText}
+      </span>
+    );
+
+    const content = (
+      <div
+        className={`flex items-center justify-center ${maxWidth ? 'min-w-0' : ''} ${sizeClasses[size]}`}
+        style={maxWidth ? { maxWidth } : undefined}
+      >
+        {baseContent}
+      </div>
+    );
+
+    if (!showEmptyFrame) {
+      return content;
+    }
+
     return (
       <div
-        className={`flex items-center justify-center ${maxWidth ? 'min-w-0' : ''} border border-gray-300 ${sizeClasses[size]} text-gray-400 font-medium`}
+        className={
+          `flex items-center justify-center ${maxWidth ? 'min-w-0' : ''} border border-gray-300 ${sizeClasses[size]}`
+        }
         style={{ backgroundColor: 'transparent', ...(maxWidth && { maxWidth }) }}
       >
-        <span className={maxWidth ? 'truncate inline-block max-w-full text-left' : ''}>
-          No Label
-        </span>
-        </div>
+        {baseContent}
+      </div>
     );
   }
 

@@ -82,9 +82,13 @@ export const BlockSessionCard = forwardRef<HTMLButtonElement, BlockSessionCardPr
         {currentLabel ? (
           <LabelTag label={currentLabel} size="small" selected={false} maxWidth="80px" />
         ) : (
-          <div className="flex items-center justify-center border border-gray-300 px-2 py-1 text-xs text-gray-400 font-medium bg-transparent max-w-[80px] truncate">
-            No Label
-          </div>
+          <LabelTag
+            label={null}
+            size="small"
+            selected={false}
+            maxWidth="80px"
+            showEmptyFrame={false}
+          />
         )}
         
         {/* Square status indicator */}

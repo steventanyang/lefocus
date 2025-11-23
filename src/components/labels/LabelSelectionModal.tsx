@@ -24,7 +24,7 @@ export function LabelSelectionModal({
   onAddNew,
   showAddNew = true,
   showNoLabel = true,
-  noLabelText = "No Label",
+  noLabelText = "no label",
 }: LabelSelectionModalProps) {
   // Handle keyboard shortcuts
   useEffect(() => {
@@ -107,7 +107,7 @@ export function LabelSelectionModal({
           className="absolute top-4 right-4 flex items-center gap-2 text-sm text-gray-600 hover:text-black"
         >
           <KeyBox hovered={false} className="!w-12">esc</KeyBox>
-          <span>Close</span>
+          <span>close</span>
         </button>
 
         {/* Labels list - centered */}
@@ -171,7 +171,7 @@ export function LabelSelectionModal({
                 className="text-sm text-gray-500 hover:text-gray-700 flex items-center justify-center"
                 style={{ width: '126px' }}
               >
-                + New Label
+                + new label
               </button>
             </div>
           )}
