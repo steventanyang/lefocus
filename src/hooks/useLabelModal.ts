@@ -2,24 +2,24 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useCreateLabelMutation, useUpdateLabelMutation, useUpdateSessionLabelMutation } from "@/hooks/queries";
 import type { Label } from "@/types/label";
 
-// 4x4 grid of preset colors (16 colors) - muted, darker, grey-toned palette
+// 4x4 grid of preset colors (16 colors) - balanced warm row plus two rows of cool blues/greens
 export const PRESET_COLORS = [
-  "#6B5B5F", // dusty mauve
-  "#7A5F5B", // terracotta grey
-  "#8A6B5F", // warm clay
-  "#9E8A73", // sandy taupe
-  "#5F6B5F", // sage grey
-  "#5B7A6B", // forest grey
-  "#6B8A7A", // muted jade
-  "#5F8A8A", // teal grey
-  "#5F7A8A", // slate blue
-  "#5B6B8A", // periwinkle grey
-  "#6B5F8A", // dusty purple
-  "#7A5F8A", // mauve grey
-  "#8A5F7A", // plum grey
-  "#8A5F6B", // rose grey
-  "#7A6B6B", // warm stone
-  "#6B6B7A", // cool stone
+  "#592C34", // deep cranberry
+  "#6B3145", // berry wine
+  "#763A5E", // muted magenta
+  "#81446F", // dusky plum
+  "#8F4D36", // ember clay
+  "#9C5A33", // burnt copper
+  "#B0743D", // amber ochre
+  "#BFA04A", // muted goldenrod
+  "#4E6A4A", // moss green
+  "#4A7A5F", // pine sage
+  "#3F7F70", // deep teal
+  "#3B7A82", // teal blue
+  "#366F92", // steel blue
+  "#3C639C", // twilight blue
+  "#4458A0", // muted indigo
+  "#4F5A90", // dusk periwinkle
 ];
 
 type Step = "name" | "color";

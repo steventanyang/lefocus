@@ -30,22 +30,29 @@ function formatDateTime(isoString: string): string {
   return timeString;
 }
 
-function getStatusBadge(status: string): { icon: string; className: string } {
+function getStatusBadge(status: string): { icon: React.ReactNode; className: string; wrapperClassName: string } {
   switch (status) {
     case "completed":
       return {
-        icon: "✓",
-        className: "bg-green-100 text-green-800 border-green-500",
+        icon: (
+          <svg width="10" height="8" viewBox="0 0 12 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M1 5L4.5 8.5L11 1" stroke="currentColor" strokeWidth="2" strokeLinecap="square" />
+          </svg>
+        ),
+        wrapperClassName: "bg-green-100 text-green-800 border-green-500",
+        className: "",
       };
     case "interrupted":
       return {
         icon: "✕",
-        className: "bg-amber-100 text-amber-800 border-amber-300",
+        wrapperClassName: "bg-amber-100 text-amber-800 border-amber-300",
+        className: "",
       };
     default:
       return {
         icon: "",
-        className: "bg-gray-100 text-gray-800 border-gray-300",
+        wrapperClassName: "bg-gray-100 text-gray-800 border-gray-300",
+        className: "",
       };
   }
 }
@@ -80,16 +87,20 @@ export const BlockSessionCard = forwardRef<HTMLButtonElement, BlockSessionCardPr
       <div className="absolute top-3 right-3 flex items-center gap-2">
         {/* Label tag on the left of status */}
         {currentLabel ? (
-          <LabelTag label={currentLabel} size="small" selected={false} maxWidth="80px" />
+          <LabelTag label={currentLabel} size="small" selected={true} maxWidth="80px" />
         ) : (
-          <div className="flex items-center justify-center border border-gray-300 px-2 py-1 text-xs text-gray-400 font-medium bg-transparent max-w-[80px] truncate">
-            No Label
-          </div>
+          <LabelTag
+            label={null}
+            size="small"
+            selected={false}
+            maxWidth="80px"
+            showEmptyFrame={false}
+          />
         )}
         
         {/* Square status indicator */}
         <div
-          className={`w-6 h-6 border rounded ${statusBadge.className} flex items-center justify-center text-xs font-bold`}
+          className={`w-6 h-6 border ${statusBadge.wrapperClassName} flex items-center justify-center text-xs font-bold`}
         >
           {statusBadge.icon}
         </div>

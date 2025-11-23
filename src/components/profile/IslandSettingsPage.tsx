@@ -3,7 +3,7 @@ import { useIslandSoundSettings } from "@/hooks/useIslandSoundSettings";
 import { KeyBox } from "@/components/ui/KeyBox";
 import { isUserTyping } from "@/utils/keyboardUtils";
 
-export function IslandSettingsPage() {
+export function ChimeSettingsPage() {
   const {
     settings,
     isLoading,
@@ -135,7 +135,7 @@ export function IslandSettingsPage() {
   }, [settings, userSelectedIndex, options, previewSound, previewState, updateSettings, setError, isLoading]);
 
   if (isLoading && !settings) {
-    return <div className="text-gray-500">Loading completion chime settings...</div>;
+    return <div className="text-gray-500">loading completion chime settings...</div>;
   }
 
   const disabled = !settings || isLoading;
@@ -144,7 +144,7 @@ export function IslandSettingsPage() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-lg font-semibold">Completion chimes</h2>
+          <h2 className="text-base font-normal tracking-wide text-gray-800">completion chimes</h2>
         </div>
         <button
           disabled={disabled || isSaving}
@@ -154,10 +154,10 @@ export function IslandSettingsPage() {
               // error handled in hook
             });
           }}
-          className={`flex items-center gap-2 text-gray-600 hover:text-black disabled:opacity-30 disabled:cursor-not-allowed`}
+          className={`flex items-center gap-2 text-base font-light text-gray-600 hover:text-black disabled:opacity-30 disabled:cursor-not-allowed group`}
         >
           <KeyBox hovered={false} selected={settings?.enabled ?? false}>T</KeyBox>
-          <span className="text-sm">{settings?.enabled ? "Turn off" : "Turn on"}</span>
+          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">{settings?.enabled ? "turn off" : "turn on"}</span>
         </button>
       </div>
 
@@ -187,7 +187,7 @@ export function IslandSettingsPage() {
                 }}
               >
                 <div
-                  className={`border px-3 py-1 text-sm font-medium transition-opacity flex items-center justify-center min-w-0 ${
+                  className={`border px-3 py-1 text-sm font-normal transition-opacity flex items-center justify-center min-w-0 ${
                     isSelected || isCurrent ? "bg-black text-white border-black" : "bg-white text-gray-700 border-gray-300 opacity-60"
                   } hover:opacity-100 hover:bg-black hover:text-white hover:border-black`}
                   style={{ width: "200px" }}
@@ -197,7 +197,7 @@ export function IslandSettingsPage() {
 
                 {/* Actions - only show when selected */}
                 {isSelected && (
-                  <div className="flex items-center justify-center px-2 gap-2">
+                  <div className="flex items-center justify-start pl-4 gap-2">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -215,10 +215,10 @@ export function IslandSettingsPage() {
                         }
                       }}
                       disabled={previewState === "playing"}
-                      className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:text-black disabled:opacity-50"
+                      className="flex items-center gap-2 px-2 py-1 text-sm font-light text-gray-600 hover:text-black disabled:opacity-50"
                     >
                       <KeyBox selected={previewState === "success" && isSelected}>P</KeyBox>
-                      <span>{previewState === "playing" && isSelected ? "Playing..." : "Preview"}</span>
+                      <span>{previewState === "playing" && isSelected ? "playing..." : "preview"}</span>
                     </button>
                   </div>
                 )}
@@ -237,7 +237,7 @@ export function IslandSettingsPage() {
             }}
             className="underline text-red-700/80"
           >
-            Dismiss
+            dismiss
           </button>
         </div>
       )}

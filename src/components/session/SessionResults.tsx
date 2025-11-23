@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Segment } from "@/types/segment";
 import { useSegments, useUpdateSessionLabelMutation } from "@/hooks/queries";
 import { calculateSegmentStats } from "@/hooks/useSegments";
@@ -34,7 +35,7 @@ export function SessionResults({
   sessionId,
   session,
   onBack,
-  backButtonText = "View Timer",
+  backButtonText = "view timer",
 }: SessionResultsProps) {
   const { data: segments = [], isLoading: loading, error } = useSegments(sessionId);
   const updateSessionLabelMutation = useUpdateSessionLabelMutation();
@@ -53,6 +54,8 @@ export function SessionResults({
   }, [session?.labelId]);
 
   // Handle keyboard shortcuts for navigation and labels
+  const showEmptyState = !loading && !error && segments.length === 0;
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Ignore shortcuts when user is typing or any modal is open
@@ -62,6 +65,16 @@ export function SessionResults({
 
       const isModifierPressed = isMac() ? event.metaKey : event.ctrlKey;
 
+      if (showEmptyState) {
+        const key = event.key.toLowerCase();
+        if (!isModifierPressed && (key === "enter" || key === "return")) {
+          event.preventDefault();
+          event.stopPropagation();
+          onBack();
+          return;
+        }
+      }
+
       // L key: Open label selection modal
       if ((event.key === "l" || event.key === "L") && !isModifierPressed) {
         event.preventDefault();
@@ -69,7 +82,7 @@ export function SessionResults({
         return;
       }
 
-      if (backButtonText === "View Activities") {
+      if (backButtonText === "view activities") {
         // Cmd+A (Mac) or Ctrl+A (non-Mac): Close the session (go back to activities list)
         if (event.key === "a" && isModifierPressed) {
           event.preventDefault();
@@ -77,7 +90,7 @@ export function SessionResults({
           onBack();
           return;
         }
-      } else if (backButtonText === "View Timer") {
+      } else if (backButtonText === "view timer") {
         // Cmd+T (Mac) or Ctrl+T (non-Mac): Close the session (go back to timer)
         if (event.key === "t" && isModifierPressed) {
           event.preventDefault();
@@ -93,7 +106,7 @@ export function SessionResults({
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [onBack, backButtonText, isLabelSelectionModalOpen, isLabelModalOpen]);
+  }, [onBack, backButtonText, isLabelSelectionModalOpen, isLabelModalOpen, showEmptyState]);
 
   const stats = calculateSegmentStats(segments, 5); // Limit to top 5 apps for session view
   const sessionDurationSecs =
@@ -128,7 +141,7 @@ export function SessionResults({
   }
 
   // Determine which shortcut to show based on backButtonText
-  const shortcutKey = backButtonText === "View Activities" ? "a" : "t";
+  const shortcutKey = backButtonText === "view activities" ? "a" : "t";
   
   const backButton = (
     <button
@@ -145,9 +158,9 @@ export function SessionResults({
     labelTag: (
       <button
         onClick={() => setIsLabelSelectionModalOpen(true)}
-        className="group"
+        className="group ml-1.5 mr-11"
       >
-        <LabelTag label={currentLabel} />
+        <LabelTag label={currentLabel} showEmptyFrame />
       </button>
     ),
   };
@@ -192,16 +205,22 @@ export function SessionResults({
         }}
       />
 
-      {segments.length === 0 ? (
+      {showEmptyState ? (
         <div className="text-center p-12 px-8 flex flex-col gap-4">
           <p>No segments were generated for this session.</p>
           <p className="text-sm font-light text-gray-600">
             This may happen if the session was too short or no context readings
             were captured.
           </p>
-          <button className={buttonPrimaryClass} onClick={onBack}>
-            Start New Session
-          </button>
+          <div className="fixed bottom-8 right-8 flex flex-col items-start gap-2">
+            <KeyBox className="w-16 h-6 px-2 py-1">return</KeyBox>
+            <button
+              onClick={onBack}
+              className="bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer w-[160px] hover:bg-black hover:text-white"
+            >
+              Go Back
+            </button>
+          </div>
         </div>
       ) : (
         <SegmentStats
@@ -220,6 +239,20 @@ export function SessionResults({
           onClose={() => setSelectedSegment(null)}
         />
       )}
+
+      {showEmptyState && typeof document !== "undefined" &&
+        createPortal(
+          <div className="fixed bottom-8 right-8 flex flex-col items-start gap-2 z-10">
+            <KeyBox className="w-16 h-6 px-2 py-1">return</KeyBox>
+            <button
+              onClick={onBack}
+              className="bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer w-[160px] hover:bg-black hover:text-white"
+            >
+              Go Back
+            </button>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

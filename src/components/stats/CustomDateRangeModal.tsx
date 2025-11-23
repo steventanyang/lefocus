@@ -25,12 +25,12 @@ export function CustomDateRangeModal({
     setCustomDateError("");
     
     if (!validateCustomDate(customStartDate)) {
-      setCustomDateError("Invalid start date format");
+      setCustomDateError("invalid start date format");
       return;
     }
     
     if (!validateCustomDate(customEndDate)) {
-      setCustomDateError("Invalid end date format");
+      setCustomDateError("invalid end date format");
       return;
     }
 
@@ -38,13 +38,13 @@ export function CustomDateRangeModal({
     const end = parseCustomDate(customEndDate);
     
     if (!start || !end) {
-      setCustomDateError("Invalid date format");
+      setCustomDateError("invalid date format");
       return;
     }
 
     // Check if end date is before start date
     if (end < start) {
-      setCustomDateError("End date must be after start date");
+      setCustomDateError("end date must be after start date");
       return;
     }
 
@@ -65,7 +65,7 @@ export function CustomDateRangeModal({
       setCustomDateError("");
       setCustomDateStep("endDate");
     } else {
-      setCustomDateError("Invalid date format");
+      setCustomDateError("invalid date format");
     }
   };
 
@@ -81,7 +81,7 @@ export function CustomDateRangeModal({
     // Remove any non-digit characters
     let digits = value.replace(/\D/g, '');
     
-    // Limit to 8 digits (DDMMYYYY)
+    // Limit to 8 digits (MMDDYYYY)
     if (digits.length > 8) {
       digits = digits.slice(0, 8);
     }
@@ -194,7 +194,7 @@ export function CustomDateRangeModal({
     const day = String(today.getDate()).padStart(2, '0');
     const month = String(today.getMonth() + 1).padStart(2, '0'); // JavaScript months are 0-indexed
     const year = today.getFullYear();
-    const formattedDate = `${day}/${month}/${year}`;
+    const formattedDate = `${month}/${day}/${year}`;
     setCustomEndDate(formattedDate);
     setCustomDateError("");
   };
@@ -215,10 +215,10 @@ export function CustomDateRangeModal({
         {customDateStep === "startDate" && (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-medium text-gray-700">Start Date</div>
+              <div className="text-sm font-medium text-gray-700">start date</div>
               <div className="flex items-center gap-2 text-sm font-light text-gray-600 opacity-0 pointer-events-none">
                 <KeyBox className="w-12 h-6 px-2 py-1" hovered={false}>tab</KeyBox>
-                <span>Today</span>
+                <span>today</span>
               </div>
             </div>
             <input
@@ -227,7 +227,7 @@ export function CustomDateRangeModal({
               value={customStartDate}
               onChange={handleStartDateChange}
               onKeyDown={handleStartDateKeyDown}
-              placeholder="DD/MM/YYYY"
+              placeholder="MM/DD/YYYY"
               className="w-full text-3xl font-semibold focus:outline-none placeholder-gray-400"
               maxLength={10}
             />
@@ -247,7 +247,7 @@ export function CustomDateRangeModal({
                   onClick={handleCustomDateCancel}
                   className="w-full bg-transparent border border-black text-black px-6 py-3 text-base font-semibold cursor-pointer hover:bg-black hover:text-white hover:transition-none transition-all duration-200"
                 >
-                  Cancel
+                  cancel
                 </button>
               </div>
               <div className="flex-1 flex flex-col items-start gap-2">
@@ -256,7 +256,7 @@ export function CustomDateRangeModal({
                   onClick={handleStartDateSubmit}
                   className="w-full bg-transparent border border-black text-black px-6 py-3 text-base font-semibold cursor-pointer hover:bg-black hover:text-white hover:transition-none transition-all duration-200"
                 >
-                  Next
+                  next
                 </button>
               </div>
             </div>
@@ -267,13 +267,13 @@ export function CustomDateRangeModal({
         {customDateStep === "endDate" && (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <div className="text-sm font-medium text-gray-700">End Date</div>
+              <div className="text-sm font-medium text-gray-700">end date</div>
               <button
                 onClick={handleTodaysDate}
                 className="flex items-center gap-2 text-sm font-light text-gray-600 hover:text-gray-800 transition-colors"
               >
                 <KeyBox className="w-12 h-6 px-2 py-1" hovered={false}>tab</KeyBox>
-                <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Today</span>
+                <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">today</span>
               </button>
             </div>
             <input
@@ -282,7 +282,7 @@ export function CustomDateRangeModal({
               value={customEndDate}
               onChange={handleEndDateChange}
               onKeyDown={handleEndDateKeyDown}
-              placeholder="DD/MM/YYYY"
+              placeholder="MM/DD/YYYY"
               className="w-full text-3xl font-semibold focus:outline-none placeholder-gray-400"
               maxLength={10}
             />
@@ -305,7 +305,7 @@ export function CustomDateRangeModal({
                   }}
                   className="w-full bg-transparent border border-black text-black px-6 py-3 text-base font-semibold cursor-pointer hover:bg-black hover:text-white hover:transition-none transition-all duration-200"
                 >
-                  Back
+                  back
                 </button>
               </div>
               <div className="flex-1 flex flex-col items-start gap-2">
@@ -315,7 +315,7 @@ export function CustomDateRangeModal({
                   disabled={!validateCustomDate(customStartDate) || !validateCustomDate(customEndDate)}
                   className="w-full bg-transparent border border-black text-black px-6 py-3 text-base font-semibold cursor-pointer hover:bg-black hover:text-white hover:transition-none transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-black"
                 >
-                  Save
+                  save
                 </button>
               </div>
             </div>

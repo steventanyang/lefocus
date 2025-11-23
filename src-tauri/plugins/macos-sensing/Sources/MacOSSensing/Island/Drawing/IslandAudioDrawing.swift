@@ -198,22 +198,29 @@ extension IslandView {
         ])
         let emojiWidth = emojiString.size().width
         let totalWidth = emojiWidth
-        let spacing: CGFloat = 3.0
-        let pillWidth = (totalWidth - spacing * 3.0) / 4.0
-        let pillHeight: CGFloat = 12.0
+        let baseSpacing: CGFloat = 3.0
+        let widthScale: CGFloat = 1.2
+        let heightScale: CGFloat = 1.3
+        let spacing = baseSpacing * widthScale
+        let basePillWidth = (totalWidth - baseSpacing * 3.0) / 4.0
+        let pillWidth = basePillWidth * widthScale
+        let pillHeight: CGFloat = 12.0 * heightScale
         // Add padding to account for notch top corner curve (10px radius)
         let startX = customStartX ?? 22.0
         let centerY = customCenterY ?? bounds.midY
 
+        let hasPalette = waveformGradient != nil
+        let isLiveWaveform = hasPalette && isAudioPlaying
+        let deadDotHeight = pillWidth * 1.12
         for (index, value) in waveformBars.enumerated() {
             let height: CGFloat
-            if isAudioPlaying {
-                // Animate when playing: use actual waveform values
+            if isLiveWaveform {
+                // Animate when playing only after palette is ready
                 let normalized = min(1.0, value)
                 height = normalized * pillHeight
             } else {
-                // Flat dots when paused: minimum height (just the pill width for circular dots)
-                height = pillWidth
+                // Flat dots before palette loads or when paused
+                height = deadDotHeight
             }
 
             let rect = NSRect(
@@ -224,7 +231,10 @@ extension IslandView {
             )
             let path = NSBezierPath(roundedRect: rect, xRadius: pillWidth / 2.0, yRadius: pillWidth / 2.0)
             let alpha: CGFloat = isAudioPlaying ? 0.8 : 0.5
-            NSColor.white.withAlphaComponent(alpha).setFill()
+            let color = isLiveWaveform
+                ? waveformColor(forBar: index, totalBars: waveformBars.count, baseAlpha: alpha)
+                : deadWaveformDotColor(baseAlpha: alpha)
+            color.setFill()
             path.fill()
         }
     }
@@ -238,24 +248,31 @@ extension IslandView {
         ])
         let emojiWidth = emojiString.size().width
         let totalWidth = emojiWidth
-        let spacing: CGFloat = 3.0
-        let pillWidth = (totalWidth - spacing * 3.0) / 4.0
-        let pillHeight: CGFloat = 12.0
+        let baseSpacing: CGFloat = 3.0
+        let widthScale: CGFloat = 1.2
+        let heightScale: CGFloat = 1.3
+        let spacing = baseSpacing * widthScale
+        let basePillWidth = (totalWidth - baseSpacing * 3.0) / 4.0
+        let pillWidth = basePillWidth * widthScale
+        let pillHeight: CGFloat = 12.0 * heightScale
         
         // Position waveform at top left (around 28px from top) - stays fixed regardless of title/artist position
         let waveformCenterY = bounds.height - 28.0
         // Position waveform left edge - add padding to account for notch top corner curve (10px radius)
         let startX: CGFloat = 38.0
 
+        let hasPalette = waveformGradient != nil
+        let isLiveWaveform = hasPalette && isAudioPlaying
+        let deadDotHeight = pillWidth * 1.12
         for (index, value) in waveformBars.enumerated() {
             let height: CGFloat
-            if isAudioPlaying {
-                // Animate when playing: use actual waveform values
+            if isLiveWaveform {
+                // Animate when playing only after palette is ready
                 let normalized = min(1.0, value)
                 height = normalized * pillHeight
             } else {
-                // Flat dots when paused: minimum height (just the pill width for circular dots)
-                height = pillWidth
+                // Flat dots before palette loads or when paused
+                height = deadDotHeight
             }
 
             let rect = NSRect(
@@ -272,7 +289,11 @@ extension IslandView {
             } else {
                 baseAlpha = isAudioPlaying ? 0.7 : 0.35
             }
-            NSColor.white.withAlphaComponent(baseAlpha * expandedContentOpacity).setFill()
+            let alpha = baseAlpha * expandedContentOpacity
+            let color = isLiveWaveform
+                ? waveformColor(forBar: index, totalBars: waveformBars.count, baseAlpha: alpha)
+                : deadWaveformDotColor(baseAlpha: alpha)
+            color.setFill()
             path.fill()
         }
     }
@@ -296,7 +317,7 @@ extension IslandView {
 
         // No circle background, just SF Symbol icon
         // Scale icon larger when hovered
-        let basePointSize: CGFloat = emphasized ? 18.0 : 16.0
+        let basePointSize: CGFloat = emphasized ? 22.0 : 16.0
         let pointSize = button.isHovered ? basePointSize * 1.2 : basePointSize
 
         // Use SF Symbols with weight and size configuration
@@ -330,7 +351,7 @@ extension IslandView {
         }
 
         let buttonSize = CGSize(width: 42.0, height: 42.0)
-        let spacing: CGFloat = 18.0
+        let spacing: CGFloat = 12.0
         
         // Position based on timer state
         let bottomY: CGFloat
@@ -430,6 +451,29 @@ extension IslandView {
         let fillColor = NSColor(calibratedWhite: 0.03, alpha: baseAlpha)
         fillColor.setFill()
         rect.fill()
+    }
+
+    fileprivate func waveformColor(forBar index: Int, totalBars: Int, baseAlpha: CGFloat) -> NSColor {
+        let fallback = NSColor.white.withAlphaComponent(baseAlpha)
+        guard let gradient = waveformGradient else {
+            return fallback
+        }
+
+        let barCount = max(totalBars, 1)
+        let location: CGFloat
+        if barCount == 1 {
+            location = 0.5
+        } else {
+            location = CGFloat(index) / CGFloat(barCount - 1)
+        }
+
+        let clampedLocation = min(max(location, 0.0), 1.0)
+        let color = gradient.interpolatedColor(atLocation: clampedLocation)
+        return color.withAlphaComponent(baseAlpha)
+    }
+
+    private func deadWaveformDotColor(baseAlpha: CGFloat) -> NSColor {
+        NSColor(calibratedWhite: 0.75, alpha: baseAlpha)
     }
 
     private func formatPlaybackTime(_ seconds: TimeInterval) -> String {

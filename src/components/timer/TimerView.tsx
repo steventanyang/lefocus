@@ -273,7 +273,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     return (
       <div className="w-full max-w-md flex flex-col items-center gap-12">
         <div className="text-base font-light text-center p-8">
-          Loading timer...
+          loading timer...
         </div>
       </div>
     );
@@ -292,6 +292,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
 
   const { state, remaining_ms } = timerState;
   const isRunning = state.status === "running";
+  const showCommandControls = controlsVisible && state.status === "idle";
 
   const handleEnd = async () => {
     // For break mode, just end the timer without showing results
@@ -320,7 +321,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
               className="flex items-center gap-2 group"
             >
               <KeyBox hovered={false}>L</KeyBox>
-              <LabelTag label={selectedLabel} />
+              <LabelTag label={selectedLabel} showEmptyFrame />
             </button>
             <LabelDropdown
               isOpen={isLabelDropdownOpen}
@@ -368,58 +369,60 @@ export function TimerView({ onNavigate }: TimerViewProps) {
             className="text-base font-light text-gray-600 flex items-center gap-2 group"
           >
             <KeyBox selected={selectedMode === "countdown"} hovered={false}>T</KeyBox>
-            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Timer</span>
+            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">timer</span>
           </button>
           <button
             onClick={() => handleModeChange("stopwatch")}
             className="text-base font-light text-gray-600 flex items-center gap-2 group"
           >
             <KeyBox selected={selectedMode === "stopwatch"} hovered={false}>S</KeyBox>
-            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Stopwatch</span>
+            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">stopwatch</span>
           </button>
           <button
             onClick={() => handleModeChange("break")}
             className="text-base font-light text-gray-600 flex items-center gap-2 group"
           >
             <KeyBox selected={selectedMode === "break"} hovered={false}>B</KeyBox>
-            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Break</span>
+            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">break</span>
           </button>
         </div>
       )}
 
       {/* Navigation buttons - aligned with top of clock */}
-      <div
-        className={`fixed left-8 top-52 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
-          controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
-        }`}
-      >
+      {state.status === "idle" && (
+        <div
+          className={`fixed left-8 top-52 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
+            showCommandControls ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
+        >
         <button
           className="text-base font-light text-gray-600 flex items-center gap-2 group"
           onClick={() => onNavigate("activities")}
         >
           <KeyboardShortcut keyLetter="a" hovered={false} />
-          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Activities</span>
+          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">activities</span>
         </button>
         <button
           className="text-base font-light text-gray-600 flex items-center gap-2 group"
           onClick={() => onNavigate("stats")}
         >
           <KeyboardShortcut keyLetter="s" hovered={false} />
-          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Stats</span>
+          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">stats</span>
         </button>
         <button
           className="text-base font-light text-gray-600 flex items-center gap-2 group"
           onClick={() => onNavigate("profile")}
         >
           <KeyboardShortcut keyLetter="p" hovered={false} />
-          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Profile</span>
+          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">profile</span>
         </button>
-      </div>
+        </div>
+      )}
 
       {/* General controls in bottom left */}
       <div
         className={`fixed bottom-8 left-8 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
-          controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
+          showCommandControls ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
       >
         <button
@@ -435,21 +438,21 @@ export function TimerView({ onNavigate }: TimerViewProps) {
           }}
         >
           <KeyboardShortcut keyLetter="f" hovered={false} />
-          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Fullscreen</span>
+          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">fullscreen</span>
         </button>
         <button
           className="text-base font-light text-gray-600 flex items-center gap-2 group"
           onClick={() => setControlsVisible(false)}
         >
           <KeyBox hovered={false}>H</KeyBox>
-          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Hide</span>
+          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">hide</span>
         </button>
       </div>
 
       {/* Start button in bottom right */}
       {state.status === "idle" && (
         <div className="fixed bottom-8 right-8 flex flex-col items-start gap-2 z-10">
-          <div className={`transition-opacity duration-300 ${controlsVisible ? "opacity-100" : "opacity-0"}`}>
+          <div className={`transition-opacity duration-300 ${showCommandControls ? "opacity-100" : "opacity-0"}`}>
             <KeyBox className="w-16 h-6 px-2 py-1">return</KeyBox>
           </div>
           <button
@@ -457,7 +460,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
             disabled={startDisabled}
             className="bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer w-[160px] hover:bg-black hover:text-white hover:transition-none transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-black"
           >
-            Start
+            start
           </button>
         </div>
       )}

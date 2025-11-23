@@ -80,9 +80,9 @@ export function AppDetailsModal({ app, startTime, endTime, onClose }: AppDetails
             <button
               className="bg-transparent border-none text-base font-normal cursor-pointer p-0 transition-opacity duration-200 hover:opacity-70"
               onClick={onClose}
-              aria-label="Close"
+              aria-label="close"
             >
-              Close
+              close
             </button>
           </div>
         </div>
@@ -91,11 +91,11 @@ export function AppDetailsModal({ app, startTime, endTime, onClose }: AppDetails
         <div className="p-6 flex flex-col gap-6 flex-1 overflow-y-auto">
           {isLoading ? (
              <div className="text-base font-light text-center p-8">
-               Loading details...
+               loading details...
              </div>
           ) : !details ? (
              <div className="text-base font-light text-center p-8">
-               Failed to load details
+               failed to load details
              </div>
           ) : (
             <>
@@ -103,7 +103,7 @@ export function AppDetailsModal({ app, startTime, endTime, onClose }: AppDetails
               {details.windowTitles.length > 0 ? (
                 <div className="flex flex-col gap-4">
                   <h3 className="text-sm font-normal tracking-wide text-gray-800">
-                    Windows
+                    windows
                   </h3>
                   <div className="flex flex-col gap-3">
                     {details.windowTitles.map((wt, index) => {
@@ -167,7 +167,7 @@ export function AppDetailsModal({ app, startTime, endTime, onClose }: AppDetails
                 </div>
               ) : (
                 <div className="text-base font-light text-center p-8 text-gray-500">
-                  No window titles found
+                  no window titles found
                 </div>
               )}
             </>

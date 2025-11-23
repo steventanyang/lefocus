@@ -229,13 +229,11 @@ extension IslandView {
         let waveformBaseY: CGFloat = bounds.height - 20.0
         let waveformCenterY = waveformBaseY // Waveform bars are centered at baseY
         
-        // Position break label in top-right, vertically aligned with waveform
-        let padding: CGFloat = 16.0
-        let breakLabelX = bounds.maxX - textSize.width - padding
-        
-        // Center the text vertically with the waveform
-        // draw(at:) uses bottom-left origin, so we need to position it so the center aligns
-        let breakLabelY = waveformCenterY - textSize.height / 2.0
+        // Mirror waveform offsets (38px from edges, same vertical alignment)
+        let edgePadding: CGFloat = 38.0
+        let breakLabelX = bounds.maxX - textSize.width - edgePadding
+        let verticalOffset: CGFloat = 4.0
+        let breakLabelY = waveformCenterY - textSize.height / 2.0 - verticalOffset
         
         let origin = NSPoint(
             x: breakLabelX,

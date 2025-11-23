@@ -107,7 +107,7 @@ export function LabelsSettingsPage() {
   }, [labels, selectedIndex, deleteConfirmId, isModalOpen, deleteLabelMutation]);
 
   if (isLoading) {
-    return <div className="text-gray-500">Loading labels...</div>;
+    return <div className="text-gray-500">loading labels...</div>;
   }
 
   // Helper to convert hex to rgba for light backgrounds
@@ -122,123 +122,145 @@ export function LabelsSettingsPage() {
       : null;
   };
 
-  if (labels.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-4 py-12 text-gray-500">
-        <p>No labels created yet</p>
-        <p className="text-sm">Create labels to categorize your focus sessions</p>
-      </div>
-    );
-  }
+  const darkenHex = (hex: string, amount = 0.25) => {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return hex;
+    const mix = (channel: number) => Math.max(0, Math.min(255, Math.round(channel * (1 - amount))));
+    const toHex = (value: number) => value.toString(16).padStart(2, "0");
+    return `#${toHex(mix(rgb.r))}${toHex(mix(rgb.g))}${toHex(mix(rgb.b))}`;
+  };
 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <h2 className="text-lg font-semibold">Labels</h2>
-          <span className="text-sm text-gray-500">
+          <h2 className="text-base font-normal tracking-wide text-gray-800">labels</h2>
+          <span className="text-sm font-light text-gray-500">
             {labels.length} / 8
           </span>
         </div>
-        <button
-          onClick={() => {
-            setModalMode("create");
-            setEditingLabel(null);
-            setIsModalOpen(true);
-          }}
-          disabled={labels.length >= 8}
-          className="flex items-center gap-2 text-gray-600 hover:text-black disabled:opacity-30 disabled:cursor-not-allowed"
-        >
-          <KeyBox hovered={false}>N</KeyBox>
-          <span className="text-sm">New Label</span>
-        </button>
+        {labels.length > 0 && (
+          <button
+            onClick={() => {
+              setModalMode("create");
+              setEditingLabel(null);
+              setIsModalOpen(true);
+            }}
+            disabled={labels.length >= 8}
+            className="flex items-center gap-2 text-base font-light text-gray-600 hover:text-black disabled:opacity-30 disabled:cursor-not-allowed group"
+          >
+            <KeyBox hovered={false}>N</KeyBox>
+            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">new label</span>
+          </button>
+        )}
       </div>
 
       {/* Labels list - single column */}
       <div className="flex flex-col gap-3">
-        {labels.map((label, index) => {
-          const isSelected = selectedIndex === index;
-          const isDeleteConfirm = deleteConfirmId === label.id;
-
-          return (
-            <div key={label.id} className="flex items-center gap-2" style={{ height: '34px' }}>
-              {/* Shortcut number */}
-              <KeyBox selected={isSelected} hovered={false} selectedColor={label.color}>
-                {index + 1}
-              </KeyBox>
-
-              {/* Row container */}
+        {labels.length === 0 ? (
+          <div className="flex items-center gap-2" style={{ height: '34px' }}>
+            <KeyBox hovered={false}>N</KeyBox>
+            <div className="flex">
               <div
-                className="flex cursor-pointer"
-                onClick={() => setSelectedIndex(index)}
+                className="border border-gray-300 px-3 py-1 text-sm font-light text-gray-500 hover:border-gray-400 hover:text-gray-600 flex items-center justify-center cursor-pointer transition-colors"
+                style={{ width: '126px' }}
+                onClick={() => {
+                  setModalMode("create");
+                  setEditingLabel(null);
+                  setIsModalOpen(true);
+                }}
               >
-                {/* Label button - matching dropdown style */}
-                {(() => {
-                  const rgb = hexToRgb(label.color);
-                  const lightBg = rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)` : label.color;
-                  return (
-                    <button
-                      className={`border px-3 py-1 text-sm font-medium transition-opacity flex items-center justify-center min-w-0 ${
-                        isSelected ? "" : "opacity-60"
-                      } hover:opacity-100`}
-                      style={{
-                        backgroundColor: isSelected ? label.color : lightBg,
-                        borderColor: label.color,
-                        color: isSelected ? 'white' : label.color,
-                        width: '126px',
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedIndex(index);
-                      }}
-                    >
-                      <span className="truncate inline-block max-w-full text-left">{label.name}</span>
-                    </button>
-                  );
-                })()}
-
-                {/* Actions container - only show when selected */}
-                {isSelected && (
-                  <div className="flex items-center justify-center px-2" style={{ minWidth: '200px' }}>
-                    {isDeleteConfirm ? (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <KeyBox>D</KeyBox>
-                        <span>to confirm</span>
-                      </div>
-                    ) : (
-                      <>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setModalMode("edit");
-                            setEditingLabel(label);
-                            setIsModalOpen(true);
-                          }}
-                          className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:text-black"
-                        >
-                          <KeyBox>E</KeyBox>
-                          <span>Edit</span>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // Mouse click: delete immediately without confirmation
-                            deleteLabelMutation.mutate(label.id);
-                            setSelectedIndex(null);
-                          }}
-                          className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:text-red-600"
-                        >
-                          <KeyBox>D</KeyBox>
-                          <span>Delete</span>
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
+                + new label
               </div>
             </div>
-          );
-        })}
+          </div>
+        ) : (
+          labels.map((label, index) => {
+            const isSelected = selectedIndex === index;
+            const isDeleteConfirm = deleteConfirmId === label.id;
+
+            return (
+              <div key={label.id} className="flex items-center gap-2" style={{ height: '34px' }}>
+                {/* Shortcut number */}
+                <KeyBox selected={isSelected} hovered={false} selectedColor={label.color}>
+                  {index + 1}
+                </KeyBox>
+
+                {/* Row container */}
+                <div
+                  className="flex cursor-pointer"
+                  onClick={() => setSelectedIndex(index)}
+                >
+                  {/* Label button - matching dropdown style */}
+                  {(() => {
+                    const rgb = hexToRgb(label.color);
+                    const lightBg = rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)` : label.color;
+                    const subtleBorder = isSelected ? label.color : darkenHex(label.color, 0.4);
+                    const subtleText = isSelected ? "white" : darkenHex(label.color, 0.35);
+                    return (
+                      <button
+                        className={`border px-3 py-1 text-sm font-normal transition-opacity flex items-center justify-center min-w-0 ${
+                          isSelected ? "" : "opacity-60"
+                        } hover:opacity-100`}
+                        style={{
+                          backgroundColor: isSelected ? label.color : lightBg,
+                          borderColor: subtleBorder,
+                          color: subtleText,
+                          width: '126px',
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedIndex(index);
+                        }}
+                      >
+                        <span className="truncate inline-block max-w-full text-left">{label.name}</span>
+                      </button>
+                    );
+                  })()}
+
+                  {/* Actions container - only show when selected */}
+                  {isSelected && (
+                    <div className="flex items-center justify-start pl-4 gap-2" style={{ minWidth: '200px' }}>
+                      {isDeleteConfirm ? (
+                        <div className="flex items-center gap-2 text-sm font-light text-gray-600">
+                          <KeyBox>D</KeyBox>
+                          <span>to confirm</span>
+                        </div>
+                      ) : (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setModalMode("edit");
+                              setEditingLabel(label);
+                              setIsModalOpen(true);
+                            }}
+                            className="flex items-center gap-2 px-2 py-1 text-sm font-light text-gray-600 hover:text-black"
+                          >
+                            <KeyBox>E</KeyBox>
+                            <span>edit</span>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Mouse click: delete immediately without confirmation
+                              deleteLabelMutation.mutate(label.id);
+                              setSelectedIndex(null);
+                            }}
+                            className="flex items-center gap-2 px-2 py-1 text-sm font-light text-gray-600 hover:text-red-600"
+                          >
+                            <KeyBox>D</KeyBox>
+                            <span>delete</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Label Modal */}

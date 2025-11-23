@@ -1,7 +1,8 @@
+import AppKit
 import Foundation
 
 protocol IslandAudioControllerDelegate: AnyObject {
-    func islandAudioController(_ controller: IslandAudioController, didUpdateTrack track: TrackInfo?)
+    func islandAudioController(_ controller: IslandAudioController, didUpdateTrack track: TrackInfo?, gradient: NSGradient?)
     func islandAudioController(_ controller: IslandAudioController, didUpdateWaveform bars: [CGFloat])
 }
 
@@ -11,8 +12,10 @@ final class IslandAudioController {
 
     private let mediaMonitor = MediaMonitor.shared
     private let waveformAnimator = WaveformAnimator.shared
+    private let paletteProvider = WaveformPaletteProvider()
 
     private var currentTrack: TrackInfo?
+    private var currentGradient: NSGradient?
     private var waveformBars: [CGFloat] = []
     private var monitoring = false
 
@@ -41,6 +44,8 @@ final class IslandAudioController {
         waveformAnimator.onFrame = nil
         waveformBars = []
         currentTrack = nil
+        currentGradient = nil
+        paletteProvider.resetCache()
     }
 
     func togglePlayback() {
@@ -64,6 +69,7 @@ final class IslandAudioController {
 
     private func handleTrackChange(_ track: TrackInfo?) {
         currentTrack = track
+        currentGradient = paletteProvider.gradient(for: track)
 
         if let track {
             waveformAnimator.state = track.isPlaying ? .playing : .paused
@@ -74,7 +80,7 @@ final class IslandAudioController {
             waveformBars = []
         }
 
-        delegate?.islandAudioController(self, didUpdateTrack: track)
+        delegate?.islandAudioController(self, didUpdateTrack: track, gradient: currentGradient)
     }
 
     private func handleWaveformFrame(_ bars: [CGFloat]) {

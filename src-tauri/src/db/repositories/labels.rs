@@ -107,23 +107,23 @@ impl Database {
     }
 
     /// Get a single label by ID
-    pub async fn get_label_by_id(&self, label_id: i64) -> Result<Option<Label>> {
-        self.execute(move |conn| {
-            let mut stmt = conn.prepare(
-                "SELECT id, name, color, order_index, created_at, updated_at, deleted_at
-                 FROM labels
-                 WHERE id = ?1 AND deleted_at IS NULL",
-            )?;
+    // pub async fn get_label_by_id(&self, label_id: i64) -> Result<Option<Label>> {
+    //     self.execute(move |conn| {
+    //         let mut stmt = conn.prepare(
+    //             "SELECT id, name, color, order_index, created_at, updated_at, deleted_at
+    //              FROM labels
+    //              WHERE id = ?1 AND deleted_at IS NULL",
+    //         )?;
 
-            let mut rows = stmt.query(params![label_id])?;
-            let label = match rows.next()? {
-                Some(row) => Some(row_to_label(row)?),
-                None => None,
-            };
-            Ok(label)
-        })
-        .await
-    }
+    //         let mut rows = stmt.query(params![label_id])?;
+    //         let label = match rows.next()? {
+    //             Some(row) => Some(row_to_label(row)?),
+    //             None => None,
+    //         };
+    //         Ok(label)
+    //     })
+    //     .await
+    // }
 
     /// Update a label's name and/or color
     /// Returns an error if name is duplicate

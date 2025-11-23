@@ -176,61 +176,68 @@ export function StatsView({ onNavigate }: StatsViewProps) {
     <div className="flex gap-4">
       <button
         onClick={() => setTimeWindow("day")}
-        className="text-base font-light flex items-center gap-2 group"
+        className="text-base font-light text-gray-600 flex items-center gap-2 group"
       >
         <KeyBox selected={timeWindow === "day"} hovered={false}>D</KeyBox>
-        <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Day</span>
+        <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">day</span>
       </button>
       <button
         onClick={() => setTimeWindow("week")}
-        className="text-base font-light flex items-center gap-2 group"
+        className="text-base font-light text-gray-600 flex items-center gap-2 group"
       >
         <KeyBox selected={timeWindow === "week"} hovered={false}>W</KeyBox>
-        <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Week</span>
+        <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">week</span>
       </button>
       <button
         onClick={() => setTimeWindow("month")}
-        className="text-base font-light flex items-center gap-2 group"
+        className="text-base font-light text-gray-600 flex items-center gap-2 group"
       >
         <KeyBox selected={timeWindow === "month"} hovered={false}>M</KeyBox>
-        <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Month</span>
+        <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">month</span>
       </button>
       <button
         onClick={() => setTimeWindow("year")}
-        className="text-base font-light flex items-center gap-2 group"
+        className="text-base font-light text-gray-600 flex items-center gap-2 group"
       >
         <KeyBox selected={timeWindow === "year"} hovered={false}>Y</KeyBox>
-        <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Year</span>
+        <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">year</span>
       </button>
       <button
         onClick={() => setIsCustomModalOpen(true)}
-        className="text-base font-light flex items-center gap-2 group"
+        className="text-base font-light text-gray-600 flex items-center gap-2 group"
       >
         <KeyBox selected={timeWindow === "custom"} hovered={false}>C</KeyBox>
-        <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">Custom</span>
+        <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">custom</span>
       </button>
     </div>
   );
 
   // Label filter selector (used in StatsStats)
+  const labelDisplay = currentLabel ? (
+    <LabelTag
+      label={currentLabel}
+      size="medium"
+      selected={true}
+      maxWidth="126px"
+      showEmptyFrame
+    />
+  ) : (
+    <span className="text-base font-light text-gray-600">all labels</span>
+  );
+
   const labelFilterSelector = (
     <div className="flex items-center justify-end">
       <button 
         onClick={() => setIsLabelModalOpen(true)}
-        className="flex items-center gap-2 group"
+        className="flex items-center gap-1.5 group"
       >
-        <KeyBox selected={isLabelModalOpen} hovered={false}>⌘</KeyBox>
-        <KeyBox selected={isLabelModalOpen} hovered={false}>L</KeyBox>
-        {selectedLabelId === null ? (
-           <div
-            className="flex items-center justify-center border border-gray-300 px-3 py-1 text-sm text-gray-400 font-medium"
-            style={{ width: '126px', backgroundColor: 'transparent' }}
-          >
-            All Labels
-          </div>
-        ) : (
-          <LabelTag label={currentLabel} size="medium" selected={true} />
-        )}
+        <div className="flex items-center gap-1">
+          <KeyBox selected={isLabelModalOpen} hovered={false}>⌘</KeyBox>
+          <KeyBox selected={isLabelModalOpen} hovered={false}>L</KeyBox>
+        </div>
+        <div className="flex items-center justify-end ml-1 mr-7">
+          {labelDisplay}
+        </div>
       </button>
     </div>
   );
@@ -249,28 +256,28 @@ export function StatsView({ onNavigate }: StatsViewProps) {
         }}
         onAddNew={() => {}} // Not needed here as we hide the add new button
         showAddNew={false}
-        noLabelText="All Labels"
+        noLabelText="all labels"
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-light tracking-wide">Stats</h1>
+      <div className="flex items-center justify-between px-6">
+        <h1 className="text-2xl font-light tracking-wide">stats</h1>
         <div className="flex-1 flex justify-center" style={{marginLeft: '60px'}}>
-          {timeWindowButtons}
+          {labelFilterSelector}
         </div>
         <button
           className="text-base font-light text-gray-600 flex items-center gap-2 group"
           onClick={() => onNavigate("timer")}
         >
           <KeyboardShortcut keyLetter="t" hovered={false} />
-          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">View Timer</span>
+          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">view timer</span>
         </button>
       </div>
 
       {/* Loading state */}
       {isLoading && !sessionsError && (
         <StatsSkeleton
-          labelFilterSelector={labelFilterSelector}
+          timeWindowButtons={timeWindowButtons}
           viewMode={viewMode}
           onToggleViewMode={() => setViewMode((prev) => (prev === "list" ? "treemap" : "list"))}
           showAllApps={showAllApps}
@@ -281,7 +288,7 @@ export function StatsView({ onNavigate }: StatsViewProps) {
       {/* Error state */}
       {sessionsError && (
         <div className="text-sm font-normal text-center p-4 border border-black bg-transparent max-w-full">
-          {sessionsError instanceof Error ? sessionsError.message : "Failed to load stats"}
+          {sessionsError instanceof Error ? sessionsError.message : "failed to load stats"}
         </div>
       )}
 
@@ -294,7 +301,7 @@ export function StatsView({ onNavigate }: StatsViewProps) {
             onToggleShowAll={() => setShowAllApps(!showAllApps)}
             viewMode={viewMode}
             onToggleViewMode={() => setViewMode((prev) => (prev === "list" ? "treemap" : "list"))}
-            labelFilterSelector={labelFilterSelector}
+            timeWindowSelector={timeWindowButtons}
             timeWindow={timeWindow}
             customDateRange={customDateRange}
           />
@@ -312,7 +319,7 @@ export function StatsView({ onNavigate }: StatsViewProps) {
 }
 
 interface StatsSkeletonProps {
-  labelFilterSelector: ReactNode;
+  timeWindowButtons: ReactNode;
   viewMode: "list" | "treemap";
   onToggleViewMode: () => void;
   showAllApps: boolean;
@@ -324,7 +331,7 @@ const SkeletonBar = ({ className = "" }: { className?: string }) => (
 );
 
 function StatsSkeleton({
-  labelFilterSelector,
+  timeWindowButtons,
   viewMode,
   onToggleViewMode,
   showAllApps,
@@ -336,12 +343,12 @@ function StatsSkeleton({
         <div className="flex items-start justify-between">
           <div className="flex flex-col gap-2">
             <div className="text-xl font-light tracking-wide text-gray-800">
-              Total Duration
+              total duration
             </div>
             <SkeletonBar className="h-8 w-32" />
           </div>
           <div className="flex gap-2 pt-0.5">
-            {labelFilterSelector}
+            {timeWindowButtons}
           </div>
         </div>
 
@@ -349,27 +356,27 @@ function StatsSkeleton({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-normal tracking-wide text-gray-800">
-                Top Applications
+                top applications
               </h3>
               <button
                 onClick={onToggleShowAll}
                 className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-1"
               >
                 <KeyBox selected={showAllApps} hovered={false}>V</KeyBox>
-                {showAllApps ? "View Top Apps" : "View All"}
+                {showAllApps ? "view top apps" : "view all"}
               </button>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={onToggleViewMode} className="flex items-center gap-1">
                 <KeyBox selected={viewMode === "list"} hovered={false}>L</KeyBox>
                 <span className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors">
-                  List
+                  list
                 </span>
               </button>
               <button onClick={onToggleViewMode} className="flex items-center gap-1">
                 <KeyBox selected={viewMode === "treemap"} hovered={false}>T</KeyBox>
                 <span className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors">
-                  Treemap
+                  treemap
                 </span>
               </button>
             </div>

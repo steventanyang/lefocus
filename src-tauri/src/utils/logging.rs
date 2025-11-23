@@ -6,7 +6,7 @@
 //! const ENABLE_LOGS: bool = true;
 //!
 //! // Then use the macros (they're exported at the crate root):
-//! use crate::{log_info, log_warn, log_error};
+//! use lefocus_lib::{log_info, log_warn, log_error};
 //!
 //! log_info!("This will log if ENABLE_LOGS is true");
 //! ```

@@ -17,7 +17,7 @@ interface StatsStatsProps {
   onToggleShowAll: () => void;
   viewMode: "list" | "treemap";
   onToggleViewMode: () => void;
-  labelFilterSelector?: React.ReactNode;
+  timeWindowSelector?: React.ReactNode;
   timeWindow: TimeWindow;
   customDateRange?: { start: Date; end: Date } | null;
 }
@@ -28,7 +28,7 @@ export function StatsStats({
   onToggleShowAll,
   viewMode,
   onToggleViewMode,
-  labelFilterSelector,
+  timeWindowSelector,
   timeWindow,
   customDateRange,
 }: StatsStatsProps) {
@@ -125,32 +125,32 @@ export function StatsStats({
 
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-2">
-          <div className="text-sm font-normal tracking-wide text-gray-800">
+          <div className="text-base font-normal tracking-wide text-gray-800">
             {dateRangeText}
           </div>
           <div className="text-2xl font-semibold tabular-nums">
             {formatDuration(stats.totalDurationSecs)}
           </div>
         </div>
-        {labelFilterSelector && (
+        {timeWindowSelector && (
           <div className="flex gap-2 pt-0.5">
-            {labelFilterSelector}
+            {timeWindowSelector}
           </div>
         )}
       </div>
 
       <div className="flex flex-col">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-normal tracking-wide text-gray-800">
-              Top Applications
+          <div className="flex items-center gap-4">
+            <h3 className="text-base font-normal tracking-wide text-gray-800">
+              top applications
             </h3>
             <button
               onClick={onToggleShowAll}
-              className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-1"
+              className="text-base font-light text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-2"
             >
               <KeyBox selected={showAllApps} hovered={false}>{showAllApps ? "V" : "V"}</KeyBox>
-              {showAllApps ? "View Top Apps" : "View All"}
+              <span>{showAllApps ? "view top apps" : "view all"}</span>
             </button>
           </div>
 
@@ -158,20 +158,20 @@ export function StatsStats({
           <div className="flex items-center gap-2">
             <button
               onClick={onToggleViewMode}
-              className="flex items-center gap-1"
+              className="text-base font-light text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-2"
             >
               <KeyBox selected={viewMode === "list"} hovered={false}>L</KeyBox>
-              <span className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors">
-                List
+              <span>
+                list
               </span>
             </button>
             <button
               onClick={onToggleViewMode}
-              className="flex items-center gap-1"
+              className="text-base font-light text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-2"
             >
               <KeyBox selected={viewMode === "treemap"} hovered={false}>T</KeyBox>
-              <span className="text-sm font-light text-gray-600 hover:text-gray-800 transition-colors">
-                Treemap
+              <span>
+                treemap
               </span>
             </button>
           </div>
@@ -207,7 +207,7 @@ export function StatsStats({
               onClick={() => handleSelect(app)}
               onMouseEnter={() => selection.handleHover(app.bundleId)}
               onMouseLeave={selection.handleHoverLeave}
-              className={`flex items-center gap-3 w-full text-left transition-all duration-200 rounded p-2 -m-2 ${
+              className={`flex items-center gap-3 w-full text-left transition-all duration-200 rounded p-2 -my-2 ${
                 !selection.shouldShowFocus(app) ? "hover:bg-gray-50" : ""
               }`}
               style={selection.shouldShowFocus(app) ? { backgroundColor: lightBgColor } : undefined}

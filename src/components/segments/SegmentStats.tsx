@@ -191,35 +191,33 @@ export function SegmentStats({
   });
 
   return (
-    <div className="p-6 flex flex-col gap-6">
-      <div className="flex items-center justify-between pb-2">
+    <div className="px-6 pb-6 flex flex-col gap-6">
+      <div className="relative flex items-center justify-between pb-2 pt-1">
         <div className="text-base font-light tracking-wide">
           {dateTime ? formatDateTime(dateTime) : "Session Summary"}
         </div>
+        {labelSection && (
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+            <div className="flex items-center gap-2 pl-5">
+              {labelSection.labelKey}
+              <div className="flex items-center">
+                {labelSection.labelTag}
+              </div>
+            </div>
+          </div>
+        )}
         {backButton && <div>{backButton}</div>}
       </div>
 
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-2">
-          <div className="text-sm font-normal tracking-wide text-gray-800">
-            Total Duration
+          <div className="text-base font-normal tracking-wide text-gray-800">
+            total duration
           </div>
           <div className="text-2xl font-semibold tabular-nums">
             {formatDuration(stats.totalDurationSecs)}
           </div>
         </div>
-
-        {labelSection && (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              {labelSection.labelKey}
-              <div className="text-sm font-normal tracking-wide text-gray-800">
-                Label
-              </div>
-            </div>
-            <div>{labelSection.labelTag}</div>
-          </div>
-        )}
       </div>
 
       {/* Timeline embedded here */}
@@ -228,7 +226,7 @@ export function SegmentStats({
           {/* Dynamic pill indicator */}
           {pillPosition && (
             <div
-              className="absolute h-1 rounded-full transition-all duration-300 ease-in-out z-10"
+              className="absolute h-1 transition-all duration-300 ease-in-out z-10"
               style={{
                 left: `${pillPosition.left}%`,
                 width: `${pillPosition.width}%`,
@@ -280,8 +278,8 @@ export function SegmentStats({
 
       {stats.topApps.length > 0 && (
         <div className="flex flex-col gap-4">
-          <h3 className="text-sm font-normal tracking-wide text-gray-800">
-            Top Applications
+          <h3 className="text-base font-normal tracking-wide text-gray-800">
+            top applications
           </h3>
           {stats.topApps.map((app, index) => {
             const isSelected = selectedBundleId === app.bundleId;

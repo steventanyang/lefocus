@@ -118,7 +118,7 @@ export function FontsSettingsPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold">Fonts</h2>
+        <h2 className="text-base font-normal tracking-wide text-gray-800">fonts</h2>
       </div>
 
       {/* Fonts list - single column matching labels page */}
@@ -135,9 +135,9 @@ export function FontsSettingsPage() {
 
               {/* Font button */}
               <button
-                className={`border px-3 py-1 text-sm font-medium transition-opacity flex items-center justify-center min-w-0 ${
+                className={`border px-3 py-1 text-sm font-normal transition-opacity flex items-center justify-center min-w-0 ${
                   isSelected ? "" : "opacity-60"
-                } hover:opacity-100 font-normal`}
+                } hover:opacity-100`}
                 style={{
                   backgroundColor: isSelected ? "#000000" : "#f9fafb",
                   borderColor: isSelected ? "#000000" : "#d1d5db",
