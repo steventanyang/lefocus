@@ -3,6 +3,7 @@ import { SessionSummary } from "@/types/timer";
 import { getAppColor } from "@/constants/appColors";
 import { AppleLogo, shouldShowAppleLogo } from "@/utils/appUtils"; // Updated to .tsx
 import { LabelTag } from "@/components/labels/LabelTag";
+import { KeyBox } from "@/components/ui/KeyBox";
 import type { Label } from "@/types/label";
 
 interface BlockSessionCardProps {
@@ -10,6 +11,7 @@ interface BlockSessionCardProps {
   labels?: Label[];
   onClick: (session: SessionSummary) => void;
   isSelected?: boolean;
+  isDeleteConfirm?: boolean;
 }
 
 function formatDuration(seconds: number): string {
@@ -58,7 +60,7 @@ function getStatusBadge(status: string): { icon: React.ReactNode; className: str
 }
 
 export const BlockSessionCard = forwardRef<HTMLButtonElement, BlockSessionCardProps>(
-  ({ session, labels = [], onClick, isSelected = false }, ref) => {
+  ({ session, labels = [], onClick, isSelected = false, isDeleteConfirm = false }, ref) => {
     const totalDurationSecs = Math.floor(session.activeMs / 1000);
     const statusBadge = getStatusBadge(session.status);
     const topApp = session.topApps.length > 0 ? session.topApps[0] : null;
@@ -106,8 +108,14 @@ export const BlockSessionCard = forwardRef<HTMLButtonElement, BlockSessionCardPr
         </div>
       </div>
 
-      {/* Bottom-left: Top app */}
-      {topApp && (
+      {/* Bottom-left: Top app or Delete Confirmation */}
+      {isDeleteConfirm ? (
+        <div className="absolute bottom-3 left-3 flex items-center gap-1.5">
+          <KeyBox>⌘</KeyBox>
+          <KeyBox>D</KeyBox>
+          <span className="text-xs font-light text-gray-600 ml-1">to confirm</span>
+        </div>
+      ) : topApp && (
         <div className="absolute bottom-3 left-3 flex items-center gap-1.5 max-w-[70%]">
           {shouldShowAppleLogo(topApp.bundleId, topApp.appName) ? (
             <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-gray-800">

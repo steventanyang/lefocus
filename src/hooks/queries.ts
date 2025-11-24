@@ -331,3 +331,20 @@ export function useUpdateSessionLabelMutation() {
     },
   });
 }
+
+/**
+ * Delete a session
+ * Automatically invalidates sessions queries
+ */
+export function useDeleteSessionMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sessionId: string) => invoke<void>("delete_session", { sessionId }),
+    onSuccess: () => {
+      // Invalidate sessions to refetch (removing the deleted session)
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['sessions', 'infinite'] });
+    },
+  });
+}

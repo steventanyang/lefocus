@@ -81,16 +81,19 @@ export function LabelsSettingsPage() {
         setIsModalOpen(true);
       }
 
-      // D key: Delete selected label (double-press confirmation)
+      // D key: Delete selected label
       else if ((event.key === "d" || event.key === "D") && selectedLabel) {
-        event.preventDefault();
-        if (deleteConfirmId === selectedLabel.id) {
-          // Second press: actually delete
-          deleteLabelMutation.mutate(selectedLabel.id);
-          setDeleteConfirmId(null);
-          setSelectedIndex(null);
+        if (event.metaKey || event.ctrlKey) {
+          event.preventDefault();
+          if (deleteConfirmId === selectedLabel.id) {
+            // Cmd+D: actually delete if confirming
+            deleteLabelMutation.mutate(selectedLabel.id);
+            setDeleteConfirmId(null);
+            setSelectedIndex(null);
+          }
         } else {
-          // First press: show confirmation
+          event.preventDefault();
+          // D: show confirmation
           setDeleteConfirmId(selectedLabel.id);
         }
       }
@@ -222,8 +225,11 @@ export function LabelsSettingsPage() {
                   {isSelected && (
                     <div className="flex items-center justify-start pl-4 gap-2" style={{ minWidth: '200px' }}>
                       {isDeleteConfirm ? (
-                        <div className="flex items-center gap-2 text-sm font-light text-gray-600">
-                          <KeyBox>D</KeyBox>
+                        <div className="flex items-center gap-1.5 text-sm font-light text-gray-600">
+                          <div className="flex items-center gap-1">
+                            <KeyBox>⌘</KeyBox>
+                            <KeyBox>D</KeyBox>
+                          </div>
                           <span>to confirm</span>
                         </div>
                       ) : (
