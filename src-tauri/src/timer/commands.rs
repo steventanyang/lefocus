@@ -237,3 +237,8 @@ pub async fn list_sessions_paginated(
 
     Ok(summaries)
 }
+
+#[tauri::command]
+pub async fn delete_session(state: State<'_, AppState>, session_id: String) -> Result<(), String> {
+    state.db.delete_session(&session_id).await.map_err(|e| e.to_string())
+}

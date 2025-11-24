@@ -258,4 +258,43 @@ impl Database {
         })
         .await
     }
+
+    /// Delete a session and all its related data (segments, interruptions)
+    /// 
+    /// Note: `context_readings` are automatically deleted via ON DELETE CASCADE
+    /// foreign key constraint (defined in schema_v4.sql). No manual deletion needed.
+    pub async fn delete_session(&self, session_id: &str) -> Result<()> {
+        let session_id = session_id.to_string();
+        self.execute(move |conn| {
+            let tx = conn.transaction()?;
+
+            // 1. Delete interruptions for segments belonging to this session
+            tx.execute(
+                "DELETE FROM interruptions 
+                 WHERE segment_id IN (SELECT id FROM segments WHERE session_id = ?1)",
+                params![session_id],
+            )?;
+
+            // 2. Delete segments for this session
+            tx.execute(
+                "DELETE FROM segments WHERE session_id = ?1",
+                params![session_id],
+            )?;
+
+            // 3. Delete the session itself
+            // Note: context_readings are automatically deleted via ON DELETE CASCADE
+            let rows_affected = tx.execute(
+                "DELETE FROM sessions WHERE id = ?1",
+                params![session_id],
+            )?;
+
+            if rows_affected == 0 {
+                // Don't fail if session is already gone, just commit
+            }
+
+            tx.commit()?;
+            Ok(())
+        })
+        .await
+    }
 }
