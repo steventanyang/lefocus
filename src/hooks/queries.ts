@@ -316,7 +316,7 @@ export function useDeleteLabelMutation() {
 
 /**
  * Update a session's label
- * Automatically invalidates sessions queries
+ * Optimistically updates the cache and invalidates queries for consistency
  */
 export function useUpdateSessionLabelMutation() {
   const queryClient = useQueryClient();
@@ -324,8 +324,32 @@ export function useUpdateSessionLabelMutation() {
   return useMutation({
     mutationFn: ({ sessionId, labelId }: { sessionId: string; labelId: number | null }) =>
       invoke<void>("update_session_label", { sessionId, labelId }),
-    onSuccess: () => {
-      // Invalidate sessions to refetch with updated label
+    onSuccess: (_, { sessionId, labelId }) => {
+      // Optimistically update the sessions list cache
+      queryClient.setQueryData<SessionSummary[]>(['sessions'], (old) => {
+        if (!old) return old;
+        return old.map(session =>
+          session.id === sessionId ? { ...session, labelId } : session
+        );
+      });
+
+      // Optimistically update the infinite sessions cache
+      queryClient.setQueryData<{ pages: SessionSummary[][]; pageParams: number[] }>(
+        ['sessions', 'infinite'],
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map(page =>
+              page.map(session =>
+                session.id === sessionId ? { ...session, labelId } : session
+              )
+            ),
+          };
+        }
+      );
+
+      // Still invalidate to ensure consistency with server
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
       queryClient.invalidateQueries({ queryKey: ['sessions', 'infinite'] });
     },
