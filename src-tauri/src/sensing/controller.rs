@@ -5,6 +5,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::db::Database;
 use crate::macos_bridge;
+use crate::metrics::MetricsCollector;
 
 use super::icon_manager::IconManager;
 use super::loop_worker::sensing_loop;
@@ -22,7 +23,13 @@ impl SensingController {
         }
     }
 
-    pub async fn start_sensing(&mut self, session_id: String, db: Database) -> Result<()> {
+    pub async fn start_sensing(
+        &mut self,
+        session_id: String,
+        db: Database,
+        metrics: MetricsCollector,
+        app_handle: tauri::AppHandle,
+    ) -> Result<()> {
         if self.handle.is_some() {
             bail!("sensing already active");
         }
@@ -32,6 +39,9 @@ impl SensingController {
         info!("Clearing macOS sensing cache before starting new session");
         macos_bridge::clear_cache();
 
+        // Reset metrics for new session
+        metrics.reset().await;
+
         // Create icon manager for pre-fetching icons during the session
         let icon_manager = IconManager::new(db.clone());
         icon_manager.clear().await; // Clear any previous session's cache
@@ -39,7 +49,14 @@ impl SensingController {
         let cancel_token = CancellationToken::new();
         let token_clone = cancel_token.clone();
 
-        let handle = tokio::spawn(sensing_loop(session_id, db, icon_manager, token_clone));
+        let handle = tokio::spawn(sensing_loop(
+            session_id,
+            db,
+            icon_manager,
+            token_clone,
+            metrics,
+            app_handle,
+        ));
 
         self.handle = Some(handle);
         self.cancel_token = Some(cancel_token);

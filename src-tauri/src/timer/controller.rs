@@ -12,6 +12,7 @@ use uuid::Uuid;
 
 use crate::{
     db::{Database, Session, SessionInfo, SessionStatus},
+    metrics::MetricsCollector,
     sensing::SensingController,
 };
 
@@ -56,10 +57,11 @@ pub struct TimerController {
     tick_interval: Duration,
     heartbeat_every_ticks: u32,
     sensing: Arc<Mutex<SensingController>>,
+    metrics: MetricsCollector,
 }
 
 impl TimerController {
-    pub fn new(app_handle: AppHandle, db: Database) -> Self {
+    pub fn new(app_handle: AppHandle, db: Database, metrics: MetricsCollector) -> Self {
         let debug_mode = std::env::var("LEFOCUS_DEBUG")
             .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
@@ -72,6 +74,7 @@ impl TimerController {
             tick_interval: Duration::from_secs(1),
             heartbeat_every_ticks: if debug_mode { 1 } else { 10 },
             sensing: Arc::new(Mutex::new(SensingController::new())),
+            metrics,
         }
     }
 
@@ -159,7 +162,12 @@ impl TimerController {
             self.sensing
                 .lock()
                 .await
-                .start_sensing(session_id, self.db.clone())
+                .start_sensing(
+                    session_id,
+                    self.db.clone(),
+                    self.metrics.clone(),
+                    self.app_handle.clone(),
+                )
                 .await?;
         }
 

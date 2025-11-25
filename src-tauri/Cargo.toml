@@ -35,5 +35,7 @@ image = "0.25"
 image_hasher = "2.0"
 tokio-util = "0.7"
 
+sysinfo = "0.31"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 mach = "0.3"

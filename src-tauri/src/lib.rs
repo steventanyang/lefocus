@@ -2,6 +2,7 @@ mod audio;
 mod db;
 mod labels;
 mod macos_bridge;
+mod metrics;
 mod segmentation;
 mod sensing;
 mod settings;
@@ -15,6 +16,7 @@ use labels::commands::{
     create_label, delete_label, get_labels, update_label, update_session_label,
 };
 use log::warn;
+use metrics::{MetricsCollector, MetricsSnapshot};
 use macos_bridge::{
     capture_screenshot, get_active_window_metadata, run_ocr, OCRResult, WindowMetadata,
 };
@@ -34,6 +36,7 @@ pub(crate) struct AppState {
     pub(crate) db: Database,
     pub(crate) timer: TimerController,
     pub(crate) settings: SettingsStore,
+    pub(crate) metrics: MetricsCollector,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -223,6 +226,11 @@ fn open_accessibility_settings() -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+async fn get_metrics_snapshot(state: State<'_, AppState>) -> Result<MetricsSnapshot, String> {
+    Ok(state.metrics.get_snapshot().await)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize logging (reads RUST_LOG env var)
@@ -263,7 +271,12 @@ pub fn run() {
                     })?;
                 }
 
-                let timer_controller = TimerController::new(app.handle().clone(), database.clone());
+                let metrics_collector = MetricsCollector::new();
+                let timer_controller = TimerController::new(
+                    app.handle().clone(),
+                    database.clone(),
+                    metrics_collector.clone(),
+                );
 
                 let settings_path = app_data_dir.join("settings.json");
                 let settings_store = SettingsStore::new(settings_path)?;
@@ -274,6 +287,7 @@ pub fn run() {
                     db: database,
                     timer: timer_controller,
                     settings: settings_store,
+                    metrics: metrics_collector,
                 });
 
                 // Initialize the island window on macOS to show "00:00" when idle
@@ -326,6 +340,7 @@ pub fn run() {
         check_accessibility_permissions,
         open_screen_recording_settings,
         open_accessibility_settings,
+        get_metrics_snapshot,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
