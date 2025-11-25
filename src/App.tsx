@@ -1,15 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./App.css";
 import { TimerView } from "@/components/timer/TimerView";
 import { ActivitiesView } from "@/components/activities/ActivitiesView";
 import { StatsView } from "@/components/stats/StatsView";
 import { ProfileView } from "@/components/profile/ProfileView";
 import { OnboardingView } from "@/components/onboarding/OnboardingView";
+import { MetricsView } from "@/components/metrics/MetricsView";
 import { useWindowSize } from "@/hooks/useWindowSize";
 import { useGlobalNavigationShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { usePermissions } from "@/hooks/usePermissions";
+import { isUserTyping, isMac } from "@/utils/keyboardUtils";
 
-type View = "timer" | "activities" | "stats" | "profile" | "onboarding";
+type View = "timer" | "activities" | "stats" | "profile" | "onboarding" | "metrics";
 
 const ONBOARDING_COMPLETED_KEY = "lefocus_onboarding_completed";
 
@@ -31,6 +33,20 @@ function App() {
     () => setCurrentView("stats"),
     () => setCurrentView("profile")
   );
+
+  // Cmd+5 for metrics view
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isUserTyping()) return;
+      const modifier = isMac() ? event.metaKey : event.ctrlKey;
+      if (modifier && event.key === "5") {
+        event.preventDefault();
+        setCurrentView("metrics");
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Show onboarding only on first launch:
   // - After permissions have finished loading
@@ -84,6 +100,9 @@ function App() {
           onNavigate={setCurrentView}
           onClose={() => setCurrentView("timer")}
         />
+      )}
+      {currentView === "metrics" && (
+        <MetricsView />
       )}
     </main>
   );
