@@ -10,6 +10,7 @@ import { useWindowSize } from "@/hooks/useWindowSize";
 import { useGlobalNavigationShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { usePermissions } from "@/hooks/usePermissions";
 import { isUserTyping, isMac } from "@/utils/keyboardUtils";
+import { FONT_CLASSES } from "@/constants/fonts";
 
 type View = "timer" | "activities" | "stats" | "profile" | "onboarding" | "metrics";
 
@@ -25,6 +26,21 @@ function App() {
   );
   const { height } = useWindowSize();
   const { loading: permissionsLoading } = usePermissions();
+
+  // Apply saved font on app startup
+  useEffect(() => {
+    const savedFont = localStorage.getItem("selectedFont");
+    // Handle migration from old "system" preference
+    const fontId = savedFont === "system" ? "noto-sans-jp" : savedFont;
+    
+    if (fontId && FONT_CLASSES[fontId]) {
+      const root = document.documentElement;
+      // Remove any existing font classes
+      Object.values(FONT_CLASSES).forEach(cls => root.classList.remove(cls));
+      // Apply the saved font
+      root.classList.add(FONT_CLASSES[fontId]);
+    }
+  }, []);
 
   // Set up global navigation shortcuts (work from anywhere)
   useGlobalNavigationShortcuts(

@@ -1,15 +1,6 @@
 import { useState, useEffect } from "react";
 import { KeyBox } from "@/components/ui/KeyBox";
-
-const fontOptions = [
-  { id: "noto-sans-jp", name: "Noto Sans JP", shortcut: "1", className: "font-noto-sans-jp" },
-  { id: "helvetica", name: "Helvetica", shortcut: "2", className: "font-helvetica" },
-  { id: "inter", name: "Inter", shortcut: "3", className: "font-inter" },
-  { id: "work-sans", name: "Work Sans", shortcut: "4", className: "font-work-sans" },
-  { id: "ibm-plex-sans", name: "IBM Plex Sans", shortcut: "5", className: "font-ibm-plex-sans" },
-  { id: "sf-pro", name: "SF Pro", shortcut: "6", className: "font-sf-pro" },
-  { id: "ibm-plex-mono", name: "IBM Plex Mono", shortcut: "7", className: "font-ibm-plex-mono" },
-];
+import { FONT_OPTIONS } from "@/constants/fonts";
 
 export function FontsSettingsPage() {
   const [selectedFont, setSelectedFont] = useState<string | null>(null);
@@ -31,7 +22,7 @@ export function FontsSettingsPage() {
     }
     
     // Check what font is currently applied to the root element
-    const currentFontClass = fontOptions.find(font => {
+    const currentFontClass = FONT_OPTIONS.find(font => {
       if (!font.className) return false;
       return font.className.split(" ").some(cls => root.classList.contains(cls));
     });
@@ -39,12 +30,12 @@ export function FontsSettingsPage() {
     if (currentFontClass) {
       // Use the currently applied font
       setSelectedFont(currentFontClass.id);
-      const index = fontOptions.findIndex(f => f.id === currentFontClass.id);
+      const index = FONT_OPTIONS.findIndex(f => f.id === currentFontClass.id);
       setSelectedIndex(index !== -1 ? index : 0);
-    } else if (savedFont && fontOptions.some(f => f.id === savedFont)) {
+    } else if (savedFont && FONT_OPTIONS.some(f => f.id === savedFont)) {
       // Fallback to saved preference if no font class is applied
       setSelectedFont(savedFont);
-      const index = fontOptions.findIndex(f => f.id === savedFont);
+      const index = FONT_OPTIONS.findIndex(f => f.id === savedFont);
       setSelectedIndex(index !== -1 ? index : 0);
     } else {
       // Default to first option (Noto Sans JP)
@@ -69,7 +60,7 @@ export function FontsSettingsPage() {
     allClasses.forEach(cls => root.classList.remove(cls));
     
     // Apply new font class
-    const fontOption = fontOptions.find(f => f.id === selectedFont);
+    const fontOption = FONT_OPTIONS.find(f => f.id === selectedFont);
     if (fontOption && fontOption.className) {
       fontOption.className.split(" ").forEach(cls => root.classList.add(cls));
     }
@@ -86,8 +77,8 @@ export function FontsSettingsPage() {
       if (key >= "1" && key <= "7") {
         event.preventDefault();
         const fontIndex = parseInt(key) - 1;
-        if (fontIndex < fontOptions.length) {
-          setSelectedFont(fontOptions[fontIndex].id);
+        if (fontIndex < FONT_OPTIONS.length) {
+          setSelectedFont(FONT_OPTIONS[fontIndex].id);
           setSelectedIndex(fontIndex);
         }
         return;
@@ -98,15 +89,15 @@ export function FontsSettingsPage() {
         event.preventDefault();
         const newIndex = selectedIndex - 1;
         setSelectedIndex(newIndex);
-        setSelectedFont(fontOptions[newIndex].id);
+        setSelectedFont(FONT_OPTIONS[newIndex].id);
         return;
       }
 
-      if (event.key === "ArrowDown" && selectedIndex !== null && selectedIndex < fontOptions.length - 1) {
+      if (event.key === "ArrowDown" && selectedIndex !== null && selectedIndex < FONT_OPTIONS.length - 1) {
         event.preventDefault();
         const newIndex = selectedIndex + 1;
         setSelectedIndex(newIndex);
-        setSelectedFont(fontOptions[newIndex].id);
+        setSelectedFont(FONT_OPTIONS[newIndex].id);
         return;
       }
     };
@@ -123,7 +114,7 @@ export function FontsSettingsPage() {
 
       {/* Fonts list - single column matching labels page */}
       <div className="flex flex-col gap-3">
-        {fontOptions.map((font, index) => {
+        {FONT_OPTIONS.map((font, index) => {
           const isSelected = selectedIndex === index;
 
           return (
