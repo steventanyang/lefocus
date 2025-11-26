@@ -421,7 +421,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
 
       {/* General controls in bottom left */}
       <div
-        className={`fixed bottom-8 left-8 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
+        className={`fixed bottom-7 left-8 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
           showCommandControls ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
       >
@@ -458,7 +458,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
           <button
             onClick={handleStart}
             disabled={startDisabled}
-            className="bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer w-[160px] hover:bg-black hover:text-white hover:transition-none transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-black"
+            className="bg-transparent border border-black text-black px-8 py-4 text-base font-semibold cursor-pointer w-[160px] hover:bg-black hover:text-white hover:transition-none transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-black"
           >
             start
           </button>

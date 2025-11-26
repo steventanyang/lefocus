@@ -133,14 +133,14 @@ export function StatsStats({
           </div>
         </div>
         {timeWindowSelector && (
-          <div className="flex gap-2 pt-0.5">
+          <div className="flex gap-2 pt-0.5" style={{ marginLeft: '1px', marginRight: '-6px' }}>
             {timeWindowSelector}
           </div>
         )}
       </div>
 
-      <div className="flex flex-col">
-        <div className="flex items-center justify-between">
+      <div className="flex flex-col -mt-2">
+        <div className="flex items-center justify-between mt-[1px]">
           <div className="flex items-center gap-4">
             <h3 className="text-base font-normal tracking-wide text-gray-800">
               top applications

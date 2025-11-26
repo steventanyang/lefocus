@@ -41,30 +41,30 @@ export function TimerContent({
   controlsVisible = true,
   isLabelDropdownOpen = false,
 }: TimerContentProps) {
-
   return (
     <>
-      <div className="flex items-center justify-center w-full mt-8">
-        <TimerDisplay
-          remainingMs={remainingMs}
-          isRunning={isRunning}
-          mode={mode}
-          isEditable={isIdle}
-          onTimeChange={onTimeChange}
-          initialMs={
-            selectedMode === "break"
-              ? selectedBreakDuration
-              : selectedMode === "stopwatch"
-              ? 0
-              : selectedDuration
-          }
-          isLabelDropdownOpen={isLabelDropdownOpen}
-        />
-      </div>
-
-      {/* Always reserve space to prevent clock shifting */}
+      {/* Clock and duration buttons grouped together to avoid parent gap-12 */}
       <div className="flex flex-col items-center w-full">
-        <div className="mt-4 mb-4 h-[52px] flex items-center justify-center">
+        <div className="flex items-center justify-center w-full mt-[30px]">
+          <TimerDisplay
+            remainingMs={remainingMs}
+            isRunning={isRunning}
+            mode={mode}
+            isEditable={isIdle}
+            onTimeChange={onTimeChange}
+            initialMs={
+              selectedMode === "break"
+                ? selectedBreakDuration
+                : selectedMode === "stopwatch"
+                  ? 0
+                  : selectedDuration
+            }
+            isLabelDropdownOpen={isLabelDropdownOpen}
+          />
+        </div>
+
+        {/* Duration buttons - reserve space to prevent clock shifting */}
+        <div className="mt-[41px] h-[52px] flex items-center justify-center">
           {isIdle && selectedMode === "countdown" && (
             <DurationPicker
               selectedDuration={selectedDuration}
@@ -95,4 +95,3 @@ export function TimerContent({
     </>
   );
 }
-

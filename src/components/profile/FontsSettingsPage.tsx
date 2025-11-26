@@ -12,10 +12,10 @@ export function FontsSettingsPage() {
     const root = document.documentElement;
     const savedFont = localStorage.getItem("selectedFont");
     
-    // Migrate old "system" preference to "noto-sans-jp"
-    if (savedFont === "system") {
-      localStorage.setItem("selectedFont", "noto-sans-jp");
-      setSelectedFont("noto-sans-jp");
+    // Migrate old preferences to "helvetica"
+    if (savedFont === "system" || savedFont === "noto-sans-jp" || savedFont === "ibm-plex-mono") {
+      localStorage.setItem("selectedFont", "helvetica");
+      setSelectedFont("helvetica");
       setSelectedIndex(0);
       setIsInitialized(true);
       return;
@@ -38,8 +38,8 @@ export function FontsSettingsPage() {
       const index = FONT_OPTIONS.findIndex(f => f.id === savedFont);
       setSelectedIndex(index !== -1 ? index : 0);
     } else {
-      // Default to first option (Noto Sans JP)
-      setSelectedFont("noto-sans-jp");
+      // Default to first option (Helvetica)
+      setSelectedFont("helvetica");
       setSelectedIndex(0);
     }
     setIsInitialized(true);
@@ -54,8 +54,10 @@ export function FontsSettingsPage() {
     // Clean up all font classes
     const allClasses = [
       "font-sans", "font-serif", "font-mono", "font-medium", "font-light",
-      "font-noto-sans-jp", "font-helvetica", "font-inter", "font-work-sans",
-      "font-ibm-plex-sans", "font-sf-pro", "font-ibm-plex-mono"
+      "font-helvetica", "font-inter", "font-sf-pro", "font-work-sans",
+      "font-ibm-plex-sans", "font-roboto", "font-source-sans",
+      // Legacy classes for cleanup
+      "font-noto-sans-jp", "font-ibm-plex-mono"
     ];
     allClasses.forEach(cls => root.classList.remove(cls));
     
