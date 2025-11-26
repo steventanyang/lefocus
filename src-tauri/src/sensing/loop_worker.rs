@@ -1,18 +1,22 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
-use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::time::{Duration, Instant, MissedTickBehavior};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
     db::{ContextReading, Database},
-    macos_bridge::{capture_screenshot, get_active_window_metadata, run_ocr},
+    macos_bridge::get_active_window_metadata,
     metrics::{CaptureMetrics, MetricsCollector},
 };
 
 use super::icon_manager::IconManager;
-use super::phash::{compute_hamming_distance, compute_phash};
+
+// DEPRECATED: Screenshot + pHash + OCR imports removed
+// use std::sync::Arc;
+// use anyhow::Context;
+// use crate::macos_bridge::{capture_screenshot, run_ocr};
+// use super::phash::{compute_hamming_distance, compute_phash};
 
 const ENABLE_LOGS: bool = true;
 
@@ -20,8 +24,10 @@ use crate::{log_error, log_info, log_warn};
 
 const CAPTURE_INTERVAL_SECS: u64 = 5;
 const CAPTURE_TIMEOUT_SECS: u64 = 10;
-const OCR_COOLDOWN_SECS: u64 = 20;
-const PHASH_CHANGE_THRESHOLD: u32 = 8;
+
+// DEPRECATED: OCR tuning constants no longer used
+// const OCR_COOLDOWN_SECS: u64 = 20;
+// const PHASH_CHANGE_THRESHOLD: u32 = 8;
 
 pub async fn sensing_loop(
     session_id: String,
@@ -34,9 +40,10 @@ pub async fn sensing_loop(
     let mut ticker = tokio::time::interval(Duration::from_secs(CAPTURE_INTERVAL_SECS));
     ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
-    let mut last_sampled_phash: Option<String> = None;
-    let mut last_ocr_phash: Option<String> = None;
-    let mut last_ocr_time: Option<Instant> = None;
+    // DEPRECATED: pHash/OCR state tracking removed
+    // let mut last_sampled_phash: Option<String> = None;
+    // let mut last_ocr_phash: Option<String> = None;
+    // let mut last_ocr_time: Option<Instant> = None;
 
     loop {
         tokio::select! {
@@ -47,9 +54,6 @@ pub async fn sensing_loop(
                     timestamp,
                     &db,
                     &icon_manager,
-                    &mut last_sampled_phash,
-                    &mut last_ocr_phash,
-                    &mut last_ocr_time,
                     &metrics,
                     &app_handle,
                 );
@@ -68,7 +72,97 @@ pub async fn sensing_loop(
     }
 }
 
+/// Simplified capture: only metadata, no screenshot/pHash/OCR
 async fn perform_capture(
+    session_id: &str,
+    timestamp: DateTime<Utc>,
+    db: &Database,
+    icon_manager: &IconManager,
+    metrics_collector: &MetricsCollector,
+    app_handle: &AppHandle,
+) -> Result<()> {
+    let capture_start = Instant::now();
+
+    // Sample CPU/RAM at start of capture
+    let (cpu_percent, memory_mb) = metrics_collector.sample_system_metrics().await;
+
+    // Get active window metadata - this is all we need!
+    let metadata_start = Instant::now();
+    let mut metadata = get_active_window_metadata()
+        .map_err(|err| anyhow!("active window metadata failed: {err}"))?;
+    let metadata_duration_ms = metadata_start.elapsed().as_millis() as u64;
+
+    // Handle system windows (empty bundle_id)
+    if metadata.bundle_id.is_empty() {
+        metadata.bundle_id = "com.apple.system".to_string();
+        metadata.owner_name = "System UI".to_string();
+    }
+
+    // Ensure icon is cached for this app
+    if !metadata.bundle_id.is_empty() && metadata.bundle_id != "com.apple.system" {
+        icon_manager
+            .ensure_icon(&metadata.bundle_id, Some(&metadata.owner_name))
+            .await;
+    }
+
+    // Store the reading (no screenshot, no pHash, no OCR)
+    let db_start = Instant::now();
+    let reading = ContextReading {
+        id: None,
+        session_id: session_id.to_string(),
+        timestamp,
+        window_metadata: metadata.clone(),
+        phash: None,           // DEPRECATED: No longer computed
+        ocr_text: None,        // DEPRECATED: No longer computed
+        ocr_confidence: None,  // DEPRECATED: No longer computed
+        ocr_word_count: None,  // DEPRECATED: No longer computed
+        segment_id: None,
+    };
+
+    db.insert_context_reading(&reading)
+        .await
+        .map_err(|err| anyhow!("failed to persist context reading: {err}"))?;
+    let db_duration_ms = db_start.elapsed().as_millis() as u64;
+
+    let capture_duration_ms = capture_start.elapsed().as_millis() as u64;
+    log_info!(
+        "Capture completed in {}ms for session {} (metadata: {}ms, db: {}ms) - {}",
+        capture_duration_ms,
+        session_id,
+        metadata_duration_ms,
+        db_duration_ms,
+        metadata.bundle_id
+    );
+
+    // Emit metrics (screenshot/pHash/OCR fields are zeroed/disabled)
+    let capture_metrics = CaptureMetrics {
+        timestamp,
+        metadata_ms: metadata_duration_ms,
+        screenshot_ms: 0,      // DEPRECATED: No longer captured
+        screenshot_bytes: 0,   // DEPRECATED: No longer captured
+        phash_ms: 0,           // DEPRECATED: No longer computed
+        ocr_ms: None,          // DEPRECATED: No longer computed
+        ocr_skipped_reason: Some("disabled".to_string()),
+        db_write_ms: db_duration_ms,
+        total_ms: capture_duration_ms,
+        cpu_percent,
+        memory_mb,
+    };
+    metrics_collector.record_capture(capture_metrics.clone()).await;
+    let _ = app_handle.emit("sensing-metrics", capture_metrics);
+
+    Ok(())
+}
+
+// =============================================================================
+// DEPRECATED: Screenshot + pHash + OCR logic
+// =============================================================================
+// TO RESTORE: Uncomment the imports at top, the state variables in sensing_loop,
+// and replace perform_capture with perform_capture_with_ocr below.
+// =============================================================================
+
+/*
+async fn perform_capture_with_ocr(
     session_id: &str,
     timestamp: DateTime<Utc>,
     db: &Database,
@@ -297,3 +391,4 @@ fn cooldown_elapsed(last_ocr_time: Option<&Instant>) -> bool {
         .map(|instant| instant.elapsed().as_secs() >= OCR_COOLDOWN_SECS)
         .unwrap_or(true)
 }
+*/
