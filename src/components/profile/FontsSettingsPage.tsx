@@ -12,10 +12,10 @@ export function FontsSettingsPage() {
     const root = document.documentElement;
     const savedFont = localStorage.getItem("selectedFont");
     
-    // Migrate old preferences to "helvetica"
+    // Migrate old preferences to "ibm-plex-sans"
     if (savedFont === "system" || savedFont === "noto-sans-jp" || savedFont === "ibm-plex-mono") {
-      localStorage.setItem("selectedFont", "helvetica");
-      setSelectedFont("helvetica");
+      localStorage.setItem("selectedFont", "ibm-plex-sans");
+      setSelectedFont("ibm-plex-sans");
       setSelectedIndex(0);
       setIsInitialized(true);
       return;
@@ -38,8 +38,8 @@ export function FontsSettingsPage() {
       const index = FONT_OPTIONS.findIndex(f => f.id === savedFont);
       setSelectedIndex(index !== -1 ? index : 0);
     } else {
-      // Default to first option (Helvetica)
-      setSelectedFont("helvetica");
+      // Default to first option (IBM Plex Sans)
+      setSelectedFont("ibm-plex-sans");
       setSelectedIndex(0);
     }
     setIsInitialized(true);

@@ -448,7 +448,10 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div
+        className="flex items-center justify-between"
+        style={{ marginTop: "-4px" }}
+      >
         <h1 className="text-2xl font-light tracking-wide">activities</h1>
         <div
           className="flex-1 flex justify-center"
@@ -504,17 +507,8 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
       {!loading &&
         !error &&
         (filteredSessions.length === 0 && sessions.length > 0 ? (
-          <div className="text-center p-12 px-8 flex flex-col gap-4 border border-black">
+          <div className="text-center p-12 px-8 flex flex-col gap-4">
             <p className="text-base font-normal">no sessions with this label</p>
-            <p className="text-xs font-light text-gray-600">
-              try a different label or view all sessions
-            </p>
-            <button
-              className={buttonPrimaryClass}
-              onClick={() => setSelectedLabelId(null)}
-            >
-              view all sessions
-            </button>
           </div>
         ) : sessions.length === 0 ? (
           <div className="text-center p-12 px-8 flex flex-col gap-4 border border-black">

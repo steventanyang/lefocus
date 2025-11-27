@@ -117,7 +117,7 @@ function App() {
       savedFont === "system" ||
       savedFont === "noto-sans-jp" ||
       savedFont === "ibm-plex-mono"
-        ? "helvetica"
+        ? "ibm-plex-sans"
         : savedFont;
 
     if (fontId && FONT_CLASSES[fontId]) {

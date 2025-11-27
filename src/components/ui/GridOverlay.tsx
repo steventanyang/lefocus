@@ -19,8 +19,16 @@ export function GridOverlay({
 }: GridOverlayProps) {
   return (
     <div 
-      className="fixed inset-0 pointer-events-none z-50"
-      style={{ opacity }}
+      className="pointer-events-none"
+      style={{ 
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 9999,
+        opacity,
+      }}
     >
       {/* Vertical lines */}
       {lines.vertical.map((x, i) => (
