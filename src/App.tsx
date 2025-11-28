@@ -112,20 +112,13 @@ function App() {
   // Apply saved font on app startup
   useEffect(() => {
     const savedFont = localStorage.getItem("selectedFont");
-    // Handle migration from old "system" preference
-    const fontId =
-      savedFont === "system" ||
-      savedFont === "noto-sans-jp" ||
-      savedFont === "ibm-plex-mono"
-        ? "ibm-plex-sans"
-        : savedFont;
 
-    if (fontId && FONT_CLASSES[fontId]) {
+    if (savedFont && FONT_CLASSES[savedFont]) {
       const root = document.documentElement;
       // Remove any existing font classes
       Object.values(FONT_CLASSES).forEach((cls) => root.classList.remove(cls));
       // Apply the saved font
-      root.classList.add(FONT_CLASSES[fontId]);
+      root.classList.add(FONT_CLASSES[savedFont]);
     }
   }, []);
 

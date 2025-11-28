@@ -99,36 +99,37 @@ export function useGridOverlay() {
     };
   }, []);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Only toggle on plain G key (no modifiers)
-      if (
-        (e.key === "g" || e.key === "G") &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        !e.altKey &&
-        !e.shiftKey
-      ) {
-        // Don't toggle if user is typing in an input
-        const target = e.target as HTMLElement;
-        if (
-          target.tagName === "INPUT" ||
-          target.tagName === "TEXTAREA" ||
-          target.isContentEditable
-        ) {
-          return;
-        }
-        e.preventDefault();
-        // Only allow toggling in fullscreen mode
-        if (isFullscreen) {
-          setShowGrid((prev) => !prev);
-        }
-      }
-    };
+  // Commented out: G key to toggle grid
+  // useEffect(() => {
+  //   const handleKeyDown = (e: KeyboardEvent) => {
+  //     // Only toggle on plain G key (no modifiers)
+  //     if (
+  //       (e.key === "g" || e.key === "G") &&
+  //       !e.metaKey &&
+  //       !e.ctrlKey &&
+  //       !e.altKey &&
+  //       !e.shiftKey
+  //     ) {
+  //       // Don't toggle if user is typing in an input
+  //       const target = e.target as HTMLElement;
+  //       if (
+  //         target.tagName === "INPUT" ||
+  //         target.tagName === "TEXTAREA" ||
+  //         target.isContentEditable
+  //       ) {
+  //         return;
+  //       }
+  //       e.preventDefault();
+  //       // Only allow toggling in fullscreen mode
+  //       if (isFullscreen) {
+  //         setShowGrid((prev) => !prev);
+  //       }
+  //     }
+  //   };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isFullscreen]);
+  //   window.addEventListener("keydown", handleKeyDown);
+  //   return () => window.removeEventListener("keydown", handleKeyDown);
+  // }, [isFullscreen]);
 
   return { showGrid: showGrid && isFullscreen, setShowGrid, isFullscreen };
 }

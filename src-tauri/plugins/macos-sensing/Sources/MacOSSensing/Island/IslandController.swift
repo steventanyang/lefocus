@@ -127,6 +127,12 @@ public final class IslandController {
         }
     }
 
+    public func setVisible(_ visible: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            self?.windowManager.setVisible(visible)
+        }
+    }
+
     public func cleanup() {
         stateQueue.sync { [weak self] in
             let cleanupWork = { [weak self] in

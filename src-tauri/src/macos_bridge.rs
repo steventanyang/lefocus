@@ -58,12 +58,16 @@ extern "C" {
     fn macos_sensing_audio_previous_track();
     fn macos_sensing_island_update_chime_preferences(enabled: bool, sound_id: *const c_char);
     fn macos_sensing_island_preview_chime(sound_id: *const c_char);
+    fn macos_sensing_island_set_visible(visible: bool);
 
     // Permission checking
     fn macos_sensing_check_screen_recording_permission() -> bool;
     fn macos_sensing_check_accessibility_permission() -> bool;
     fn macos_sensing_open_screen_recording_settings();
     fn macos_sensing_open_accessibility_settings();
+    fn macos_sensing_check_media_automation_permission(bundle_id: *const c_char) -> bool;
+    fn macos_sensing_request_media_automation_permission(bundle_id: *const c_char) -> i32;
+    fn macos_sensing_open_automation_settings();
 
     fn macos_sensing_set_timer_end_callback(callback: extern "C" fn());
     fn macos_sensing_set_timer_cancel_callback(callback: extern "C" fn());
@@ -232,11 +236,21 @@ pub fn island_preview_chime(sound_id: &str) {
     }
 }
 
+#[cfg(target_os = "macos")]
+pub fn island_set_visible(visible: bool) {
+    unsafe {
+        macos_sensing_island_set_visible(visible);
+    }
+}
+
 #[cfg(not(target_os = "macos"))]
 pub fn island_update_chime_preferences(_enabled: bool, _sound_id: &str) {}
 
 #[cfg(not(target_os = "macos"))]
 pub fn island_preview_chime(_sound_id: &str) {}
+
+#[cfg(not(target_os = "macos"))]
+pub fn island_set_visible(_visible: bool) {}
 
 // Permission checking functions
 pub fn check_screen_recording_permission() -> bool {
@@ -260,6 +274,38 @@ pub fn open_screen_recording_settings() {
 pub fn open_accessibility_settings() {
     unsafe {
         macos_sensing_open_accessibility_settings();
+    }
+}
+
+pub fn check_media_automation_permission(bundle_id: &str) -> bool {
+    match CString::new(bundle_id) {
+        Ok(c_bundle) => unsafe {
+            macos_sensing_check_media_automation_permission(c_bundle.as_ptr())
+        },
+        Err(err) => {
+            log::error!("Failed to build CString for bundle_id {}: {}", bundle_id, err);
+            false
+        }
+    }
+}
+
+pub fn request_media_automation_permission_status(bundle_id: &str) -> i32 {
+    match CString::new(bundle_id) {
+        Ok(c_bundle) => unsafe { macos_sensing_request_media_automation_permission(c_bundle.as_ptr()) },
+        Err(err) => {
+            log::error!(
+                "Failed to build CString for bundle_id {} when requesting automation permission: {}",
+                bundle_id,
+                err
+            );
+            -1
+        }
+    }
+}
+
+pub fn open_automation_settings() {
+    unsafe {
+        macos_sensing_open_automation_settings();
     }
 }
 

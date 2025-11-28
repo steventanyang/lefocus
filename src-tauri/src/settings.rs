@@ -20,12 +20,14 @@ impl Default for IslandSoundSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct UserSettings {
     island_sound: IslandSoundSettings,
+    island_visible: bool,
 }
 
 impl Default for UserSettings {
     fn default() -> Self {
         Self {
             island_sound: IslandSoundSettings::default(),
+            island_visible: true,
         }
     }
 }
@@ -59,6 +61,19 @@ impl SettingsStore {
         {
             let mut guard = self.data.write().unwrap();
             guard.island_sound = settings;
+            self.persist(&guard)?;
+        }
+        Ok(())
+    }
+
+    pub fn island_visible(&self) -> bool {
+        self.data.read().unwrap().island_visible
+    }
+
+    pub fn update_island_visible(&self, visible: bool) -> Result<()> {
+        {
+            let mut guard = self.data.write().unwrap();
+            guard.island_visible = visible;
             self.persist(&guard)?;
         }
         Ok(())

@@ -12,19 +12,6 @@ export function FontsSettingsPage() {
     const root = document.documentElement;
     const savedFont = localStorage.getItem("selectedFont");
 
-    // Migrate old preferences to "ibm-plex-sans"
-    if (
-      savedFont === "system" ||
-      savedFont === "noto-sans-jp" ||
-      savedFont === "ibm-plex-mono"
-    ) {
-      localStorage.setItem("selectedFont", "ibm-plex-sans");
-      setSelectedFont("ibm-plex-sans");
-      setSelectedIndex(0);
-      setIsInitialized(true);
-      return;
-    }
-
     // Check what font is currently applied to the root element
     const currentFontClass = FONT_OPTIONS.find((font) => {
       if (!font.className) return false;
@@ -71,9 +58,6 @@ export function FontsSettingsPage() {
       "font-ibm-plex-sans",
       "font-roboto",
       "font-source-sans",
-      // Legacy classes for cleanup
-      "font-noto-sans-jp",
-      "font-ibm-plex-mono",
     ];
     allClasses.forEach((cls) => root.classList.remove(cls));
 

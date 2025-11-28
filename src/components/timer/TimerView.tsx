@@ -329,11 +329,6 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     await endTimerMutation.mutateAsync();
   };
 
-  const handleClearOnboardingCache = () => {
-    localStorage.removeItem("lefocus_onboarding_completed");
-    window.location.reload();
-  };
-
   return (
     <div className="w-full max-w-md flex flex-col items-center gap-12">
       {/* Label section in top right */}
@@ -497,14 +492,6 @@ export function TimerView({ onNavigate }: TimerViewProps) {
           <KeyBox hovered={false}>H</KeyBox>
           <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">
             hide
-          </span>
-        </button>
-        <button
-          className="text-base font-light text-gray-600 flex items-center gap-2 group"
-          onClick={handleClearOnboardingCache}
-        >
-          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">
-            clear cache
           </span>
         </button>
       </div>

@@ -17,6 +17,7 @@ extern void macos_sensing_swift_island_reset(void);
 extern void macos_sensing_swift_island_cleanup(void);
 extern void macos_sensing_swift_island_update_chime_preferences(bool enabled, const char *sound_id);
 extern void macos_sensing_swift_island_preview_chime(const char *sound_id);
+extern void macos_sensing_swift_island_set_visible(bool visible);
 extern void macos_sensing_swift_audio_start_monitoring(void);
 extern void macos_sensing_swift_audio_toggle_playback(void);
 extern void macos_sensing_swift_audio_next_track(void);
@@ -26,6 +27,9 @@ extern bool macos_sensing_swift_check_screen_recording_permission(void);
 extern bool macos_sensing_swift_check_accessibility_permission(void);
 extern void macos_sensing_swift_open_screen_recording_settings(void);
 extern void macos_sensing_swift_open_accessibility_settings(void);
+extern bool macos_sensing_swift_check_media_automation_permission(const char *bundle_id);
+extern int32_t macos_sensing_swift_request_media_automation_permission(const char *bundle_id);
+extern void macos_sensing_swift_open_automation_settings(void);
 
 CMacOSSensing_WindowMetadataFFI *macos_sensing_get_active_window_metadata(void) {
     return macos_sensing_swift_get_window();
@@ -83,6 +87,10 @@ void macos_sensing_island_preview_chime(const char *sound_id) {
     macos_sensing_swift_island_preview_chime(sound_id);
 }
 
+void macos_sensing_island_set_visible(bool visible) {
+    macos_sensing_swift_island_set_visible(visible);
+}
+
 void macos_sensing_audio_start_monitoring(void) {
     macos_sensing_swift_audio_start_monitoring();
 }
@@ -113,6 +121,18 @@ void macos_sensing_open_screen_recording_settings(void) {
 
 void macos_sensing_open_accessibility_settings(void) {
     macos_sensing_swift_open_accessibility_settings();
+}
+
+bool macos_sensing_check_media_automation_permission(const char *bundle_id) {
+    return macos_sensing_swift_check_media_automation_permission(bundle_id);
+}
+
+int32_t macos_sensing_request_media_automation_permission(const char *bundle_id) {
+    return macos_sensing_swift_request_media_automation_permission(bundle_id);
+}
+
+void macos_sensing_open_automation_settings(void) {
+    macos_sensing_swift_open_automation_settings();
 }
 
 // Timer control callbacks
