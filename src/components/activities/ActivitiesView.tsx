@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useSessionsListInfinite, useSegmentsForSessions, useLabelsQuery } from "@/hooks/queries";
+import {
+  useSessionsListInfinite,
+  useSegmentsForSessions,
+  useLabelsQuery,
+  useDeleteSessionMutation,
+} from "@/hooks/queries";
 import { SessionCard } from "@/components/session/SessionCard";
 import { BlockView } from "@/components/activities/BlockView";
 import { SessionResults } from "@/components/session/SessionResults";
@@ -26,15 +31,25 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
     fetchNextPage,
     isFetchingNextPage,
   } = useSessionsListInfinite();
-  
+
   // Flatten pages into a single array
   const sessions = data?.pages.flat() ?? [];
 
-  const [selectedSession, setSelectedSession] = useState<SessionSummary | null>(null);
+  const [selectedSession, setSelectedSession] = useState<SessionSummary | null>(
+    null
+  );
   const [viewMode, setViewMode] = useState<"list" | "block">("list");
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [selectedIndexState, setSelectedIndexState] = useState<number | null>(
+    null
+  );
   const [selectedLabelId, setSelectedLabelId] = useState<number | null>(null);
   const [isLabelModalOpen, setIsLabelModalOpen] = useState<boolean>(false);
+  const [deleteConfirmSessionId, setDeleteConfirmSessionId] = useState<
+    string | null
+  >(null);
+
+  const deleteSessionMutation = useDeleteSessionMutation();
+
   const scrollPositionRef = useRef<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const listContainerRef = useRef<HTMLDivElement>(null);
@@ -58,30 +73,60 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
   const { data: labels = [] } = useLabelsQuery();
 
   // Get current label object
-  const currentLabel = labels.find(l => l.id === selectedLabelId) || null;
+  const currentLabel = labels.find((l) => l.id === selectedLabelId) || null;
 
   // Filter sessions by selected label
-  const filteredSessions = sessions.filter(session => 
+  const filteredSessions = sessions.filter((session) =>
     selectedLabelId === null ? true : session.labelId === selectedLabelId
   );
+
+  // Derive selectedIndex: auto-initialize to 0 when sessions load, null when empty
+  const selectedIndex =
+    filteredSessions.length > 0 ? (selectedIndexState ?? 0) : null;
 
   // Fetch segments for all sessions in parallel with automatic caching and deduplication
   const { segmentsBySession } = useSegmentsForSessions(filteredSessions);
 
+  // Wrapper to set selectedIndex and clear delete confirmation
+  const handleSetSelectedIndex = useCallback(
+    (index: number | null | ((prev: number | null) => number | null)) => {
+      setSelectedIndexState(index);
+      setDeleteConfirmSessionId(null);
+    },
+    []
+  );
+
+  // Wrapper to set viewMode and reset selection/delete confirmation
+  const handleSetViewMode = useCallback(
+    (mode: "list" | "block") => {
+      setViewMode(mode);
+      if (filteredSessions.length > 0) {
+        setSelectedIndexState(0);
+      }
+      setDeleteConfirmSessionId(null);
+    },
+    [filteredSessions.length]
+  );
+
   // Save scroll position before navigating to session
-  const handleSessionClick = useCallback((session: SessionSummary) => {
-    // Find the index of the clicked session
-    const clickedIndex = filteredSessions.findIndex((s) => s.id === session.id);
-    if (clickedIndex !== -1) {
-      setSelectedIndex(clickedIndex);
-    }
-    
-    const scrollContainer = getScrollContainer();
-    if (scrollContainer) {
-      scrollPositionRef.current = scrollContainer.scrollTop;
-    }
-    setSelectedSession(session);
-  }, [getScrollContainer, filteredSessions]);
+  const handleSessionClick = useCallback(
+    (session: SessionSummary) => {
+      // Find the index of the clicked session
+      const clickedIndex = filteredSessions.findIndex(
+        (s) => s.id === session.id
+      );
+      if (clickedIndex !== -1) {
+        handleSetSelectedIndex(clickedIndex);
+      }
+
+      const scrollContainer = getScrollContainer();
+      if (scrollContainer) {
+        scrollPositionRef.current = scrollContainer.scrollTop;
+      }
+      setSelectedSession(session);
+    },
+    [getScrollContainer, filteredSessions, handleSetSelectedIndex]
+  );
 
   // Handle keyboard shortcuts for navigation and view mode selection
   useActivitiesKeyboard({
@@ -89,8 +134,8 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
     selectedIndex,
     viewMode,
     selectedSession,
-    onSetViewMode: setViewMode,
-    onSetSelectedIndex: setSelectedIndex,
+    onSetViewMode: handleSetViewMode,
+    onSetSelectedIndex: handleSetSelectedIndex,
     onSessionClick: handleSessionClick,
   });
 
@@ -115,22 +160,6 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
     enabled: viewMode === "list" && filteredSessions.length > 0,
   });
 
-  // Initialize selected index when sessions load
-  useEffect(() => {
-    if (filteredSessions.length > 0 && selectedIndex === null) {
-      setSelectedIndex(0);
-    } else if (filteredSessions.length === 0) {
-      setSelectedIndex(null);
-    }
-  }, [filteredSessions.length, selectedIndex]);
-
-  // Reset selected index when switching views
-  useEffect(() => {
-    if (filteredSessions.length > 0) {
-      setSelectedIndex(0);
-    }
-  }, [viewMode, filteredSessions.length]);
-
   // Restore scroll position when coming back from session
   // This is a valid use of useEffect: synchronizing with DOM (external system)
   // We need to wait for React to finish rendering the list view before restoring scroll
@@ -150,7 +179,12 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
 
   // Scroll detection for infinite loading
   useEffect(() => {
-    if (viewMode !== "list" || !virtualizer || !hasNextPage || isFetchingNextPage) {
+    if (
+      viewMode !== "list" ||
+      !virtualizer ||
+      !hasNextPage ||
+      isFetchingNextPage
+    ) {
       return;
     }
 
@@ -182,12 +216,22 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
     checkScrollPosition();
 
     // Also listen to scroll events for more responsive loading
-    scrollElement.addEventListener('scroll', checkScrollPosition, { passive: true });
-    
+    scrollElement.addEventListener("scroll", checkScrollPosition, {
+      passive: true,
+    });
+
     return () => {
-      scrollElement.removeEventListener('scroll', checkScrollPosition);
+      scrollElement.removeEventListener("scroll", checkScrollPosition);
     };
-  }, [viewMode, virtualizer, hasNextPage, isFetchingNextPage, filteredSessions.length, fetchNextPage, getScrollContainer]);
+  }, [
+    viewMode,
+    virtualizer,
+    hasNextPage,
+    isFetchingNextPage,
+    filteredSessions.length,
+    fetchNextPage,
+    getScrollContainer,
+  ]);
 
   // Scroll selected item into view
   useEffect(() => {
@@ -243,6 +287,69 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
     }
   }, [selectedIndex, viewMode, getScrollContainer, virtualizer]);
 
+  // Handle keyboard shortcuts for deletion
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Ignore if user is typing, session details open, or label modal open
+      if (isUserTyping() || selectedSession || isLabelModalOpen) {
+        return;
+      }
+
+      if (selectedIndex === null) return;
+      const session = filteredSessions[selectedIndex];
+      if (!session) return;
+
+      // D key
+      if (event.key === "d" || event.key === "D") {
+        if (event.metaKey || event.ctrlKey) {
+          // Cmd+D: Confirm delete if in confirmation mode
+          if (deleteConfirmSessionId === session.id) {
+            event.preventDefault();
+            event.stopPropagation();
+            deleteSessionMutation.mutate(session.id);
+            setDeleteConfirmSessionId(null);
+          }
+        } else {
+          // D: Initiate confirmation
+          event.preventDefault();
+          event.stopPropagation();
+          setDeleteConfirmSessionId(session.id);
+        }
+      }
+      // Esc key
+      else if (event.key === "Escape") {
+        if (deleteConfirmSessionId) {
+          event.preventDefault();
+          event.stopPropagation();
+          setDeleteConfirmSessionId(null);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [
+    selectedIndex,
+    filteredSessions,
+    selectedSession,
+    isLabelModalOpen,
+    deleteConfirmSessionId,
+    deleteSessionMutation,
+  ]);
+
+  // Auto-clear delete confirmation after 5 seconds
+  useEffect(() => {
+    if (deleteConfirmSessionId) {
+      const timeoutId = setTimeout(() => {
+        setDeleteConfirmSessionId(null);
+      }, 5000); // 5 seconds
+
+      return () => {
+        clearTimeout(timeoutId);
+      };
+    }
+  }, [deleteConfirmSessionId]);
+
   // Handle keyboard shortcuts for label filtering
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -252,7 +359,10 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
       }
 
       // Cmd+L or Ctrl+L: open label modal
-      if ((event.key === "l" || event.key === "L") && (event.metaKey || event.ctrlKey)) {
+      if (
+        (event.key === "l" || event.key === "L") &&
+        (event.metaKey || event.ctrlKey)
+      ) {
         event.preventDefault();
         event.stopImmediatePropagation();
         setIsLabelModalOpen(true);
@@ -287,13 +397,17 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
   );
 
   const labelFilterSelector = (
-    <button 
+    <button
       onClick={() => setIsLabelModalOpen(true)}
       className="flex items-center gap-1.5 group"
     >
       <div className="flex items-center gap-1">
-        <KeyBox selected={isLabelModalOpen} hovered={false}>⌘</KeyBox>
-        <KeyBox selected={isLabelModalOpen} hovered={false}>L</KeyBox>
+        <KeyBox selected={isLabelModalOpen} hovered={false}>
+          ⌘
+        </KeyBox>
+        <KeyBox selected={isLabelModalOpen} hovered={false}>
+          L
+        </KeyBox>
       </div>
       <div className="flex items-center justify-start min-w-[126px] ml-1 mr-4">
         {labelDisplay}
@@ -336,7 +450,10 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-light tracking-wide">activities</h1>
-        <div className="flex-1 flex justify-center" style={{marginLeft: '60px'}}>
+        <div
+          className="flex-1 flex justify-center"
+          style={{ marginLeft: "60px" }}
+        >
           {labelFilterSelector}
         </div>
         <button
@@ -353,14 +470,14 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
         {/* View mode shortcuts */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setViewMode("list")}
+            onClick={() => handleSetViewMode("list")}
             className="text-base font-light text-gray-600 flex items-center gap-2"
           >
             <KeyBox selected={viewMode === "list"}>L</KeyBox>
             <span>list</span>
           </button>
           <button
-            onClick={() => setViewMode("block")}
+            onClick={() => handleSetViewMode("block")}
             className="text-base font-light text-gray-600 flex items-center gap-2"
           >
             <KeyBox selected={viewMode === "block"}>B</KeyBox>
@@ -384,7 +501,8 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
       )}
 
       {/* Empty state */}
-      {!loading && !error && (
+      {!loading &&
+        !error &&
         (filteredSessions.length === 0 && sessions.length > 0 ? (
           <div className="text-center p-12 px-8 flex flex-col gap-4 border border-black">
             <p className="text-base font-normal">no sessions with this label</p>
@@ -411,8 +529,7 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
               start new session
             </button>
           </div>
-        ) : null)
-      )}
+        ) : null)}
 
       {/* Sessions list or block view */}
       {filteredSessions.length > 0 && (
@@ -452,6 +569,9 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
                           labels={labels}
                           onClick={handleSessionClick}
                           isSelected={selectedIndex === virtualItem.index}
+                          isDeleteConfirm={
+                            deleteConfirmSessionId === session.id
+                          }
                         />
                       </div>
                     </div>
@@ -472,6 +592,7 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
               onClick={handleSessionClick}
               selectedIndex={selectedIndex}
               cardRefs={cardRefs}
+              deleteConfirmSessionId={deleteConfirmSessionId}
             />
           )}
         </>

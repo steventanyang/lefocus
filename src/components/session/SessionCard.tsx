@@ -4,6 +4,7 @@ import { Segment } from "@/types/segment";
 import { getAppColor } from "@/constants/appColors";
 import { AppleLogo, shouldShowAppleLogo } from "@/utils/appUtils";
 import { LabelTag } from "@/components/labels/LabelTag";
+import { KeyBox } from "@/components/ui/KeyBox";
 import type { Label } from "@/types/label";
 
 interface SessionCardProps {
@@ -12,6 +13,7 @@ interface SessionCardProps {
   labels?: Label[];
   onClick: (session: SessionSummary) => void;
   isSelected?: boolean;
+  isDeleteConfirm?: boolean;
 }
 
 function formatDuration(seconds: number): string {
@@ -67,7 +69,7 @@ function getStatusBadge(status: string): { text: string; className: string } {
 }
 
 export const SessionCard = forwardRef<HTMLButtonElement, SessionCardProps>(
-  ({ session, segments, labels = [], onClick, isSelected = false }, ref) => {
+  ({ session, segments, labels = [], onClick, isSelected = false, isDeleteConfirm = false }, ref) => {
     const totalDurationSecs = Math.floor(session.activeMs / 1000);
     const statusBadge = getStatusBadge(session.status);
     
@@ -167,47 +169,62 @@ export const SessionCard = forwardRef<HTMLButtonElement, SessionCardProps>(
         </div>
       )}
 
-      {/* Top apps list */}
-      {session.topApps.length > 0 ? (
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-light tracking-wide">
-            top apps
-          </span>
-          <div className="flex items-center gap-3">
-            {session.topApps.slice(0, 3).map((app) => {
-              const iconDataUrl = session.appIcons[app.bundleId];
-              const iconColor = session.appColors[app.bundleId];
-              return (
-                <div key={app.bundleId} className="flex items-center gap-2">
-                  {shouldShowAppleLogo(app.bundleId, app.appName) ? (
-                    <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-gray-800">
-                      <AppleLogo className="w-5 h-5" />
-                    </div>
-                  ) : iconDataUrl ? (
-                    <img
-                      src={iconDataUrl}
-                      alt={app.appName || app.bundleId}
-                      className="w-6 h-6 flex-shrink-0"
-                    />
-                  ) : (
-                    <div
-                      className="w-6 h-6 border border-black flex-shrink-0"
-                      style={{ backgroundColor: getAppColor(app.bundleId, { iconColor }) }}
-                    />
-                  )}
-                  <span className="text-sm font-normal whitespace-nowrap">
-                    {app.appName || app.bundleId}
-                  </span>
-                </div>
-              );
-            })}
+      {/* Top apps list or Delete Confirmation - Absolute positioned bottom-left */}
+      <div className="absolute bottom-4 left-4">
+        {isDeleteConfirm ? (
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-light tracking-wide text-gray-600">
+              delete session?
+            </span>
+            <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1">
+                <KeyBox>⌘</KeyBox>
+                <KeyBox>D</KeyBox>
+              </div>
+              <span className="text-sm font-light text-gray-600">to confirm</span>
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="absolute bottom-4 left-4 text-sm font-light text-gray-500">
-          No apps tracked
-        </div>
-      )}
+        ) : session.topApps.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-light tracking-wide">
+              top apps
+            </span>
+            <div className="flex items-center gap-3">
+              {session.topApps.slice(0, 3).map((app) => {
+                const iconDataUrl = session.appIcons[app.bundleId];
+                const iconColor = session.appColors[app.bundleId];
+                return (
+                  <div key={app.bundleId} className="flex items-center gap-2">
+                    {shouldShowAppleLogo(app.bundleId, app.appName) ? (
+                      <div className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-gray-800">
+                        <AppleLogo className="w-5 h-5" />
+                      </div>
+                    ) : iconDataUrl ? (
+                      <img
+                        src={iconDataUrl}
+                        alt={app.appName || app.bundleId}
+                        className="w-6 h-6 flex-shrink-0"
+                      />
+                    ) : (
+                      <div
+                        className="w-6 h-6 border border-black flex-shrink-0"
+                        style={{ backgroundColor: getAppColor(app.bundleId, { iconColor }) }}
+                      />
+                    )}
+                    <span className="text-sm font-normal whitespace-nowrap">
+                      {app.appName || app.bundleId}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="text-sm font-light text-gray-500">
+            No apps tracked
+          </div>
+        )}
+      </div>
       </button>
     );
   }

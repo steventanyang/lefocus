@@ -8,9 +8,10 @@ interface BlockViewProps {
   onClick: (session: SessionSummary) => void;
   selectedIndex: number | null;
   cardRefs: React.MutableRefObject<(HTMLButtonElement | null)[]>;
+  deleteConfirmSessionId?: string | null;
 }
 
-export function BlockView({ sessions, labels, onClick, selectedIndex, cardRefs }: BlockViewProps) {
+export function BlockView({ sessions, labels, onClick, selectedIndex, cardRefs, deleteConfirmSessionId }: BlockViewProps) {
   const dayGroups = groupSessionsByDay(sessions);
   
   // Flatten sessions to calculate index
@@ -39,6 +40,7 @@ export function BlockView({ sessions, labels, onClick, selectedIndex, cardRefs }
                   labels={labels}
                   onClick={onClick}
                   isSelected={selectedIndex === currentIndex}
+                  isDeleteConfirm={deleteConfirmSessionId === session.id}
                 />
               );
             })}

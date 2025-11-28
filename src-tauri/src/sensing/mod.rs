@@ -1,6 +1,8 @@
 mod controller;
 mod icon_manager;
 mod loop_worker;
-mod phash;
+
+// DEPRECATED: pHash module no longer used
+// mod phash;
 
 pub use controller::SensingController;
