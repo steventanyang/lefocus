@@ -39,11 +39,15 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     DEFAULT_BREAK_DURATION_MS
   );
   const [selectedMode, setSelectedMode] = useState<TimerMode>("countdown");
-  const [dismissedSessionId, setDismissedSessionId] = useState<string | null>(null);
+  const [dismissedSessionId, setDismissedSessionId] = useState<string | null>(
+    null
+  );
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
 
   // Label state
-  const [selectedLabelId, setSelectedLabelId] = useState<number | null>(lastUsedLabelId);
+  const [selectedLabelId, setSelectedLabelId] = useState<number | null>(
+    lastUsedLabelId
+  );
   const [isLabelDropdownOpen, setIsLabelDropdownOpen] = useState(false);
   const [isLabelModalOpen, setIsLabelModalOpen] = useState(false);
 
@@ -67,12 +71,15 @@ export function TimerView({ onNavigate }: TimerViewProps) {
   // Calculate state-dependent values (handle null case)
   const isIdle = timerState?.state.status === "idle" || false;
   const startDisabled =
-    (selectedMode === "countdown" && (selectedDuration === null || selectedDuration === 0)) ||
-    (selectedMode === "break" && (selectedBreakDuration === null || selectedBreakDuration === 0));
+    (selectedMode === "countdown" &&
+      (selectedDuration === null || selectedDuration === 0)) ||
+    (selectedMode === "break" &&
+      (selectedBreakDuration === null || selectedBreakDuration === 0));
 
   const handleStart = () => {
     if (timerState) {
-      const duration = selectedMode === "break" ? selectedBreakDuration : selectedDuration;
+      const duration =
+        selectedMode === "break" ? selectedBreakDuration : selectedDuration;
       // Pass labelId when starting timer (only for non-break sessions)
       const labelIdToPass = selectedMode === "break" ? null : selectedLabelId;
       startTimer(duration, selectedMode, labelIdToPass);
@@ -83,106 +90,114 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     }
   };
 
-
   // Cycle through presets (left/right arrows)
-  const cyclePreset = useCallback((direction: "left" | "right", event?: React.MouseEvent) => {
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-    if (selectedMode === "countdown") {
-      const currentDuration = selectedDuration || 0;
-      // Find the closest preset to current duration
-      let currentIndex = PRESETS.findIndex(
-        (preset) => Math.abs(currentDuration - preset.ms) < 100
-      );
-      
-      // If no exact match, find the closest preset
-      if (currentIndex === -1) {
-        let closestIndex = 0;
-        let closestDiff = Math.abs(currentDuration - PRESETS[0].ms);
-        for (let i = 1; i < PRESETS.length; i++) {
-          const diff = Math.abs(currentDuration - PRESETS[i].ms);
-          if (diff < closestDiff) {
-            closestDiff = diff;
-            closestIndex = i;
-          }
-        }
-        currentIndex = closestIndex;
+  const cyclePreset = useCallback(
+    (direction: "left" | "right", event?: React.MouseEvent) => {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
       }
-      
-      // Cycle to next/previous preset
-      const nextIndex = direction === "right" 
-        ? (currentIndex + 1) % PRESETS.length
-        : (currentIndex - 1 + PRESETS.length) % PRESETS.length;
-      
-      setSelectedDuration(PRESETS[nextIndex].ms);
-    } else if (selectedMode === "break") {
-      const currentDuration = selectedBreakDuration || 0;
-      // Find the closest preset to current duration
-      let currentIndex = BREAK_PRESETS.findIndex(
-        (preset) => Math.abs(currentDuration - preset.ms) < 100
-      );
-      
-      // If no exact match, find the closest preset
-      if (currentIndex === -1) {
-        let closestIndex = 0;
-        let closestDiff = Math.abs(currentDuration - BREAK_PRESETS[0].ms);
-        for (let i = 1; i < BREAK_PRESETS.length; i++) {
-          const diff = Math.abs(currentDuration - BREAK_PRESETS[i].ms);
-          if (diff < closestDiff) {
-            closestDiff = diff;
-            closestIndex = i;
+      if (selectedMode === "countdown") {
+        const currentDuration = selectedDuration || 0;
+        // Find the closest preset to current duration
+        let currentIndex = PRESETS.findIndex(
+          (preset) => Math.abs(currentDuration - preset.ms) < 100
+        );
+
+        // If no exact match, find the closest preset
+        if (currentIndex === -1) {
+          let closestIndex = 0;
+          let closestDiff = Math.abs(currentDuration - PRESETS[0].ms);
+          for (let i = 1; i < PRESETS.length; i++) {
+            const diff = Math.abs(currentDuration - PRESETS[i].ms);
+            if (diff < closestDiff) {
+              closestDiff = diff;
+              closestIndex = i;
+            }
           }
+          currentIndex = closestIndex;
         }
-        currentIndex = closestIndex;
+
+        // Cycle to next/previous preset
+        const nextIndex =
+          direction === "right"
+            ? (currentIndex + 1) % PRESETS.length
+            : (currentIndex - 1 + PRESETS.length) % PRESETS.length;
+
+        setSelectedDuration(PRESETS[nextIndex].ms);
+      } else if (selectedMode === "break") {
+        const currentDuration = selectedBreakDuration || 0;
+        // Find the closest preset to current duration
+        let currentIndex = BREAK_PRESETS.findIndex(
+          (preset) => Math.abs(currentDuration - preset.ms) < 100
+        );
+
+        // If no exact match, find the closest preset
+        if (currentIndex === -1) {
+          let closestIndex = 0;
+          let closestDiff = Math.abs(currentDuration - BREAK_PRESETS[0].ms);
+          for (let i = 1; i < BREAK_PRESETS.length; i++) {
+            const diff = Math.abs(currentDuration - BREAK_PRESETS[i].ms);
+            if (diff < closestDiff) {
+              closestDiff = diff;
+              closestIndex = i;
+            }
+          }
+          currentIndex = closestIndex;
+        }
+
+        // Cycle to next/previous preset
+        const nextIndex =
+          direction === "right"
+            ? (currentIndex + 1) % BREAK_PRESETS.length
+            : (currentIndex - 1 + BREAK_PRESETS.length) % BREAK_PRESETS.length;
+
+        setSelectedBreakDuration(BREAK_PRESETS[nextIndex].ms);
       }
-      
-      // Cycle to next/previous preset
-      const nextIndex = direction === "right"
-        ? (currentIndex + 1) % BREAK_PRESETS.length
-        : (currentIndex - 1 + BREAK_PRESETS.length) % BREAK_PRESETS.length;
-      
-      setSelectedBreakDuration(BREAK_PRESETS[nextIndex].ms);
-    }
-  }, [selectedMode, selectedDuration, selectedBreakDuration]);
+    },
+    [selectedMode, selectedDuration, selectedBreakDuration]
+  );
 
   // Adjust time by +/- 5 minutes (up/down arrows)
-  const adjustTime = useCallback((direction: "up" | "down", event?: React.MouseEvent) => {
-    if (event) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-    const fiveMinutesMs = 5 * 60 * 1000;
-    // Maximum duration for countdown/break: 3 hours (3:00:00)
-    const maxDurationMs = 3 * 60 * 60 * 1000; // 10800000ms = 3 hours
-    const adjustment = direction === "up" ? fiveMinutesMs : -fiveMinutesMs;
-    
-    if (selectedMode === "break") {
-      let newDuration = (selectedBreakDuration || 0) + adjustment;
-      if (newDuration < 0) {
-        newDuration = 0;
-      } else if (newDuration > maxDurationMs) {
-        newDuration = 0; // Wrap to 00:00 when exceeding 3 hours
+  const adjustTime = useCallback(
+    (direction: "up" | "down", event?: React.MouseEvent) => {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
       }
-      setSelectedBreakDuration(newDuration);
-    } else if (selectedMode === "countdown") {
-      let newDuration = (selectedDuration || 0) + adjustment;
-      if (newDuration < 0) {
-        newDuration = 0;
-      } else if (newDuration > maxDurationMs) {
-        newDuration = 0; // Wrap to 00:00 when exceeding 3 hours
+      const fiveMinutesMs = 5 * 60 * 1000;
+      // Maximum duration for countdown/break: 3 hours (3:00:00)
+      const maxDurationMs = 3 * 60 * 60 * 1000; // 10800000ms = 3 hours
+      const adjustment = direction === "up" ? fiveMinutesMs : -fiveMinutesMs;
+
+      if (selectedMode === "break") {
+        let newDuration = (selectedBreakDuration || 0) + adjustment;
+        if (newDuration < 0) {
+          newDuration = 0;
+        } else if (newDuration > maxDurationMs) {
+          newDuration = 0; // Wrap to 00:00 when exceeding 3 hours
+        }
+        setSelectedBreakDuration(newDuration);
+      } else if (selectedMode === "countdown") {
+        let newDuration = (selectedDuration || 0) + adjustment;
+        if (newDuration < 0) {
+          newDuration = 0;
+        } else if (newDuration > maxDurationMs) {
+          newDuration = 0; // Wrap to 00:00 when exceeding 3 hours
+        }
+        setSelectedDuration(newDuration);
       }
-      setSelectedDuration(newDuration);
-    }
-    // Stopwatch mode doesn't use adjustTime - it starts at 0 and can run up to 99:59:59
-  }, [selectedMode, selectedDuration, selectedBreakDuration]);
+      // Stopwatch mode doesn't use adjustTime - it starts at 0 and can run up to 99:59:59
+    },
+    [selectedMode, selectedDuration, selectedBreakDuration]
+  );
 
   // Calculate displayed session during render (no effect needed)
   // Show session if it exists and hasn't been dismissed
-  const displayedSession = completedSession && completedSession.id !== dismissedSessionId 
-    ? completedSession 
-    : null;
+  const displayedSession =
+    completedSession && completedSession.id !== dismissedSessionId
+      ? completedSession
+      : null;
 
   // Set up keyboard shortcuts (must be called unconditionally)
   useKeyboardShortcuts({
@@ -204,7 +219,8 @@ export function TimerView({ onNavigate }: TimerViewProps) {
 
       // Don't handle keyboard shortcuts when SessionResults is displayed
       // Let SessionResults handle its own keyboard navigation
-      const hasDisplayedSession = completedSession && completedSession.id !== dismissedSessionId;
+      const hasDisplayedSession =
+        completedSession && completedSession.id !== dismissedSessionId;
       if (hasDisplayedSession) {
         return;
       }
@@ -267,7 +283,14 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [isIdle, selectedMode, cyclePreset, adjustTime, completedSession, dismissedSessionId]);
+  }, [
+    isIdle,
+    selectedMode,
+    cyclePreset,
+    adjustTime,
+    completedSession,
+    dismissedSessionId,
+  ]);
 
   if (!timerState) {
     return (
@@ -300,10 +323,15 @@ export function TimerView({ onNavigate }: TimerViewProps) {
       await endTimerMutation.mutateAsync();
       return;
     }
-    
+
     // Use mutation to end timer - automatically invalidates sessions cache
     // The session will be displayed via useSessionCompleted hook
     await endTimerMutation.mutateAsync();
+  };
+
+  const handleClearOnboardingCache = () => {
+    localStorage.removeItem("lefocus_onboarding_completed");
+    window.location.reload();
   };
 
   return (
@@ -368,22 +396,34 @@ export function TimerView({ onNavigate }: TimerViewProps) {
             onClick={() => handleModeChange("countdown")}
             className="text-base font-light text-gray-600 flex items-center gap-2 group"
           >
-            <KeyBox selected={selectedMode === "countdown"} hovered={false}>T</KeyBox>
-            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">timer</span>
+            <KeyBox selected={selectedMode === "countdown"} hovered={false}>
+              T
+            </KeyBox>
+            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">
+              timer
+            </span>
           </button>
           <button
             onClick={() => handleModeChange("stopwatch")}
             className="text-base font-light text-gray-600 flex items-center gap-2 group"
           >
-            <KeyBox selected={selectedMode === "stopwatch"} hovered={false}>S</KeyBox>
-            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">stopwatch</span>
+            <KeyBox selected={selectedMode === "stopwatch"} hovered={false}>
+              S
+            </KeyBox>
+            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">
+              stopwatch
+            </span>
           </button>
           <button
             onClick={() => handleModeChange("break")}
             className="text-base font-light text-gray-600 flex items-center gap-2 group"
           >
-            <KeyBox selected={selectedMode === "break"} hovered={false}>B</KeyBox>
-            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">break</span>
+            <KeyBox selected={selectedMode === "break"} hovered={false}>
+              B
+            </KeyBox>
+            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">
+              break
+            </span>
           </button>
         </div>
       )}
@@ -392,30 +432,38 @@ export function TimerView({ onNavigate }: TimerViewProps) {
       {state.status === "idle" && (
         <div
           className={`fixed left-8 top-52 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
-            showCommandControls ? "opacity-100" : "opacity-0 pointer-events-none"
+            showCommandControls
+              ? "opacity-100"
+              : "opacity-0 pointer-events-none"
           }`}
         >
-        <button
-          className="text-base font-light text-gray-600 flex items-center gap-2 group"
-          onClick={() => onNavigate("activities")}
-        >
-          <KeyboardShortcut keyLetter="a" hovered={false} />
-          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">activities</span>
-        </button>
-        <button
-          className="text-base font-light text-gray-600 flex items-center gap-2 group"
-          onClick={() => onNavigate("stats")}
-        >
-          <KeyboardShortcut keyLetter="s" hovered={false} />
-          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">stats</span>
-        </button>
-        <button
-          className="text-base font-light text-gray-600 flex items-center gap-2 group"
-          onClick={() => onNavigate("profile")}
-        >
-          <KeyboardShortcut keyLetter="p" hovered={false} />
-          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">profile</span>
-        </button>
+          <button
+            className="text-base font-light text-gray-600 flex items-center gap-2 group"
+            onClick={() => onNavigate("activities")}
+          >
+            <KeyboardShortcut keyLetter="a" hovered={false} />
+            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">
+              activities
+            </span>
+          </button>
+          <button
+            className="text-base font-light text-gray-600 flex items-center gap-2 group"
+            onClick={() => onNavigate("stats")}
+          >
+            <KeyboardShortcut keyLetter="s" hovered={false} />
+            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">
+              stats
+            </span>
+          </button>
+          <button
+            className="text-base font-light text-gray-600 flex items-center gap-2 group"
+            onClick={() => onNavigate("profile")}
+          >
+            <KeyboardShortcut keyLetter="p" hovered={false} />
+            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">
+              profile
+            </span>
+          </button>
         </div>
       )}
 
@@ -438,21 +486,35 @@ export function TimerView({ onNavigate }: TimerViewProps) {
           }}
         >
           <KeyboardShortcut keyLetter="f" hovered={false} />
-          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">fullscreen</span>
+          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">
+            fullscreen
+          </span>
         </button>
         <button
           className="text-base font-light text-gray-600 flex items-center gap-2 group"
           onClick={() => setControlsVisible(false)}
         >
           <KeyBox hovered={false}>H</KeyBox>
-          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">hide</span>
+          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">
+            hide
+          </span>
+        </button>
+        <button
+          className="text-base font-light text-gray-600 flex items-center gap-2 group"
+          onClick={handleClearOnboardingCache}
+        >
+          <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">
+            clear cache
+          </span>
         </button>
       </div>
 
       {/* Start button in bottom right */}
       {state.status === "idle" && (
         <div className="fixed bottom-8 right-8 flex flex-col items-start gap-2 z-10">
-          <div className={`transition-opacity duration-300 ${showCommandControls ? "opacity-100" : "opacity-0"}`}>
+          <div
+            className={`transition-opacity duration-300 ${showCommandControls ? "opacity-100" : "opacity-0"}`}
+          >
             <KeyBox className="w-16 h-6 px-2 py-1">return</KeyBox>
           </div>
           <button

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export interface GridLines {
-  vertical: number[];   // x positions in px
+  vertical: number[]; // x positions in px
   horizontal: number[]; // y positions in px
 }
 
@@ -12,16 +12,16 @@ interface GridOverlayProps {
   opacity?: number;
 }
 
-export function GridOverlay({ 
-  lines, 
-  color = "#999", 
-  opacity = 0.3 
+export function GridOverlay({
+  lines,
+  color = "#999",
+  opacity = 0.3,
 }: GridOverlayProps) {
   return (
-    <div 
+    <div
       className="pointer-events-none"
-      style={{ 
-        position: 'fixed',
+      style={{
+        position: "fixed",
         top: 0,
         left: 0,
         right: 0,
@@ -42,7 +42,7 @@ export function GridOverlay({
           }}
         />
       ))}
-      
+
       {/* Horizontal lines */}
       {lines.horizontal.map((y, i) => (
         <div
@@ -137,16 +137,16 @@ export function useGridOverlay() {
 // All values must be multiples of the 8px base unit
 export const TIMER_GRID: GridLines = {
   vertical: [
-    32,      // left-8 (4 × 8px)
+    32, // left-8 (4 × 8px)
     32 + 24, // right edge of KeyBox (24px = 3 × 8px)
     // Center area - will be calculated dynamically or use viewport center
   ],
   horizontal: [
-    32,       // top-8 (4 × 8px)
-    32 + 24,  // after first button row (24px height = 3 × 8px)
+    32, // top-8 (4 × 8px)
+    32 + 24, // after first button row (24px height = 3 × 8px)
     32 + 24 + 8 + 24, // after second button (gap-2 = 8px)
     32 + 24 + 8 + 24 + 8 + 24, // after third button
-    208,      // top-52 (26 × 8px)
+    208, // top-52 (26 × 8px)
   ],
 };
 
@@ -162,17 +162,17 @@ export function generateCenteredGrid(
 
   return {
     vertical: [
-      32,                          // left-8
-      windowWidth - 32,            // right-8
-      centerX - halfContent,       // content left edge
-      centerX,                     // center
-      centerX + halfContent,       // content right edge
+      32, // left-8
+      windowWidth - 32, // right-8
+      centerX - halfContent, // content left edge
+      centerX, // center
+      centerX + halfContent, // content right edge
     ],
     horizontal: [
-      32,                          // top-8
-      208,                         // top-52
-      windowHeight - 32,           // bottom-8
-      centerY,                     // center
+      32, // top-8
+      208, // top-52
+      windowHeight - 32, // bottom-8
+      centerY, // center
     ],
   };
 }
