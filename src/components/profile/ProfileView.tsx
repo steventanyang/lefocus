@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { LabelsSettingsPage } from "./LabelsSettingsPage";
 import { FontsSettingsPage } from "./FontsSettingsPage";
 import { ChimeSettingsPage } from "./IslandSettingsPage";
+import { SettingsSettingsPage } from "./SettingsSettingsPage";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import { KeyBox } from "@/components/ui/KeyBox";
 import { isUserTyping } from "@/utils/keyboardUtils";
@@ -13,7 +14,7 @@ interface ProfileViewProps {
   onNavigate?: (view: ViewName) => void;
 }
 
-type SubPage = "labels" | "fonts" | "island";
+type SubPage = "labels" | "fonts" | "island" | "settings";
 
 export function ProfileView({ onClose }: ProfileViewProps) {
   const [selectedSubPage, setSelectedSubPage] = useState<SubPage>("labels");
@@ -42,6 +43,13 @@ export function ProfileView({ onClose }: ProfileViewProps) {
       if ((event.key === "c" || event.key === "C") && !isModifierPressed) {
         event.preventDefault();
         setSelectedSubPage("island");
+        return;
+      }
+
+      // S key: Switch to Settings
+      if ((event.key === "s" || event.key === "S") && !isModifierPressed) {
+        event.preventDefault();
+        setSelectedSubPage("settings");
         return;
       }
     };
@@ -110,6 +118,20 @@ export function ProfileView({ onClose }: ProfileViewProps) {
               chimes
             </span>
           </button>
+          <button
+            onClick={() => setSelectedSubPage("settings")}
+            className="text-base font-light text-gray-600 flex items-center gap-2 group text-left"
+          >
+            <KeyBox
+              selected={selectedSubPage === "settings"}
+              hovered={false}
+            >
+              S
+            </KeyBox>
+            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">
+              settings
+            </span>
+          </button>
         </div>
 
         {/* Right content area */}
@@ -117,6 +139,7 @@ export function ProfileView({ onClose }: ProfileViewProps) {
           {selectedSubPage === "labels" && <LabelsSettingsPage />}
           {selectedSubPage === "fonts" && <FontsSettingsPage />}
           {selectedSubPage === "island" && <ChimeSettingsPage />}
+          {selectedSubPage === "settings" && <SettingsSettingsPage />}
         </div>
       </div>
     </div>

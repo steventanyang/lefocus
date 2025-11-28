@@ -177,6 +177,16 @@ final class IslandWindowManager {
         islandWindow?.orderFrontRegardless()
     }
 
+    func setVisible(_ visible: Bool) {
+        if visible {
+            islandWindow?.orderFrontRegardless()
+            parentWindow?.orderFrontRegardless()
+        } else {
+            islandWindow?.orderOut(nil)
+            parentWindow?.orderOut(nil)
+        }
+    }
+
     func teardown() {
         if let observer = screenObserver {
             NotificationCenter.default.removeObserver(observer)

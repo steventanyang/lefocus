@@ -21,6 +21,8 @@ use macos_bridge::{
     capture_screenshot, get_active_window_metadata, run_ocr, OCRResult, WindowMetadata,
 };
 use settings::{IslandSoundSettings, SettingsStore};
+use std::{env, process::Command};
+
 use tauri::{Emitter, Manager, State};
 use timer::{
     commands::{
@@ -30,6 +32,7 @@ use timer::{
     },
     TimerController,
 };
+
 
 pub(crate) struct AppState {
     audio: AudioEngineHandle,
@@ -44,6 +47,12 @@ pub enum SoundType {
     Binaural,
     BrownNoise,
     Rain,
+}
+
+#[derive(serde::Serialize)]
+struct AutomationPermissionRequestResult {
+    granted: bool,
+    status: i32,
 }
 
 #[tauri::command]
@@ -173,6 +182,34 @@ fn preview_island_chime(sound_id: Option<String>, sound_id_camel: Option<String>
 }
 
 #[tauri::command]
+fn get_island_visible(state: State<AppState>) -> Result<bool, String> {
+    Ok(state.settings.island_visible())
+}
+
+#[tauri::command]
+fn set_island_visible(
+    visible: bool,
+    state: State<AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    state
+        .settings
+        .update_island_visible(visible)
+        .map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "macos")]
+    {
+        macos_bridge::island_set_visible(visible);
+    }
+
+    app_handle
+        .emit("island-visible-updated", visible)
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
 fn check_screen_recording_permissions() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
@@ -224,6 +261,67 @@ fn open_accessibility_settings() -> Result<(), String> {
     {
         Err("Accessibility settings are only available on macOS".into())
     }
+}
+
+#[tauri::command]
+fn check_media_automation_permission(bundle_id: String) -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        Ok(macos_bridge::check_media_automation_permission(&bundle_id))
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = bundle_id;
+        Ok(true)
+    }
+}
+
+#[tauri::command]
+fn request_media_automation_permission(bundle_id: String) -> Result<AutomationPermissionRequestResult, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let status = macos_bridge::request_media_automation_permission_status(&bundle_id);
+        Ok(AutomationPermissionRequestResult {
+            granted: status == 0,
+            status,
+        })
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = bundle_id;
+        Ok(AutomationPermissionRequestResult {
+            granted: true,
+            status: 0,
+        })
+    }
+}
+
+#[tauri::command]
+fn open_automation_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        macos_bridge::open_automation_settings();
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Automation settings are only available on macOS".into())
+    }
+}
+
+#[tauri::command]
+fn restart_app_instance(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let current_exe = env::current_exe().map_err(|e| format!("Failed to locate executable: {e}"))?;
+
+    Command::new(&current_exe)
+        .spawn()
+        .map_err(|e| format!("Failed to relaunch LeFocus: {e}"))?;
+
+    app_handle.exit(0);
+    Ok(())
 }
 
 #[tauri::command]
@@ -335,11 +433,17 @@ pub fn run() {
             get_island_sound_settings,
             set_island_sound_settings,
             preview_island_chime,
+            get_island_visible,
+            set_island_visible,
         // Permission checking commands
         check_screen_recording_permissions,
         check_accessibility_permissions,
         open_screen_recording_settings,
         open_accessibility_settings,
+        check_media_automation_permission,
+        request_media_automation_permission,
+        open_automation_settings,
+        restart_app_instance,
         get_metrics_snapshot,
         ])
         .run(tauri::generate_context!())

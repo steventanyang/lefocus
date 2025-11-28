@@ -389,7 +389,7 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
       label={currentLabel}
       size="medium"
       selected={true}
-      maxWidth="126px"
+      maxWidth="128px"
       showEmptyFrame
     />
   ) : (
@@ -399,9 +399,9 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
   const labelFilterSelector = (
     <button
       onClick={() => setIsLabelModalOpen(true)}
-      className="flex items-center gap-1.5 group"
+      className="flex items-center gap-2 group"
     >
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-2">
         <KeyBox selected={isLabelModalOpen} hovered={false}>
           ⌘
         </KeyBox>
@@ -409,14 +409,14 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
           L
         </KeyBox>
       </div>
-      <div className="flex items-center justify-start min-w-[126px] ml-1 mr-4">
+      <div className="flex items-center justify-start min-w-[128px] ml-2 mr-4">
         {labelDisplay}
       </div>
     </button>
   );
 
   const buttonPrimaryClass =
-    "bg-transparent border border-black text-black px-8 py-3.5 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[140px] hover:bg-gray-300 hover:text-black";
+    "bg-transparent border border-black text-black px-8 py-4 text-base font-semibold cursor-pointer transition-all duration-200 min-w-[144px] hover:bg-gray-300 hover:text-black";
 
   // Show expanded session modal
   if (selectedSession) {
@@ -448,16 +448,19 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
       />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div
+        className="flex items-center justify-between"
+        style={{ marginTop: "-4px" }}
+      >
         <h1 className="text-2xl font-light tracking-wide">activities</h1>
         <div
           className="flex-1 flex justify-center"
-          style={{ marginLeft: "60px" }}
+          style={{ marginLeft: "64px" }}
         >
           {labelFilterSelector}
         </div>
         <button
-          className="text-base font-light text-gray-600 hover:opacity-70 transition-opacity flex items-center gap-2"
+          className="text-base font-light text-gray-600 flex items-center gap-2 group"
           onClick={() => onNavigate("timer")}
         >
           <KeyboardShortcut keyLetter="t" />
@@ -495,7 +498,7 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
 
       {/* Error state */}
       {error && (
-        <div className="text-sm font-normal text-center p-4 border border-black bg-transparent max-w-full">
+        <div className="text-xs font-normal text-center p-4 border border-black bg-transparent max-w-full">
           {error instanceof Error ? error.message : "failed to load sessions"}
         </div>
       )}
@@ -504,22 +507,13 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
       {!loading &&
         !error &&
         (filteredSessions.length === 0 && sessions.length > 0 ? (
-          <div className="text-center p-12 px-8 flex flex-col gap-4 border border-black">
+          <div className="text-center p-12 px-8 flex flex-col gap-4">
             <p className="text-base font-normal">no sessions with this label</p>
-            <p className="text-sm font-light text-gray-600">
-              try a different label or view all sessions
-            </p>
-            <button
-              className={buttonPrimaryClass}
-              onClick={() => setSelectedLabelId(null)}
-            >
-              view all sessions
-            </button>
           </div>
         ) : sessions.length === 0 ? (
           <div className="text-center p-12 px-8 flex flex-col gap-4 border border-black">
             <p className="text-base font-normal">no past sessions yet</p>
-            <p className="text-sm font-light text-gray-600">
+            <p className="text-xs font-light text-gray-600">
               complete a focus session to see it here
             </p>
             <button

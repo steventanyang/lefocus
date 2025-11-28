@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import "./App.css";
 import { TimerView } from "@/components/timer/TimerView";
 import { ActivitiesView } from "@/components/activities/ActivitiesView";
@@ -6,13 +6,24 @@ import { StatsView } from "@/components/stats/StatsView";
 import { ProfileView } from "@/components/profile/ProfileView";
 import { OnboardingView } from "@/components/onboarding/OnboardingView";
 import { MetricsView } from "@/components/metrics/MetricsView";
+import {
+  GridOverlay,
+  useGridOverlay,
+  type GridLines,
+} from "@/components/ui/GridOverlay";
 import { useWindowSize } from "@/hooks/useWindowSize";
 import { useGlobalNavigationShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { usePermissions } from "@/hooks/usePermissions";
 import { isUserTyping, isMac } from "@/utils/keyboardUtils";
 import { FONT_CLASSES } from "@/constants/fonts";
 
-type View = "timer" | "activities" | "stats" | "profile" | "onboarding" | "metrics";
+type View =
+  | "timer"
+  | "activities"
+  | "stats"
+  | "profile"
+  | "onboarding"
+  | "metrics";
 
 const ONBOARDING_COMPLETED_KEY = "lefocus_onboarding_completed";
 
@@ -24,21 +35,90 @@ function App() {
       return localStorage.getItem(ONBOARDING_COMPLETED_KEY) === "true";
     }
   );
-  const { height } = useWindowSize();
+  const { width, height } = useWindowSize();
   const { loading: permissionsLoading } = usePermissions();
+  const { showGrid } = useGridOverlay();
+
+  // Generate grid lines based on current view and window size
+  const gridLines = useMemo((): GridLines => {
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const contentWidth = 448; // max-w-md
+    const halfContent = contentWidth / 2;
+
+    if (currentView === "timer") {
+      return {
+        vertical: [
+          32, // left-8 (mode buttons, nav buttons, bottom controls)
+          width - 32, // right-8 (label, start button)
+          width - 32 - 160, // left edge of start button (w-[160px])
+          centerX - halfContent, // content left edge
+          centerX, // center
+          centerX + halfContent, // content right edge
+        ],
+        horizontal: [
+          32, // top-8 (mode buttons, label section)
+          208, // top-52 (navigation buttons)
+          height - 32, // bottom-8 (bottom controls)
+          centerY, // vertical center
+          centerY + 64 + 36,
+          centerY + 64 + 36 - 50,
+        ],
+      };
+    }
+
+    if (currentView === "activities") {
+      const maxW3xl = 768; // max-w-3xl
+      return {
+        vertical: [
+          centerX - maxW3xl / 2, // content left
+          centerX + maxW3xl / 2, // content right
+        ],
+        horizontal: [
+          32, // top padding
+        ],
+      };
+    }
+
+    if (currentView === "stats") {
+      const maxW3xl = 768; // max-w-3xl
+      const contentLeft = centerX - maxW3xl / 2;
+      const contentRight = centerX + maxW3xl / 2;
+      const padding = 24; // p-6
+      return {
+        vertical: [
+          contentLeft, // content left edge
+          contentLeft + padding, // inner padding left
+          contentRight - padding, // inner padding right
+          contentRight, // content right edge
+        ],
+        horizontal: [
+          32, // top padding (p-8)
+          32 + 32 + 32, // gap-8 between header and content
+          32 + 32 + 32 + padding, // content inner top (p-6)
+          32 + 32 + 32 + padding + 24 + 32, // after date + duration section
+          32 + 32 + 32 + padding + 24 + 32 + 24, // after "top applications" header
+        ],
+      };
+    }
+
+    // Default grid
+    return {
+      vertical: [32, centerX, width - 32],
+      horizontal: [32, centerY, height - 32],
+    };
+  }, [currentView, width, height]);
 
   // Apply saved font on app startup
   useEffect(() => {
     const savedFont = localStorage.getItem("selectedFont");
-    // Handle migration from old "system" preference
-    const fontId = savedFont === "system" ? "noto-sans-jp" : savedFont;
-    
-    if (fontId && FONT_CLASSES[fontId]) {
+
+    if (savedFont && FONT_CLASSES[savedFont]) {
       const root = document.documentElement;
       // Remove any existing font classes
-      Object.values(FONT_CLASSES).forEach(cls => root.classList.remove(cls));
+      Object.values(FONT_CLASSES).forEach((cls) => root.classList.remove(cls));
       // Apply the saved font
-      root.classList.add(FONT_CLASSES[fontId]);
+      root.classList.add(FONT_CLASSES[savedFont]);
     }
   }, []);
 
@@ -98,29 +178,30 @@ function App() {
   }
 
   return (
-    <main
-      className={`flex-1 flex flex-col p-8 bg-white ${
-        isTimerView
-          ? "items-center justify-center"
-          : "items-center justify-start overflow-y-auto"
-      }`}
-      style={{ height: height > 0 ? `${height}px` : "100vh" }}
-    >
-      {currentView === "timer" && <TimerView onNavigate={setCurrentView} />}
-      {currentView === "activities" && (
-        <ActivitiesView onNavigate={setCurrentView} />
-      )}
-      {currentView === "stats" && <StatsView onNavigate={setCurrentView} />}
-      {currentView === "profile" && (
-        <ProfileView
-          onNavigate={setCurrentView}
-          onClose={() => setCurrentView("timer")}
-        />
-      )}
-      {currentView === "metrics" && (
-        <MetricsView />
-      )}
-    </main>
+    <>
+      {showGrid && <GridOverlay lines={gridLines} />}
+      <main
+        className={`flex-1 flex flex-col p-8 bg-white ${
+          isTimerView
+            ? "items-center justify-center"
+            : "items-center justify-start overflow-y-auto"
+        }`}
+        style={{ height: height > 0 ? `${height}px` : "100vh" }}
+      >
+        {currentView === "timer" && <TimerView onNavigate={setCurrentView} />}
+        {currentView === "activities" && (
+          <ActivitiesView onNavigate={setCurrentView} />
+        )}
+        {currentView === "stats" && <StatsView onNavigate={setCurrentView} />}
+        {currentView === "profile" && (
+          <ProfileView
+            onNavigate={setCurrentView}
+            onClose={() => setCurrentView("timer")}
+          />
+        )}
+        {currentView === "metrics" && <MetricsView />}
+      </main>
+    </>
   );
 }
 

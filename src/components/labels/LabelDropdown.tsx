@@ -104,7 +104,10 @@ export function LabelDropdown({
     if (!isOpen) return;
 
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         onClose();
       }
     };
@@ -149,26 +152,36 @@ export function LabelDropdown({
         className="flex items-center gap-2"
         style={{
           opacity: isClosing ? 0 : isAnimatingIn ? 0 : 1,
-          transform: isClosing ? 'translateY(-8px)' : isAnimatingIn ? 'translateY(-8px)' : 'translateY(0)',
-          transition: `opacity ${isClosing ? '100ms' : '50ms'} ease-out ${getAnimationDelay(0)}ms, transform ${isClosing ? '100ms' : '50ms'} ease-out ${getAnimationDelay(0)}ms`,
+          transform: isClosing
+            ? "translateY(-8px)"
+            : isAnimatingIn
+              ? "translateY(-8px)"
+              : "translateY(0)",
+          transition: `opacity ${isClosing ? "100ms" : "50ms"} ease-out ${getAnimationDelay(0)}ms, transform ${isClosing ? "100ms" : "50ms"} ease-out ${getAnimationDelay(0)}ms`,
         }}
       >
         <KeyBox hovered={false}>0</KeyBox>
         <div
           onClick={() => onSelectLabel(null)}
           className={`border border-gray-300 px-3 py-1 text-sm font-medium transition-colors flex items-center justify-center min-w-0 cursor-pointer ${
-            currentLabelId === null ? "text-gray-600" : "text-gray-600 opacity-60 hover:border-gray-400 hover:text-gray-700"
+            currentLabelId === null
+              ? "text-gray-600"
+              : "text-gray-600 opacity-60 hover:border-gray-400 hover:text-gray-700"
           }`}
-          style={{ width: '126px', backgroundColor: 'transparent' }}
+          style={{ width: "160px", backgroundColor: "transparent" }}
         >
-          <span className="truncate inline-block max-w-full text-left">no label</span>
+          <span className="truncate inline-block max-w-full text-left">
+            no label
+          </span>
         </div>
       </div>
 
       {/* Label Options */}
       {labels.map((label, index) => {
         const rgb = hexToRgb(label.color);
-        const lightBg = rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)` : label.color;
+        const lightBg = rgb
+          ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.15)`
+          : label.color;
         const isSelected = currentLabelId === label.id;
         const itemIndex = index + 1; // +1 because "No Label" is index 0
 
@@ -178,8 +191,12 @@ export function LabelDropdown({
             className="flex items-center gap-2"
             style={{
               opacity: isClosing ? 0 : isAnimatingIn ? 0 : 1,
-              transform: isClosing ? 'translateY(-8px)' : isAnimatingIn ? 'translateY(-8px)' : 'translateY(0)',
-              transition: `opacity ${isClosing ? '100ms' : '50ms'} ease-out ${getAnimationDelay(itemIndex)}ms, transform ${isClosing ? '100ms' : '50ms'} ease-out ${getAnimationDelay(itemIndex)}ms`,
+              transform: isClosing
+                ? "translateY(-8px)"
+                : isAnimatingIn
+                  ? "translateY(-8px)"
+                  : "translateY(0)",
+              transition: `opacity ${isClosing ? "100ms" : "50ms"} ease-out ${getAnimationDelay(itemIndex)}ms, transform ${isClosing ? "100ms" : "50ms"} ease-out ${getAnimationDelay(itemIndex)}ms`,
             }}
           >
             <KeyBox hovered={false}>{index + 1}</KeyBox>
@@ -191,11 +208,13 @@ export function LabelDropdown({
               style={{
                 backgroundColor: isSelected ? label.color : lightBg,
                 borderColor: label.color,
-                color: isSelected ? 'white' : label.color,
-                width: '126px',
+                color: isSelected ? "white" : label.color,
+                width: "160px",
               }}
             >
-              <span className="truncate inline-block max-w-full text-left">{label.name}</span>
+              <span className="truncate inline-block max-w-full text-left">
+                {label.name}
+              </span>
             </button>
           </div>
         );
@@ -207,14 +226,18 @@ export function LabelDropdown({
           className="flex items-center gap-2 mt-3"
           style={{
             opacity: isClosing ? 0 : isAnimatingIn ? 0 : 1,
-            transform: isClosing ? 'translateY(-8px)' : isAnimatingIn ? 'translateY(-8px)' : 'translateY(0)',
-            transition: `opacity ${isClosing ? '100ms' : '50ms'} ease-out ${getAnimationDelay(labels.length + 1)}ms, transform ${isClosing ? '100ms' : '50ms'} ease-out ${getAnimationDelay(labels.length + 1)}ms`,
+            transform: isClosing
+              ? "translateY(-8px)"
+              : isAnimatingIn
+                ? "translateY(-8px)"
+                : "translateY(0)",
+            transition: `opacity ${isClosing ? "100ms" : "50ms"} ease-out ${getAnimationDelay(labels.length + 1)}ms, transform ${isClosing ? "100ms" : "50ms"} ease-out ${getAnimationDelay(labels.length + 1)}ms`,
           }}
         >
           <KeyBox hovered={false}>N</KeyBox>
           <div
             className="px-3 py-1 text-sm text-gray-500 hover:text-gray-600 flex items-center justify-center cursor-pointer transition-colors"
-            style={{ width: '126px' }}
+            style={{ width: "160px" }}
             onClick={onAddNew}
           >
             + new label
