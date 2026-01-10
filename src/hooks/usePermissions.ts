@@ -121,6 +121,27 @@ export function usePermissions() {
     queryClient.invalidateQueries({ queryKey: PERMISSIONS_QUERY_KEY });
   }, [queryClient]);
 
+  const requestScreenRecordingPermission = useCallback(async () => {
+    try {
+      const granted = await invoke<boolean>("request_screen_recording_permission");
+      // Start aggressive polling after requesting permission
+      setIsWaitingForScreenRecording(true);
+      isWaitingRef.current = true;
+      // Stop aggressive polling after 30 seconds (fallback)
+      setTimeout(() => {
+        setIsWaitingForScreenRecording(false);
+        isWaitingRef.current = false;
+      }, 30000);
+      return granted;
+    } catch (err) {
+      console.error("Failed to request screen recording permission:", err);
+      setError(
+        `Failed to request screen recording permission: ${err instanceof Error ? err.message : String(err)}`
+      );
+      return false;
+    }
+  }, []);
+
   const openScreenRecordingSettings = useCallback(async () => {
     try {
       await invoke("open_screen_recording_settings");
@@ -228,6 +249,7 @@ export function usePermissions() {
     requestingSpotify,
     allPermissionsGranted,
     checkPermissions,
+    requestScreenRecordingPermission,
     openScreenRecordingSettings,
     requestSpotifyAutomationPermission,
     openAutomationSettings,

@@ -87,7 +87,7 @@ export function SettingsSettingsPage() {
     screenRecording,
     spotifyAutomation,
     loading,
-    openScreenRecordingSettings,
+    requestScreenRecordingPermission,
     requestSpotifyAutomationPermission,
     requestingSpotify,
   } = usePermissions();
@@ -100,10 +100,9 @@ export function SettingsSettingsPage() {
 
   const handleScreenRecordingAllow = async () => {
     try {
-      await openScreenRecordingSettings();
-      // Polling will automatically start after opening settings
+      await requestScreenRecordingPermission();
     } catch (err) {
-      console.error("Failed to open screen recording settings:", err);
+      console.error("Failed to request screen recording permission:", err);
     }
   };
 

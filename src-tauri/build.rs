@@ -99,6 +99,7 @@ fn compile_macos_sensing() {
     );
     println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../Frameworks");
     println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../Resources");
+    println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path/../Resources/Frameworks");
 
     // Copy dylib into app resources for bundling
     println!("cargo:warning=[COPY] Copying dylib to resources...");

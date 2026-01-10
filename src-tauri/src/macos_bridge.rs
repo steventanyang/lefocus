@@ -62,6 +62,7 @@ extern "C" {
 
     // Permission checking
     fn macos_sensing_check_screen_recording_permission() -> bool;
+    fn macos_sensing_request_screen_recording_permission() -> bool;
     fn macos_sensing_check_accessibility_permission() -> bool;
     fn macos_sensing_open_screen_recording_settings();
     fn macos_sensing_open_accessibility_settings();
@@ -256,6 +257,12 @@ pub fn island_set_visible(_visible: bool) {}
 pub fn check_screen_recording_permission() -> bool {
     unsafe {
         macos_sensing_check_screen_recording_permission()
+    }
+}
+
+pub fn request_screen_recording_permission() -> bool {
+    unsafe {
+        macos_sensing_request_screen_recording_permission()
     }
 }
 

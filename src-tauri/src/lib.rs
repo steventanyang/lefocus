@@ -223,6 +223,19 @@ fn check_screen_recording_permissions() -> Result<bool, String> {
 }
 
 #[tauri::command]
+fn request_screen_recording_permission() -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        Ok(macos_bridge::request_screen_recording_permission())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Ok(true)
+    }
+}
+
+#[tauri::command]
 fn check_accessibility_permissions() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
@@ -437,6 +450,7 @@ pub fn run() {
             set_island_visible,
         // Permission checking commands
         check_screen_recording_permissions,
+        request_screen_recording_permission,
         check_accessibility_permissions,
         open_screen_recording_settings,
         open_accessibility_settings,

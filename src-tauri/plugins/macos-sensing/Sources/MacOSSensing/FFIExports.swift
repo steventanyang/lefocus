@@ -239,6 +239,11 @@ public func macos_sensing_swift_check_screen_recording_permission() -> Bool {
     return CGPreflightScreenCaptureAccess()
 }
 
+@_cdecl("macos_sensing_swift_request_screen_recording_permission")
+public func macos_sensing_swift_request_screen_recording_permission() -> Bool {
+    return CGRequestScreenCaptureAccess()
+}
+
 @_cdecl("macos_sensing_swift_check_accessibility_permission")
 public func macos_sensing_swift_check_accessibility_permission() -> Bool {
     return AXIsProcessTrusted()

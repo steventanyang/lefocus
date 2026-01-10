@@ -1,10 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import "./App.css";
 import { TimerView } from "@/components/timer/TimerView";
 import { ActivitiesView } from "@/components/activities/ActivitiesView";
 import { StatsView } from "@/components/stats/StatsView";
 import { ProfileView } from "@/components/profile/ProfileView";
-import { OnboardingView } from "@/components/onboarding/OnboardingView";
 import { MetricsView } from "@/components/metrics/MetricsView";
 import {
   GridOverlay,
@@ -22,22 +21,19 @@ type View =
   | "activities"
   | "stats"
   | "profile"
-  | "onboarding"
   | "metrics";
 
-const ONBOARDING_COMPLETED_KEY = "lefocus_onboarding_completed";
+const PERMISSIONS_REQUESTED_KEY = "lefocus_permissions_requested";
 
 function App() {
   const [currentView, setCurrentView] = useState<View>("timer");
-  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(
-    () => {
-      // Check localStorage on initial render
-      return localStorage.getItem(ONBOARDING_COMPLETED_KEY) === "true";
-    }
-  );
   const { width, height } = useWindowSize();
-  const { loading: permissionsLoading } = usePermissions();
+  const { 
+    requestScreenRecordingPermission, 
+    requestSpotifyAutomationPermission 
+  } = usePermissions();
   const { showGrid } = useGridOverlay();
+  const permissionsRequestedRef = useRef(false);
 
   // Generate grid lines based on current view and window size
   const gridLines = useMemo((): GridLines => {
@@ -144,38 +140,27 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Show onboarding only on first launch:
-  // - After permissions have finished loading
-  // - And onboarding hasn't been completed before (stored in localStorage)
-  const shouldShowOnboarding = !permissionsLoading && !onboardingCompleted;
+  // Request permissions on first launch (triggers native macOS dialogs)
+  useEffect(() => {
+    const alreadyRequested = localStorage.getItem(PERMISSIONS_REQUESTED_KEY) === "true";
+    if (alreadyRequested || permissionsRequestedRef.current) return;
+    
+    permissionsRequestedRef.current = true;
+    
+    const requestPermissions = async () => {
+      // Request screen recording permission (triggers native dialog)
+      await requestScreenRecordingPermission();
+      // Request Spotify automation permission (triggers native dialog)
+      await requestSpotifyAutomationPermission();
+      // Mark as requested so we don't prompt again
+      localStorage.setItem(PERMISSIONS_REQUESTED_KEY, "true");
+    };
+    
+    requestPermissions();
+  }, [requestScreenRecordingPermission, requestSpotifyAutomationPermission]);
 
   // Timer view should be centered, other views should be scrollable from top
   const isTimerView = currentView === "timer";
-
-  const handleReload = () => {
-    window.location.reload();
-  };
-
-  const handleOnboardingComplete = () => {
-    // Save to localStorage so onboarding doesn't show on next launch
-    localStorage.setItem(ONBOARDING_COMPLETED_KEY, "true");
-    setOnboardingCompleted(true);
-  };
-
-  // Show onboarding if needed, otherwise show the requested view
-  if (shouldShowOnboarding) {
-    return (
-      <main
-        className="flex-1 flex flex-col p-8 bg-white items-center justify-center"
-        style={{ height: height > 0 ? `${height}px` : "100vh" }}
-      >
-        <OnboardingView
-          onReload={handleReload}
-          onComplete={handleOnboardingComplete}
-        />
-      </main>
-    );
-  }
 
   return (
     <>
