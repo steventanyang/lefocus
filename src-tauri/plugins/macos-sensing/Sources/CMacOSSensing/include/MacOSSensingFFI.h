@@ -48,6 +48,7 @@ void macos_sensing_audio_previous_track(void);
 
 // Permission checking
 bool macos_sensing_check_screen_recording_permission(void);
+bool macos_sensing_request_screen_recording_permission(void);
 bool macos_sensing_check_accessibility_permission(void);
 void macos_sensing_open_screen_recording_settings(void);
 void macos_sensing_open_accessibility_settings(void);
