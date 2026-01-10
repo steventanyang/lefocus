@@ -1,62 +1,5 @@
-import { usePermissions } from "@/hooks/usePermissions";
+import { useSpotifyPermission } from "@/hooks/usePermissions";
 import { useIslandVisible } from "@/hooks/useIslandVisible";
-
-function PermissionCard({
-  title,
-  description,
-  granted,
-  onAllow,
-  disabled,
-  loadingText,
-}: {
-  title: string;
-  description: string;
-  granted: boolean;
-  onAllow: () => void;
-  disabled?: boolean;
-  loadingText?: string;
-}) {
-  return (
-    <div className="border border-black p-4 flex items-center justify-between gap-4">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-3 mb-1">
-          <h3 className="text-sm font-semibold">{title}</h3>
-          {granted ? (
-            <span className="text-xs px-2 py-0.5 border bg-green-100 text-green-800 border-green-500 font-normal whitespace-nowrap">
-              granted
-            </span>
-          ) : (
-            <span className="text-xs px-2 py-0.5 border bg-amber-100 text-amber-800 border-amber-300 font-normal whitespace-nowrap">
-              required
-            </span>
-          )}
-        </div>
-        <p className="text-xs font-light text-gray-600">{description}</p>
-      </div>
-      {granted ? (
-        <div className="bg-green-100 border border-green-500 text-green-800 px-4 py-2 flex items-center justify-center">
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-            <path
-              fillRule="evenodd"
-              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-              clipRule="evenodd"
-            />
-          </svg>
-        </div>
-      ) : (
-        <button
-          onClick={onAllow}
-          disabled={disabled}
-          className={`bg-transparent border border-black text-black px-4 py-2 text-sm font-semibold cursor-pointer hover:bg-black hover:text-white hover:transition-none transition-all duration-200 whitespace-nowrap ${
-            disabled ? "bg-gray-100 text-gray-400 cursor-wait" : ""
-          }`}
-        >
-          {loadingText || "allow"}
-        </button>
-      )}
-    </div>
-  );
-}
 
 function ToggleSwitch({
   enabled,
@@ -84,27 +27,17 @@ function ToggleSwitch({
 
 export function SettingsSettingsPage() {
   const {
-    screenRecording,
     spotifyAutomation,
     loading,
-    requestScreenRecordingPermission,
     requestSpotifyAutomationPermission,
     requestingSpotify,
-  } = usePermissions();
+  } = useSpotifyPermission();
 
   const {
     isVisible,
     isLoading: isLoadingVisibility,
     updateVisibility,
   } = useIslandVisible();
-
-  const handleScreenRecordingAllow = async () => {
-    try {
-      await requestScreenRecordingPermission();
-    } catch (err) {
-      console.error("Failed to request screen recording permission:", err);
-    }
-  };
 
   return (
     <div>
@@ -114,20 +47,46 @@ export function SettingsSettingsPage() {
           permissions
         </h2>
         <div className="flex flex-col gap-3 max-w-2xl">
-          <PermissionCard
-            title="screen recording"
-            description="Let LeFocus capture application windows"
-            granted={screenRecording}
-            onAllow={handleScreenRecordingAllow}
-          />
-          <PermissionCard
-            title="spotify controls"
-            description="Enable track detection and controls for the Dynamic Island"
-            granted={spotifyAutomation}
-            onAllow={requestSpotifyAutomationPermission}
-            disabled={requestingSpotify || loading}
-            loadingText={requestingSpotify ? "waiting..." : undefined}
-          />
+          <div className="border border-black p-4 flex items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 mb-1">
+                <h3 className="text-sm font-semibold">spotify controls</h3>
+                {spotifyAutomation ? (
+                  <span className="text-xs px-2 py-0.5 border bg-green-100 text-green-800 border-green-500 font-normal whitespace-nowrap">
+                    granted
+                  </span>
+                ) : (
+                  <span className="text-xs px-2 py-0.5 border bg-amber-100 text-amber-800 border-amber-300 font-normal whitespace-nowrap">
+                    optional
+                  </span>
+                )}
+              </div>
+              <p className="text-xs font-light text-gray-600">
+                Enable track detection and controls for the Dynamic Island
+              </p>
+            </div>
+            {spotifyAutomation ? (
+              <div className="bg-green-100 border border-green-500 text-green-800 px-4 py-2 flex items-center justify-center">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fillRule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+            ) : (
+              <button
+                onClick={requestSpotifyAutomationPermission}
+                disabled={requestingSpotify || loading}
+                className={`bg-transparent border border-black text-black px-4 py-2 text-sm font-semibold cursor-pointer hover:bg-black hover:text-white hover:transition-none transition-all duration-200 whitespace-nowrap ${
+                  requestingSpotify || loading ? "bg-gray-100 text-gray-400 cursor-wait" : ""
+                }`}
+              >
+                {requestingSpotify ? "waiting..." : "allow"}
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

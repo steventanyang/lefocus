@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import Foundation
 import MediaPlayer
 
@@ -20,6 +21,7 @@ public final class MediaMonitor {
     private var isPolling = false
     private var currentTrack: TrackInfo?
     private var pendingArtworkTimestamp: Date?
+    private var hasRequestedSpotifyPermission = false
 
     public private(set) var activeBundleID: String?
 
@@ -94,6 +96,12 @@ public final class MediaMonitor {
     }
 
     private func captureSnapshot() -> MediaSnapshot? {
+        // Check if Spotify is running and request automation permission lazily
+        if !hasRequestedSpotifyPermission && isSpotifyRunning() {
+            hasRequestedSpotifyPermission = true
+            requestSpotifyAutomationPermissionIfNeeded()
+        }
+        
         if let spotify = spotifyProbe.snapshot() {
             return MediaSnapshot(
                 track: spotify.track,
@@ -243,6 +251,49 @@ public final class MediaMonitor {
             duration: duration,
             canSeek: false
         )
+    }
+    
+    // MARK: - Lazy Spotify Permission
+    
+    private func isSpotifyRunning() -> Bool {
+        return NSWorkspace.shared.runningApplications.contains { app in
+            app.bundleIdentifier == "com.spotify.client"
+        }
+    }
+    
+    private func requestSpotifyAutomationPermissionIfNeeded() {
+        let bundleID = "com.spotify.client"
+        
+        // Check if we already have permission
+        guard let data = bundleID.data(using: .utf8) else { return }
+        
+        var target = AEAddressDesc()
+        let createStatus = data.withUnsafeBytes { bytes -> OSStatus in
+            guard let base = bytes.baseAddress else { return OSStatus(errAECoercionFail) }
+            return OSStatus(AECreateDesc(DescType(typeApplicationBundleID), base, data.count, &target))
+        }
+        
+        guard createStatus == noErr else { return }
+        defer { AEDisposeDesc(&target) }
+        
+        // Check without prompting first
+        let checkStatus = AEDeterminePermissionToAutomateTarget(
+            &target,
+            AEEventClass(typeWildCard),
+            AEEventID(typeWildCard),
+            false
+        )
+        
+        // If not yet determined or needs consent, prompt the user
+        if checkStatus == OSStatus(errAEEventWouldRequireUserConsent) || checkStatus == OSStatus(errAEEventNotPermitted) {
+            // Request permission (this will show the macOS dialog)
+            _ = AEDeterminePermissionToAutomateTarget(
+                &target,
+                AEEventClass(typeWildCard),
+                AEEventID(typeWildCard),
+                true
+            )
+        }
     }
 }
 

@@ -29,23 +29,26 @@ struct WindowMetadataFFI {
     bounds_height: f64,
 }
 
-#[repr(C)]
-struct OCRResultFFI {
-    text_ptr: *mut c_char,
-    confidence: f64,
-    word_count: u64,
-}
+// DEPRECATED: OCR functionality disabled
+// #[repr(C)]
+// struct OCRResultFFI {
+//     text_ptr: *mut c_char,
+//     confidence: f64,
+//     word_count: u64,
+// }
 
 #[allow(dead_code)]
 extern "C" {
     fn macos_sensing_get_active_window_metadata() -> *mut WindowMetadataFFI;
-    fn macos_sensing_capture_screenshot(window_id: u32, out_length: *mut usize) -> *mut u8;
-    fn macos_sensing_run_ocr(image_data: *const u8, image_length: usize) -> *mut OCRResultFFI;
+    // DEPRECATED: Screenshot/OCR FFI - functionality disabled
+    // fn macos_sensing_capture_screenshot(window_id: u32, out_length: *mut usize) -> *mut u8;
+    // fn macos_sensing_run_ocr(image_data: *const u8, image_length: usize) -> *mut OCRResultFFI;
     fn macos_sensing_clear_cache();
 
     fn macos_sensing_free_window_metadata(ptr: *mut WindowMetadataFFI);
-    fn macos_sensing_free_screenshot_buffer(ptr: *mut u8);
-    fn macos_sensing_free_ocr_result(ptr: *mut OCRResultFFI);
+    // DEPRECATED: Screenshot/OCR FFI - functionality disabled
+    // fn macos_sensing_free_screenshot_buffer(ptr: *mut u8);
+    // fn macos_sensing_free_ocr_result(ptr: *mut OCRResultFFI);
 
     fn macos_sensing_island_init();
     fn macos_sensing_island_start(start_uptime_ms: i64, target_ms: i64, mode: *const c_char);
@@ -97,12 +100,13 @@ pub struct WindowMetadata {
     pub bounds: WindowBounds,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OCRResult {
-    pub text: String,
-    pub confidence: f64,
-    pub word_count: u64,
-}
+// DEPRECATED: OCR functionality disabled
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// pub struct OCRResult {
+//     pub text: String,
+//     pub confidence: f64,
+//     pub word_count: u64,
+// }
 
 pub fn get_active_window_metadata() -> Result<WindowMetadata> {
     unsafe {
@@ -132,42 +136,43 @@ pub fn get_active_window_metadata() -> Result<WindowMetadata> {
     }
 }
 
-pub fn capture_screenshot(window_id: u32) -> Result<Vec<u8>> {
-    unsafe {
-        let mut length: usize = 0;
-        let ptr = macos_sensing_capture_screenshot(window_id, &mut length as *mut usize);
-
-        if ptr.is_null() || length == 0 {
-            bail!("Swift returned empty screenshot buffer");
-        }
-
-        let slice = std::slice::from_raw_parts(ptr, length);
-        let data = slice.to_vec();
-        macos_sensing_free_screenshot_buffer(ptr);
-
-        Ok(data)
-    }
-}
-
-pub fn run_ocr(image_data: &[u8]) -> Result<OCRResult> {
-    unsafe {
-        let ptr = macos_sensing_run_ocr(image_data.as_ptr(), image_data.len());
-        if ptr.is_null() {
-            bail!("Swift returned null OCR result pointer");
-        }
-
-        let ffi_data = &*ptr;
-        let text = c_ptr_to_string(ffi_data.text_ptr).context("Failed to decode OCR text")?;
-        let result = OCRResult {
-            text,
-            confidence: ffi_data.confidence,
-            word_count: ffi_data.word_count,
-        };
-
-        macos_sensing_free_ocr_result(ptr);
-        Ok(result)
-    }
-}
+// DEPRECATED: Screenshot/OCR functions - functionality disabled
+// pub fn capture_screenshot(window_id: u32) -> Result<Vec<u8>> {
+//     unsafe {
+//         let mut length: usize = 0;
+//         let ptr = macos_sensing_capture_screenshot(window_id, &mut length as *mut usize);
+//
+//         if ptr.is_null() || length == 0 {
+//             bail!("Swift returned empty screenshot buffer");
+//         }
+//
+//         let slice = std::slice::from_raw_parts(ptr, length);
+//         let data = slice.to_vec();
+//         macos_sensing_free_screenshot_buffer(ptr);
+//
+//         Ok(data)
+//     }
+// }
+//
+// pub fn run_ocr(image_data: &[u8]) -> Result<OCRResult> {
+//     unsafe {
+//         let ptr = macos_sensing_run_ocr(image_data.as_ptr(), image_data.len());
+//         if ptr.is_null() {
+//             bail!("Swift returned null OCR result pointer");
+//         }
+//
+//         let ffi_data = &*ptr;
+//         let text = c_ptr_to_string(ffi_data.text_ptr).context("Failed to decode OCR text")?;
+//         let result = OCRResult {
+//             text,
+//             confidence: ffi_data.confidence,
+//             word_count: ffi_data.word_count,
+//         };
+//
+//         macos_sensing_free_ocr_result(ptr);
+//         Ok(result)
+//     }
+// }
 
 pub fn clear_cache() {
     unsafe {

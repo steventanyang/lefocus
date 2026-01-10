@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import "./App.css";
 import { TimerView } from "@/components/timer/TimerView";
 import { ActivitiesView } from "@/components/activities/ActivitiesView";
@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/GridOverlay";
 import { useWindowSize } from "@/hooks/useWindowSize";
 import { useGlobalNavigationShortcuts } from "@/hooks/useKeyboardShortcuts";
-import { usePermissions } from "@/hooks/usePermissions";
 import { isUserTyping, isMac } from "@/utils/keyboardUtils";
 import { FONT_CLASSES } from "@/constants/fonts";
 
@@ -23,17 +22,10 @@ type View =
   | "profile"
   | "metrics";
 
-const PERMISSIONS_REQUESTED_KEY = "lefocus_permissions_requested";
-
 function App() {
   const [currentView, setCurrentView] = useState<View>("timer");
   const { width, height } = useWindowSize();
-  const { 
-    requestScreenRecordingPermission, 
-    requestSpotifyAutomationPermission 
-  } = usePermissions();
   const { showGrid } = useGridOverlay();
-  const permissionsRequestedRef = useRef(false);
 
   // Generate grid lines based on current view and window size
   const gridLines = useMemo((): GridLines => {
@@ -140,24 +132,7 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Request permissions on first launch (triggers native macOS dialogs)
-  useEffect(() => {
-    const alreadyRequested = localStorage.getItem(PERMISSIONS_REQUESTED_KEY) === "true";
-    if (alreadyRequested || permissionsRequestedRef.current) return;
-    
-    permissionsRequestedRef.current = true;
-    
-    const requestPermissions = async () => {
-      // Request screen recording permission (triggers native dialog)
-      await requestScreenRecordingPermission();
-      // Request Spotify automation permission (triggers native dialog)
-      await requestSpotifyAutomationPermission();
-      // Mark as requested so we don't prompt again
-      localStorage.setItem(PERMISSIONS_REQUESTED_KEY, "true");
-    };
-    
-    requestPermissions();
-  }, [requestScreenRecordingPermission, requestSpotifyAutomationPermission]);
+  // Note: Spotify automation permission is requested lazily when Spotify is detected (in Swift MediaMonitor)
 
   // Timer view should be centered, other views should be scrollable from top
   const isTimerView = currentView === "timer";

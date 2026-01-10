@@ -1,19 +1,6 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-
-export interface PermissionStatus {
-  screenRecording: boolean;
-  spotifyAutomation: boolean;
-  loading: boolean;
-  error: string | null;
-  requestingSpotify: boolean;
-}
-
-interface PermissionsData {
-  screenRecording: boolean;
-  spotifyAutomation: boolean;
-}
 
 interface AutomationPermissionRequestResult {
   granted: boolean;
@@ -45,121 +32,49 @@ const describeAutomationStatus = (status: number, appName: string) => {
   }
 };
 
-const PERMISSIONS_QUERY_KEY = ["permissions"];
+const SPOTIFY_PERMISSION_QUERY_KEY = ["spotify-permission"];
 
-async function fetchPermissions(): Promise<PermissionsData> {
-  // Check screen recording permission
-  let screenRecording = false;
-  try {
-    screenRecording = await Promise.race([
-      invoke<boolean>("check_screen_recording_permissions"),
-      new Promise<boolean>((_, reject) =>
-        setTimeout(
-          () => reject(new Error("Screen recording check timeout")),
-          5000
-        )
-      ),
-    ]);
-    console.log("Screen recording permission check result:", screenRecording);
-  } catch (err) {
-    console.warn("Screen recording permission check failed:", err);
-    screenRecording = false;
-  }
-
-  const spotifyAutomation = await invoke<boolean>(
-    "check_media_automation_permission",
-    { bundleId: "com.spotify.client" }
-  ).catch((err) => {
+async function fetchSpotifyPermission(): Promise<boolean> {
+  return invoke<boolean>("check_media_automation_permission", {
+    bundleId: "com.spotify.client",
+  }).catch((err) => {
     console.warn("Spotify automation permission check failed:", err);
     return false;
   });
-
-  return { screenRecording, spotifyAutomation };
 }
 
-export function usePermissions() {
-  const [isWaitingForScreenRecording, setIsWaitingForScreenRecording] =
-    useState(false);
-  const isWaitingRef = useRef(false);
+/**
+ * Hook for Spotify automation permission management.
+ * Note: Spotify permission is also requested lazily by Swift MediaMonitor when Spotify is detected.
+ * This hook is useful for manual permission management in settings.
+ */
+export function useSpotifyPermission() {
   const [requestingSpotify, setRequestingSpotify] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  // Use TanStack Query for polling
   const {
-    data: permissionsData,
-    isLoading,
+    data: spotifyAutomation,
+    isLoading: loading,
     error: queryError,
-  } = useQuery<PermissionsData>({
-    queryKey: PERMISSIONS_QUERY_KEY,
-    queryFn: fetchPermissions,
-    // Poll every 1 second when waiting for screen recording, otherwise every 5 seconds
+  } = useQuery<boolean>({
+    queryKey: SPOTIFY_PERMISSION_QUERY_KEY,
+    queryFn: fetchSpotifyPermission,
     refetchInterval: (query) => {
-      const data = query.state.data;
-      const allGranted = data?.screenRecording && data?.spotifyAutomation;
-
-      // Stop polling if all permissions are granted
-      if (allGranted) {
+      // Stop polling if permission is granted
+      if (query.state.data === true) {
         return false;
       }
-
-      // Aggressive polling when waiting for screen recording
-      // Access ref directly (updated synchronously in event handlers)
-      if (isWaitingRef.current && !data?.screenRecording) {
-        return 1000; // 1 second
-      }
-
-      // Regular polling when permissions are missing
-      return 5000; // 5 seconds
+      return 5000; // Poll every 5 seconds
     },
     refetchIntervalInBackground: false,
     retry: false,
-    staleTime: 0, // Always consider stale to enable polling
+    staleTime: 0,
   });
 
   const checkPermissions = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: PERMISSIONS_QUERY_KEY });
+    queryClient.invalidateQueries({ queryKey: SPOTIFY_PERMISSION_QUERY_KEY });
   }, [queryClient]);
-
-  const requestScreenRecordingPermission = useCallback(async () => {
-    try {
-      const granted = await invoke<boolean>("request_screen_recording_permission");
-      // Start aggressive polling after requesting permission
-      setIsWaitingForScreenRecording(true);
-      isWaitingRef.current = true;
-      // Stop aggressive polling after 30 seconds (fallback)
-      setTimeout(() => {
-        setIsWaitingForScreenRecording(false);
-        isWaitingRef.current = false;
-      }, 30000);
-      return granted;
-    } catch (err) {
-      console.error("Failed to request screen recording permission:", err);
-      setError(
-        `Failed to request screen recording permission: ${err instanceof Error ? err.message : String(err)}`
-      );
-      return false;
-    }
-  }, []);
-
-  const openScreenRecordingSettings = useCallback(async () => {
-    try {
-      await invoke("open_screen_recording_settings");
-      // Start aggressive polling after opening settings
-      setIsWaitingForScreenRecording(true);
-      isWaitingRef.current = true;
-      // Stop aggressive polling after 30 seconds (fallback)
-      setTimeout(() => {
-        setIsWaitingForScreenRecording(false);
-        isWaitingRef.current = false;
-      }, 30000);
-    } catch (err) {
-      console.error("Failed to open screen recording settings:", err);
-      setError(
-        `Failed to open screen recording settings: ${err instanceof Error ? err.message : String(err)}`
-      );
-    }
-  }, []);
 
   const openAutomationSettings = useCallback(async () => {
     try {
@@ -168,17 +83,6 @@ export function usePermissions() {
       console.error("Failed to open automation settings:", err);
       setError(
         `Failed to open automation settings: ${err instanceof Error ? err.message : String(err)}`
-      );
-    }
-  }, []);
-
-  const restartApp = useCallback(async () => {
-    try {
-      await invoke("restart_app_instance");
-    } catch (err) {
-      console.error("Failed to restart app:", err);
-      setError(
-        `Failed to restart app: ${err instanceof Error ? err.message : String(err)}`
       );
     }
   }, []);
@@ -224,35 +128,16 @@ export function usePermissions() {
     }
   }, [checkPermissions, openAutomationSettings]);
 
-  const screenRecording = permissionsData?.screenRecording ?? false;
-
-  // Synchronize state with external system (macOS permission status)
-  // This is valid because we're syncing with an external system, not deriving from props
-  useEffect(() => {
-    if (screenRecording && isWaitingForScreenRecording) {
-      setIsWaitingForScreenRecording(false);
-      isWaitingRef.current = false;
-    }
-  }, [screenRecording, isWaitingForScreenRecording]);
-  const spotifyAutomation = permissionsData?.spotifyAutomation ?? false;
-  const allPermissionsGranted = screenRecording && spotifyAutomation;
-
-  // Combine query error with local error state
   const combinedError =
     error || (queryError instanceof Error ? queryError.message : null);
 
   return {
-    screenRecording,
-    spotifyAutomation,
-    loading: isLoading,
+    spotifyAutomation: spotifyAutomation ?? false,
+    loading,
     error: combinedError,
     requestingSpotify,
-    allPermissionsGranted,
     checkPermissions,
-    requestScreenRecordingPermission,
-    openScreenRecordingSettings,
     requestSpotifyAutomationPermission,
     openAutomationSettings,
-    restartApp,
   };
 }
