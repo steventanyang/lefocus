@@ -30,7 +30,7 @@ use timer::{
     commands::{
         cancel_timer, end_timer, get_interruptions_for_segment, get_segments_for_session,
         get_timer_state, get_window_titles_for_segment, list_sessions, list_sessions_paginated,
-        start_timer, get_app_details_in_time_range, delete_session,
+        start_timer, get_app_details_in_time_range, delete_session, update_session_note,
     },
     TimerController,
 };
@@ -444,6 +444,7 @@ pub fn run() {
             update_label,
             delete_label,
             update_session_label,
+            update_session_note,
             delete_session,
             get_island_sound_settings,
             set_island_sound_settings,

@@ -372,3 +372,45 @@ export function useDeleteSessionMutation() {
     },
   });
 }
+
+/**
+ * Update a session's note
+ * Optimistically updates the cache
+ */
+export function useUpdateSessionNoteMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ sessionId, note }: { sessionId: string; note: string | null }) =>
+      invoke<void>("update_session_note", { sessionId, note }),
+    onSuccess: (_, { sessionId, note }) => {
+      // Optimistically update the sessions list cache
+      queryClient.setQueryData<SessionSummary[]>(['sessions'], (old) => {
+        if (!old) return old;
+        return old.map(session =>
+          session.id === sessionId ? { ...session, note } : session
+        );
+      });
+
+      // Optimistically update the infinite sessions cache
+      queryClient.setQueryData<{ pages: SessionSummary[][]; pageParams: number[] }>(
+        ['sessions', 'infinite'],
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map(page =>
+              page.map(session =>
+                session.id === sessionId ? { ...session, note } : session
+              )
+            ),
+          };
+        }
+      );
+
+      // Invalidate to ensure consistency with server
+      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+      queryClient.invalidateQueries({ queryKey: ['sessions', 'infinite'] });
+    },
+  });
+}

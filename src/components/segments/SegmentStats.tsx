@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { SegmentStats as Stats, Segment } from "@/types/segment";
 import { getAppColor, getConfidenceLabel } from "@/constants/appColors";
 import { AppleLogo, shouldShowAppleLogo } from "@/utils/appUtils";
 import { useSessionResultsKeyboard } from "@/hooks/useSessionResultsKeyboard";
+import { NoteSection } from "@/components/segments/NoteSection";
+import { useUpdateSessionNoteMutation } from "@/hooks/queries";
 
 interface SegmentStatsProps {
   stats: Stats;
@@ -14,6 +16,8 @@ interface SegmentStatsProps {
     labelTag: React.ReactNode;
   };
   dateTime?: string; // ISO 8601 datetime string
+  sessionId?: string;
+  initialNote?: string | null;
 }
 
 function formatDuration(seconds: number): string {
@@ -66,12 +70,29 @@ export function SegmentStats({
   backButton,
   labelSection,
   dateTime,
+  sessionId,
+  initialNote,
 }: SegmentStatsProps) {
   const [selectedBundleId, setSelectedBundleId] = useState<string | null>(null);
   const [timelineSelectedIndex, setTimelineSelectedIndex] = useState<number | null>(0); // Start on timeline
   const [listHoverIndex, setListHoverIndex] = useState<number | null>(null);
+  const [isEditingNote, setIsEditingNote] = useState(false);
+  const [noteText, setNoteText] = useState(initialNote || "");
+  const [isOnNote, setIsOnNote] = useState(false);
   const timelineContainerRef = useRef<HTMLDivElement>(null);
   const segmentRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  
+  const updateNoteMutation = useUpdateSessionNoteMutation();
+  
+  // Save note to database
+  const saveNote = useCallback(() => {
+    if (!sessionId) return;
+    const trimmedNote = noteText.trim();
+    const noteToSave = trimmedNote.length > 0 ? trimmedNote : null;
+    if (noteToSave !== (initialNote || null)) {
+      updateNoteMutation.mutate({ sessionId, note: noteToSave });
+    }
+  }, [sessionId, noteText, initialNote, updateNoteMutation]);
 
   // Filter segments based on selected app
   const filteredSegments = selectedBundleId
@@ -184,10 +205,16 @@ export function SegmentStats({
     timelineSelectedIndex: timelineSelectedIndex, // Use raw state, not derived
     listHoverIndex,
     selectedBundleId,
+    isOnNote,
+    isEditingNote,
     onSetTimelineSelectedIndex: setTimelineSelectedIndex,
     onSetListHoverIndex: setListHoverIndex,
+    onSetIsOnNote: setIsOnNote,
+    onSetIsEditingNote: setIsEditingNote,
     onTimelineClick: onSegmentClick,
     onListToggle: handleListToggle,
+    noteText,
+    saveNote,
   });
 
   return (
@@ -276,8 +303,19 @@ export function SegmentStats({
         </div>
       ) : null}
 
+      {/* Note section */}
+      <NoteSection
+        noteText={noteText}
+        isOnNote={isOnNote}
+        isEditingNote={isEditingNote}
+        onNoteChange={setNoteText}
+        onSetIsOnNote={setIsOnNote}
+        onSetIsEditingNote={setIsEditingNote}
+        onSave={saveNote}
+      />
+
       {stats.topApps.length > 0 && (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 mt-2">
           <h3 className="text-base font-normal tracking-wide text-gray-800">
             top applications
           </h3>

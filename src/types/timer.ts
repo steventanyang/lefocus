@@ -28,6 +28,7 @@ export interface SessionInfo {
   targetMs: number;
   activeMs: number;
   labelId: number | null;
+  note: string | null;
 }
 
 export interface TopApp {
@@ -45,6 +46,7 @@ export interface SessionSummary {
   targetMs: number;
   activeMs: number;
   labelId: number | null;
+  note: string | null;
   topApps: TopApp[];
   appIcons: Record<string, string | null>; // bundleId -> icon data URL (base64 PNG)
   appColors: Record<string, string | null>; // bundleId -> icon color (hex like "#AABBCC")

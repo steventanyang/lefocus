@@ -80,7 +80,7 @@ export const SessionCard = forwardRef<HTMLButtonElement, SessionCardProps>(
       <button
         ref={ref}
         onClick={() => onClick(session)}
-        className={`w-full border p-4 flex flex-col gap-4 hover:bg-gray-50 cursor-pointer transition-colors text-left relative min-h-[200px] ${
+        className={`w-full border p-4 flex flex-col gap-4 hover:bg-gray-50 cursor-pointer transition-colors text-left relative min-h-[220px] ${
           isSelected ? "bg-gray-100 border-gray-500" : "border-gray-300"
         }`}
       >
@@ -109,6 +109,16 @@ export const SessionCard = forwardRef<HTMLButtonElement, SessionCardProps>(
       <span className="absolute bottom-4 right-4 text-sm font-light">
         {formatDateTime(session.startedAt)}
       </span>
+
+      {/* Spacer above timeline when no note */}
+      {!(session.note && session.note.trim()) && <div className="mt-0" />}
+
+      {/* Note text - shown above timeline, single line with ellipsis */}
+      {session.note && session.note.trim() && (
+        <div className="text-sm font-light text-gray-600 truncate w-full pr-4">
+          {session.note.trim()}
+        </div>
+      )}
 
       {/* Mini timeline bar */}
       {segments && Array.isArray(segments) && segments.length > 0 ? (
@@ -168,6 +178,8 @@ export const SessionCard = forwardRef<HTMLButtonElement, SessionCardProps>(
           <div className="flex-1 bg-transparent border border-gray-200"></div>
         </div>
       )}
+
+
 
       {/* Top apps list or Delete Confirmation - Absolute positioned bottom-left */}
       <div className="absolute bottom-4 left-4">
