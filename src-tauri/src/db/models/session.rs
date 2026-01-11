@@ -39,6 +39,7 @@ pub struct Session {
     pub target_ms: u64,
     pub active_ms: u64,
     pub label_id: Option<i64>,
+    pub note: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -53,6 +54,7 @@ pub struct SessionInfo {
     pub target_ms: u64,
     pub active_ms: u64,
     pub label_id: Option<i64>,
+    pub note: Option<String>,
 }
 
 impl From<Session> for SessionInfo {
@@ -65,6 +67,7 @@ impl From<Session> for SessionInfo {
             target_ms: session.target_ms,
             active_ms: session.active_ms,
             label_id: session.label_id,
+            note: session.note,
         }
     }
 }
@@ -90,6 +93,7 @@ pub struct SessionSummary {
     pub target_ms: u64,
     pub active_ms: u64,
     pub label_id: Option<i64>,
+    pub note: Option<String>,
     pub top_apps: Vec<TopApp>,
     /// Map of bundle_id -> icon_data_url (base64 PNG)
     /// Deduplicates icons across all sessions returned in the list

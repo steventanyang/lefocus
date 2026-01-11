@@ -17,6 +17,7 @@ fn row_to_session(row: &Row) -> Result<Session> {
     let target_ms: i64 = row.get("target_ms")?;
     let active_ms: i64 = row.get("active_ms")?;
     let label_id: Option<i64> = row.get("label_id")?;
+    let note: Option<String> = row.get("note")?;
 
     Ok(Session {
         id: row.get("id")?,
@@ -26,6 +27,7 @@ fn row_to_session(row: &Row) -> Result<Session> {
         target_ms: to_u64(target_ms, "target_ms")?,
         active_ms: to_u64(active_ms, "active_ms")?,
         label_id,
+        note,
         created_at: parse_datetime(&created_at, "created_at")?,
         updated_at: parse_datetime(&updated_at, "updated_at")?,
     })
@@ -112,7 +114,7 @@ impl Database {
         let session_id = session_id.to_string();
         self.execute(move |conn| {
             let mut stmt = conn.prepare(
-                "SELECT id, started_at, stopped_at, status, target_ms, active_ms, label_id, created_at, updated_at
+                "SELECT id, started_at, stopped_at, status, target_ms, active_ms, label_id, note, created_at, updated_at
                  FROM sessions
                  WHERE id = ?1",
             )?;
@@ -129,7 +131,7 @@ impl Database {
     pub async fn get_incomplete_session(&self) -> Result<Option<Session>> {
         self.execute(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT id, started_at, stopped_at, status, target_ms, active_ms, label_id, created_at, updated_at
+                "SELECT id, started_at, stopped_at, status, target_ms, active_ms, label_id, note, created_at, updated_at
                  FROM sessions
                  WHERE status = 'Running'
                  ORDER BY started_at DESC
@@ -176,7 +178,7 @@ impl Database {
     pub async fn list_sessions(&self) -> Result<Vec<Session>> {
         self.execute(|conn| {
             let mut stmt = conn.prepare(
-                "SELECT id, started_at, stopped_at, status, target_ms, active_ms, label_id, created_at, updated_at
+                "SELECT id, started_at, stopped_at, status, target_ms, active_ms, label_id, note, created_at, updated_at
                  FROM sessions
                  WHERE status IN ('Completed', 'Interrupted')
                  ORDER BY started_at DESC",
@@ -202,7 +204,7 @@ impl Database {
         let offset = offset as i64;
         self.execute(move |conn| {
             let mut stmt = conn.prepare(
-                "SELECT id, started_at, stopped_at, status, target_ms, active_ms, label_id, created_at, updated_at
+                "SELECT id, started_at, stopped_at, status, target_ms, active_ms, label_id, note, created_at, updated_at
                  FROM sessions
                  WHERE status IN ('Completed', 'Interrupted')
                  ORDER BY started_at DESC
@@ -248,6 +250,31 @@ impl Database {
                      updated_at = ?2
                  WHERE id = ?3",
                 params![label_id, Utc::now().to_rfc3339(), session_id],
+            )?;
+
+            if rows_affected == 0 {
+                return Err(anyhow::anyhow!("Session not found"));
+            }
+
+            Ok(())
+        })
+        .await
+    }
+
+    /// Update the note for a session
+    pub async fn update_session_note(
+        &self,
+        session_id: &str,
+        note: Option<String>,
+    ) -> Result<()> {
+        let session_id = session_id.to_string();
+        self.execute(move |conn| {
+            let rows_affected = conn.execute(
+                "UPDATE sessions
+                 SET note = ?1,
+                     updated_at = ?2
+                 WHERE id = ?3",
+                params![note, Utc::now().to_rfc3339(), session_id],
             )?;
 
             if rows_affected == 0 {

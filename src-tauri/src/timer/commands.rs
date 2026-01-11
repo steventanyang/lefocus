@@ -142,6 +142,7 @@ pub async fn list_sessions(state: State<'_, AppState>) -> Result<Vec<SessionSumm
             target_ms: session.target_ms,
             active_ms: session.active_ms,
             label_id: session.label_id,
+            note: session.note,
             top_apps,
             app_icons: HashMap::new(),  // Will be populated below
             app_colors: HashMap::new(), // Will be populated below
@@ -209,6 +210,7 @@ pub async fn list_sessions_paginated(
             target_ms: session.target_ms,
             active_ms: session.active_ms,
             label_id: session.label_id,
+            note: session.note,
             top_apps,
             app_icons: HashMap::new(),  // Will be populated below
             app_colors: HashMap::new(), // Will be populated below
@@ -241,4 +243,13 @@ pub async fn list_sessions_paginated(
 #[tauri::command]
 pub async fn delete_session(state: State<'_, AppState>, session_id: String) -> Result<(), String> {
     state.db.delete_session(&session_id).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn update_session_note(
+    state: State<'_, AppState>,
+    session_id: String,
+    note: Option<String>,
+) -> Result<(), String> {
+    state.db.update_session_note(&session_id, note).await.map_err(|e| e.to_string())
 }
