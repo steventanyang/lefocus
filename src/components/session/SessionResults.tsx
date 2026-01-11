@@ -22,6 +22,7 @@ type SessionDescriptor = {
   targetMs: number;
   activeMs: number;
   labelId?: number | null;
+  note?: string | null;
 };
 
 interface SessionResultsProps {
@@ -230,6 +231,8 @@ export function SessionResults({
           backButton={backButton}
           labelSection={labelSection}
           dateTime={session?.startedAt}
+          sessionId={sessionId}
+          initialNote={session?.note}
         />
       )}
 

@@ -8,10 +8,16 @@ interface UseSessionResultsKeyboardOptions {
   timelineSelectedIndex: number | null;
   listHoverIndex: number | null;
   selectedBundleId: string | null;
+  isOnNote: boolean;
+  isEditingNote: boolean;
   onSetTimelineSelectedIndex: (index: number | null) => void;
   onSetListHoverIndex: (index: number | null) => void;
+  onSetIsOnNote: (isOn: boolean) => void;
+  onSetIsEditingNote: (isEditing: boolean) => void;
   onTimelineClick: (segment: Segment) => void;
   onListToggle: (bundleId: string) => void;
+  noteText: string;
+  saveNote: () => void;
 }
 
 /**
@@ -20,10 +26,13 @@ interface UseSessionResultsKeyboardOptions {
  * Navigation:
  * - Starts on timeline (first block)
  * - Left/Right: Navigate timeline blocks
- * - Down from timeline: Move to first list item (hover state)
+ * - Down from timeline: Move to note section
+ * - N key on note section: Enter editing mode
+ * - Up/Down from note: Move to timeline/list
+ * - Down from note: Move to first list item (hover state)
  * - Up/Down in list: Navigate list items (hover state)
  * - Enter in list: Toggle selection of hovered item
- * - Up from first list item: Return to timeline
+ * - Up from first list item: Return to note section
  */
 export function useSessionResultsKeyboard({
   segments,
@@ -31,15 +40,53 @@ export function useSessionResultsKeyboard({
   timelineSelectedIndex,
   listHoverIndex,
   selectedBundleId,
+  isOnNote,
+  isEditingNote,
   onSetTimelineSelectedIndex,
   onSetListHoverIndex,
+  onSetIsOnNote,
+  onSetIsEditingNote,
   onTimelineClick,
   onListToggle,
+  noteText,
+  saveNote,
 }: UseSessionResultsKeyboardOptions): void {
   const topAppsCount = topApps.length;
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Ignore shortcuts when user is typing
+      // When editing note, handle arrow keys to exit and allow Cmd shortcuts to pass through
+      if (isEditingNote) {
+        // Allow Cmd/Ctrl shortcuts to pass through (like Cmd+A for activities)
+        if (event.metaKey || event.ctrlKey) {
+          // Don't block - let other handlers process Cmd shortcuts
+          return;
+        }
+        
+        if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+          event.preventDefault();
+          // Always exit editing mode and save
+          saveNote();
+          onSetIsEditingNote(false);
+          onSetIsOnNote(false);
+          
+          if (event.key === "ArrowUp") {
+            // Move to timeline
+            if (segments.length > 0) {
+              onSetTimelineSelectedIndex(0);
+            }
+          } else {
+            // Move to list
+            if (topAppsCount > 0) {
+              onSetListHoverIndex(0);
+            }
+          }
+          return;
+        }
+        // Allow normal typing
+        return;
+      }
+
+      // Ignore shortcuts when user is typing (but not in note editing mode which we handle above)
       if (isUserTyping()) {
         return;
       }
@@ -53,6 +100,42 @@ export function useSessionResultsKeyboard({
       // Determine current navigation mode
       const isOnTimeline = timelineSelectedIndex !== null && segments.length > 0;
       const isOnList = listHoverIndex !== null;
+
+      // N key - global shortcut to start editing note (works from any state)
+      if ((event.key === "n" || event.key === "N") && !isEditingNote) {
+        event.preventDefault();
+        onSetTimelineSelectedIndex(null);
+        onSetListHoverIndex(null);
+        onSetIsOnNote(true);
+        onSetIsEditingNote(true);
+        return;
+      }
+
+      // Note section navigation
+      if (isOnNote && !isEditingNote) {
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          onSetIsOnNote(false);
+          if (segments.length > 0) {
+            onSetTimelineSelectedIndex(0);
+          }
+          return;
+        }
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          onSetIsOnNote(false);
+          if (topAppsCount > 0) {
+            onSetListHoverIndex(0);
+          }
+          return;
+        }
+        if (event.key === "Enter") {
+          event.preventDefault();
+          // Enter editing mode
+          onSetIsEditingNote(true);
+          return;
+        }
+      }
 
       // Timeline navigation (left/right)
       if (isOnTimeline) {
@@ -76,11 +159,9 @@ export function useSessionResultsKeyboard({
         }
         if (event.key === "ArrowDown") {
           event.preventDefault();
-          // Move to first list item
-          if (topAppsCount > 0) {
-            onSetTimelineSelectedIndex(null);
-            onSetListHoverIndex(0);
-          }
+          // Move to note section
+          onSetTimelineSelectedIndex(null);
+          onSetIsOnNote(true);
           return;
         }
         if (event.key === "Enter") {
@@ -98,11 +179,9 @@ export function useSessionResultsKeyboard({
         if (event.key === "ArrowUp") {
           event.preventDefault();
           if (listHoverIndex === 0) {
-            // Move back to timeline
-            if (segments.length > 0) {
-              onSetListHoverIndex(null);
-              onSetTimelineSelectedIndex(0);
-            }
+            // Move to note section
+            onSetListHoverIndex(null);
+            onSetIsOnNote(true);
           } else {
             onSetListHoverIndex(listHoverIndex - 1);
           }
@@ -142,10 +221,16 @@ export function useSessionResultsKeyboard({
     timelineSelectedIndex,
     listHoverIndex,
     selectedBundleId,
+    isOnNote,
+    isEditingNote,
     onSetTimelineSelectedIndex,
     onSetListHoverIndex,
+    onSetIsOnNote,
+    onSetIsEditingNote,
     onTimelineClick,
     onListToggle,
+    noteText,
+    saveNote,
   ]);
 }
 
