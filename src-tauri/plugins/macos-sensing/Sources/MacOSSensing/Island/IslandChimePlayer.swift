@@ -26,7 +26,8 @@ final class IslandChimePlayer {
         guard !isBootstrapped else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            _ = self.prepareEngineIfNeeded()
+            // Only pre-cache the buffer, don't start the engine yet
+            // Engine will be lazily initialized on first play() call
             _ = self.buffer(for: Self.defaultSoundID)
             self.isBootstrapped = true
         }
