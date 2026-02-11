@@ -24,8 +24,6 @@ pub struct ClaudeMonitor {
     cpu_history: HashMap<u32, Vec<f32>>,
     /// PIDs seen last poll — used to detect exits
     previous_pids: HashSet<u32>,
-    /// Recently-exited sessions kept around for the green "done" dot
-    done_sessions: Vec<(u32, std::time::Instant)>,
     /// Our own PID so we can filter ourselves out
     own_pid: u32,
     poll_count: u64,
@@ -38,7 +36,6 @@ impl ClaudeMonitor {
             system: System::new(),
             cpu_history: HashMap::new(),
             previous_pids: HashSet::new(),
-            done_sessions: Vec::new(),
             own_pid: std::process::id(),
             poll_count: 0,
         }
@@ -128,22 +125,11 @@ impl ClaudeMonitor {
             });
         }
 
-        // Detect exits: PIDs that were present last poll but are gone now
+        // Detect exits: clean up CPU history for gone PIDs
         for &old_pid in &self.previous_pids {
             if !claude_pids.contains(&old_pid) {
                 self.cpu_history.remove(&old_pid);
-                self.done_sessions.push((old_pid, std::time::Instant::now()));
             }
-        }
-
-        // Add done sessions (green dots) that haven't expired
-        self.done_sessions.retain(|(_, when)| when.elapsed().as_secs_f32() < 3.0);
-        for &(pid, when) in &self.done_sessions {
-            sessions.push(ClaudeSession {
-                pid,
-                state: SessionState::Done,
-                age_secs: when.elapsed().as_secs_f32(),
-            });
         }
 
         self.previous_pids = claude_pids;

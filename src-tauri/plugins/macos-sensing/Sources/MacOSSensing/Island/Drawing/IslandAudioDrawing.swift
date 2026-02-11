@@ -569,7 +569,8 @@ extension IslandView {
         case .timerActive:
             drawTimerText()
             if trackInfo != nil {
-                drawCompactWaveform(startX: 26.0, centerY: notchCenterY)
+                let waveformX: CGFloat = hasDots ? compactDotsZoneWidth + 18.0 : 26.0
+                drawCompactWaveform(startX: waveformX, centerY: notchCenterY)
             }
         case .idle:
             drawCompactWaveform(startX: 26.0, centerY: notchCenterY)

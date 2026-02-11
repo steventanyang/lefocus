@@ -114,6 +114,19 @@ final class IslandView: NSView {
     private var thinkingAnimationTimer: Timer?
     private(set) var waveformGradient: NSGradient?
 
+    // Dot removal animation state
+    private var previousSessionPIDs: Set<UInt32> = []
+    struct FadingDot {
+        let session: ClaudeSessionInfo
+        let oldIndex: Int       // position in the old layout
+        let oldCount: Int       // total count of old layout
+        let startTime: CFTimeInterval
+    }
+    var fadingDots: [FadingDot] = []
+    private var removalAnimationTimer: Timer?
+    static let removalDuration: TimeInterval = 0.3
+    var onRemovalAnimationComplete: (() -> Void)?
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         initializeTracking()
@@ -171,7 +184,45 @@ final class IslandView: NSView {
     }
 
     func updateClaudeSessions(_ sessions: [ClaudeSessionInfo]) {
+        let newPIDs = Set(sessions.map { $0.pid })
+        let oldSessions = self.claudeSessions
+        let removedPIDs = previousSessionPIDs.subtracting(newPIDs)
+
+        // If an animation is already running, complete it instantly
+        if !fadingDots.isEmpty {
+            completeRemovalAnimation()
+        }
+
+        // Create fading dots for removed sessions
+        if !removedPIDs.isEmpty {
+            let now = CACurrentMediaTime()
+            for (oldIndex, oldSession) in oldSessions.enumerated() {
+                if removedPIDs.contains(oldSession.pid) {
+                    fadingDots.append(FadingDot(
+                        session: oldSession,
+                        oldIndex: oldIndex,
+                        oldCount: oldSessions.count,
+                        startTime: now
+                    ))
+                }
+            }
+        }
+
         self.claudeSessions = sessions
+        self.previousSessionPIDs = newPIDs
+
+        // Start removal animation timer if we have fading dots
+        if !fadingDots.isEmpty && removalAnimationTimer == nil {
+            removalAnimationTimer = Timer.scheduledTimer(withTimeInterval: 1.0/60.0, repeats: true) { [weak self] _ in
+                guard let self else { return }
+                let now = CACurrentMediaTime()
+                let allDone = self.fadingDots.allSatisfy { now - $0.startTime >= Self.removalDuration }
+                if allDone {
+                    self.completeRemovalAnimation()
+                }
+                self.needsDisplay = true
+            }
+        }
 
         // Start/stop pulse timer based on whether any session is thinking
         let hasThinking = sessions.contains { $0.state == .thinking }
@@ -185,6 +236,14 @@ final class IslandView: NSView {
         }
 
         needsDisplay = true
+    }
+
+    private func completeRemovalAnimation() {
+        fadingDots.removeAll()
+        removalAnimationTimer?.invalidate()
+        removalAnimationTimer = nil
+        onRemovalAnimationComplete?()
+        onRemovalAnimationComplete = nil
     }
 
     func updateAudio(track: TrackInfo?, waveformBars: [CGFloat]?, waveformGradient: NSGradient?) {

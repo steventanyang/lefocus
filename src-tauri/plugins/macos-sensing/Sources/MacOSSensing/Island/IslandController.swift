@@ -138,7 +138,16 @@ public final class IslandController {
     public func updateClaudeSessions(_ sessions: [ClaudeSessionInfo]) {
         claudeSessions = sessions
         islandView?.updateClaudeSessions(sessions)
-        windowManager.updateSessionCount(sessions.count)
+
+        // If a removal animation is active, defer the width update until it finishes
+        if let view = islandView, !view.fadingDots.isEmpty {
+            view.onRemovalAnimationComplete = { [weak self] in
+                guard let self else { return }
+                self.windowManager.updateSessionCount(self.claudeSessions.count)
+            }
+        } else {
+            windowManager.updateSessionCount(sessions.count)
+        }
     }
 
     public func cleanup() {
