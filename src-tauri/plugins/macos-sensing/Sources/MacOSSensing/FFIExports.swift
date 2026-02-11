@@ -143,7 +143,7 @@ public func macos_sensing_swift_island_update_claude_sessions(
     parsed.reserveCapacity(count)
     for i in 0..<count {
         let raw = sessions[i]
-        let state = ClaudeSessionState(rawValue: raw.state) ?? .working
+        let state = ClaudeSessionState(rawValue: raw.state) ?? .thinking
         parsed.append(ClaudeSessionInfo(pid: raw.pid, state: state, ageSeconds: raw.age_secs))
     }
     if !parsed.isEmpty {

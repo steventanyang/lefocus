@@ -33,7 +33,7 @@ void macos_sensing_free_ocr_result(CMacOSSensing_OCRResultFFI *ptr);
 // Claude session monitoring
 typedef struct {
     uint32_t pid;
-    uint8_t state;    // 0=Working, 1=NeedsAttention, 2=Done
+    uint8_t state;    // 0=Thinking, 1=Executing, 2=Waiting, 3=Done
     float age_secs;
 } CMacOSSensing_ClaudeSessionFFI;
 

@@ -16,9 +16,10 @@ public struct IslandStartPayload {
 // MARK: - Claude Session Types
 
 public enum ClaudeSessionState: UInt8 {
-    case working = 0
-    case needsAttention = 1
-    case done = 2
+    case thinking = 0
+    case executing = 1
+    case waiting = 2
+    case done = 3
 }
 
 public struct ClaudeSessionInfo {

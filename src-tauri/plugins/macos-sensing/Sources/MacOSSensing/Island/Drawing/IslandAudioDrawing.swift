@@ -548,28 +548,52 @@ extension IslandView {
     }
 
     func drawCompactLayout() {
+        let hasDots = !claudeSessions.isEmpty
         switch compactLayoutState {
         case .audioOnly:
-            drawCompactArtworkOnLeft()
-            drawCompactWaveformOnRight()
+            if hasDots {
+                if claudeSessions.count <= 2 {
+                    // Few dots: album cover on left, waveform on right
+                    drawCompactArtworkOnLeft()
+                    drawCompactWaveformOnRight()
+                } else {
+                    // 3+ dots: waveform on right, no album cover
+                    drawCompactWaveformOnRight()
+                }
+            } else {
+                // No dots — original layout: waveform left, artwork right
+                drawCompactWaveform(startX: 26.0, centerY: notchCenterY)
+                drawCompactArtworkOnRight()
+            }
         case .timerActive:
             drawTimerText()
             if trackInfo != nil {
-                let waveformStartX = compactDotsZoneWidth > 0 ? compactDotsZoneWidth : 26.0
-                drawCompactWaveform(startX: waveformStartX, centerY: notchCenterY)
+                drawCompactWaveform(startX: 26.0, centerY: notchCenterY)
             }
         case .idle:
-            let waveformStartX = compactDotsZoneWidth > 0 ? compactDotsZoneWidth : 26.0
-            drawCompactWaveform(startX: waveformStartX, centerY: notchCenterY)
+            drawCompactWaveform(startX: 26.0, centerY: notchCenterY)
         }
     }
 
     func drawCompactArtworkOnLeft() {
         guard let track = trackInfo else { return }
         let size = AudioArtworkLayout.compactSize
-        let artX = compactDotsZoneWidth > 0 ? compactDotsZoneWidth : 22.0
+        // Position artwork after the dots zone so they sit side by side
+        let artworkX = compactDotsZoneWidth + 2.0
         let rect = NSRect(
-            x: artX,
+            x: artworkX,
+            y: notchCenterY - size / 2.0,
+            width: size,
+            height: size
+        )
+        drawArtworkImage(track.artwork, in: rect, cornerRadius: 3.0, emphasize: false)
+    }
+
+    func drawCompactArtworkOnRight() {
+        guard let track = trackInfo else { return }
+        let size = AudioArtworkLayout.compactSize
+        let rect = NSRect(
+            x: bounds.maxX - size - 22.0,
             y: notchCenterY - size / 2.0,
             width: size,
             height: size
@@ -579,7 +603,6 @@ extension IslandView {
 
     private func drawCompactWaveformOnRight() {
         guard !waveformBars.isEmpty, waveformBars.count == 4 else { return }
-        // Calculate total waveform width to right-align it
         let emojiString = NSAttributedString(string: "🎵", attributes: [
             .font: NSFont.systemFont(ofSize: 11, weight: .regular)
         ])

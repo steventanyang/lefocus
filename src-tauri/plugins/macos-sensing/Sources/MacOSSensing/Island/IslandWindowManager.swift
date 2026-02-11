@@ -227,9 +227,18 @@ final class IslandWindowManager {
             return NSSize(width: expandedWidth, height: expandedHeight)
         }
         
-        // Use configured widths based on timer state, plus dots zone
-        let dotsExtra = IslandView.compactDotsZoneWidth(for: claudeSessionCount)
-        let baseWidth: CGFloat = (isTimerIdle ? configuration.compactIdleWidth : configuration.compactTimerWidth) + dotsExtra
+        // Use configured widths based on timer state.
+        // When Claude sessions are present, widen the island so the left ear
+        // has enough room for the dot grid (island is centered over the notch).
+        var baseWidth: CGFloat = isTimerIdle ? configuration.compactIdleWidth : configuration.compactTimerWidth
+        if claudeSessionCount > 0 {
+            let dotsZone = IslandView.compactDotsZoneWidth(for: claudeSessionCount)
+            // When 1-2 dots + audio, artwork sits beside dots — add its width too
+            let artworkExtra: CGFloat = (claudeSessionCount <= 2 && hasAudioContent)
+                ? AudioArtworkLayout.compactSize + 4.0
+                : 0.0
+            baseWidth += dotsZone + artworkExtra
+        }
         let baseHeight = configuration.compactSize.height
 
         if isHovering {
@@ -242,9 +251,7 @@ final class IslandWindowManager {
     }
 
     private func islandFrame(for screen: NSScreen, size: NSSize) -> NSRect {
-        // Shift left so only the left side grows when dots are present
-        let dotsOffset: CGFloat = isExpanded ? 0.0 : IslandView.compactDotsZoneWidth(for: claudeSessionCount) / 2.0
-        let originX = screen.frame.midX - size.width / 2.0 - dotsOffset
+        let originX = screen.frame.midX - size.width / 2.0
 
         if let notch = screen.lf_notchRect {
             // Calculate where the compact island's top edge would be

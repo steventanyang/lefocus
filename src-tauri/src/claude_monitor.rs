@@ -1,12 +1,13 @@
 use log;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use sysinfo::{System, ProcessesToUpdate, ProcessRefreshKind};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SessionState {
-    Working,
-    NeedsAttention,
-    Done,
+    Thinking,       // No children, CPU > 2%
+    Executing,      // Has child processes
+    Waiting,        // No children, CPU ≤ 2%
+    Done,           // Process exited
 }
 
 #[derive(Debug, Clone)]
@@ -22,7 +23,7 @@ pub struct ClaudeMonitor {
     /// Rolling CPU samples per PID (up to 3)
     cpu_history: HashMap<u32, Vec<f32>>,
     /// PIDs seen last poll — used to detect exits
-    previous_pids: std::collections::HashSet<u32>,
+    previous_pids: HashSet<u32>,
     /// Recently-exited sessions kept around for the green "done" dot
     done_sessions: Vec<(u32, std::time::Instant)>,
     /// Our own PID so we can filter ourselves out
@@ -36,7 +37,7 @@ impl ClaudeMonitor {
         Self {
             system: System::new(),
             cpu_history: HashMap::new(),
-            previous_pids: std::collections::HashSet::new(),
+            previous_pids: HashSet::new(),
             done_sessions: Vec::new(),
             own_pid: std::process::id(),
             poll_count: 0,
@@ -53,23 +54,22 @@ impl ClaudeMonitor {
             ProcessRefreshKind::everything(),
         );
 
-        let mut current_pids = std::collections::HashSet::new();
-        let mut sessions = Vec::new();
+        // Pass 1: Find all Claude PIDs and record CPU
+        let mut claude_pids = HashSet::new();
+        let mut cpu_by_pid: HashMap<u32, f32> = HashMap::new();
 
         for (pid, process) in self.system.processes() {
             let pid_u32 = pid.as_u32();
 
-            // Skip ourselves
             if pid_u32 == self.own_pid {
                 continue;
             }
 
-            // Check if this looks like a Claude Code CLI process
             if !is_claude_process(process) {
                 continue;
             }
 
-            current_pids.insert(pid_u32);
+            claude_pids.insert(pid_u32);
 
             // Record CPU sample
             let cpu = process.cpu_usage();
@@ -79,12 +79,45 @@ impl ClaudeMonitor {
                 history.remove(0);
             }
 
-            // Classify state based on average CPU over samples
             let avg_cpu: f32 = history.iter().sum::<f32>() / history.len() as f32;
-            let state = if avg_cpu > 5.0 {
-                SessionState::Working
+            cpu_by_pid.insert(pid_u32, avg_cpu);
+        }
+
+        // Pass 2: Check all processes for children of Claude PIDs
+        let mut has_children = HashSet::new();
+        let mut is_sub_agent = HashSet::new();
+
+        for (_, process) in self.system.processes() {
+            if let Some(parent_pid) = process.parent() {
+                let parent_u32 = parent_pid.as_u32();
+                if claude_pids.contains(&parent_u32) {
+                    has_children.insert(parent_u32);
+                    // If this child is also a Claude process, it's a sub-agent
+                    let child_u32 = process.pid().as_u32();
+                    if claude_pids.contains(&child_u32) {
+                        is_sub_agent.insert(child_u32);
+                    }
+                }
+            }
+        }
+
+        // Classify sessions (skip sub-agents — only show top-level sessions)
+        let mut sessions = Vec::new();
+
+        let mut sorted_pids: Vec<u32> = claude_pids.iter().copied().collect();
+        sorted_pids.sort();
+
+        for &pid_u32 in &sorted_pids {
+            if is_sub_agent.contains(&pid_u32) {
+                continue;
+            }
+            let avg_cpu = cpu_by_pid.get(&pid_u32).copied().unwrap_or(0.0);
+            let state = if has_children.contains(&pid_u32) {
+                SessionState::Executing
+            } else if avg_cpu > 2.0 {
+                SessionState::Thinking
             } else {
-                SessionState::NeedsAttention
+                SessionState::Waiting
             };
 
             sessions.push(ClaudeSession {
@@ -96,14 +129,14 @@ impl ClaudeMonitor {
 
         // Detect exits: PIDs that were present last poll but are gone now
         for &old_pid in &self.previous_pids {
-            if !current_pids.contains(&old_pid) {
+            if !claude_pids.contains(&old_pid) {
                 self.cpu_history.remove(&old_pid);
                 self.done_sessions.push((old_pid, std::time::Instant::now()));
             }
         }
 
         // Add done sessions (green dots) that haven't expired
-        self.done_sessions.retain(|(_, when)| when.elapsed().as_secs_f32() < 8.0);
+        self.done_sessions.retain(|(_, when)| when.elapsed().as_secs_f32() < 3.0);
         for &(pid, when) in &self.done_sessions {
             sessions.push(ClaudeSession {
                 pid,
@@ -112,14 +145,16 @@ impl ClaudeMonitor {
             });
         }
 
-        self.previous_pids = current_pids;
+        self.previous_pids = claude_pids;
 
         // Log periodically (every 5th poll = every 10s)
         if self.poll_count % 5 == 1 {
+            let children_count = has_children.len();
             log::info!(
-                "[claude_monitor] poll #{}: found {} claude sessions, total processes={}",
+                "[claude_monitor] poll #{}: found {} claude sessions ({} with children), total processes={}",
                 self.poll_count,
                 sessions.len(),
+                children_count,
                 self.system.processes().len()
             );
             for s in &sessions {

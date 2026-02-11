@@ -22,7 +22,7 @@ fn get_app_handle() -> Option<&'static AppHandle> {
 #[repr(C)]
 pub struct ClaudeSessionFFI {
     pub pid: u32,
-    pub state: u8,     // 0=Working, 1=NeedsAttention, 2=Done
+    pub state: u8,     // 0=Thinking, 1=Executing, 2=Waiting, 3=Done
     pub age_secs: f32,
 }
 
@@ -276,9 +276,10 @@ pub fn island_update_claude_sessions(sessions: &[ClaudeSession]) {
         .map(|s| ClaudeSessionFFI {
             pid: s.pid,
             state: match s.state {
-                SessionState::Working => 0,
-                SessionState::NeedsAttention => 1,
-                SessionState::Done => 2,
+                SessionState::Thinking => 0,
+                SessionState::Executing => 1,
+                SessionState::Waiting => 2,
+                SessionState::Done => 3,
             },
             age_secs: s.age_secs,
         })

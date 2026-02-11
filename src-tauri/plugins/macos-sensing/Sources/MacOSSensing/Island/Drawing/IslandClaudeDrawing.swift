@@ -1,4 +1,5 @@
 import Cocoa
+import QuartzCore
 
 extension IslandView {
     /// Draws Claude session dots inside the island.
@@ -23,12 +24,12 @@ extension IslandView {
         guard maxDots > 0 else { return }
 
         let dotSize: CGFloat = maxDots <= 4 ? 8.0 : 6.0
-        let dotSpacing: CGFloat = 5.0
-        let rowSpacing: CGFloat = 4.0
+        let dotSpacing: CGFloat = 3.0
+        let rowSpacing: CGFloat = 3.0
         let leftMargin: CGFloat = 22.0
 
-        let rows: Int = maxDots <= 4 ? 1 : 2
-        let topRowCount = maxDots <= 4 ? maxDots : Int(ceil(Double(maxDots) / 2.0))
+        let rows: Int = maxDots <= 1 ? 1 : 2
+        let topRowCount = maxDots <= 2 ? 1 : Int(ceil(Double(maxDots) / 2.0))
         let bottomRowCount = maxDots - topRowCount
 
         // Total grid height for vertical centering
@@ -116,25 +117,29 @@ extension IslandView {
 
     // MARK: - Color Helpers
 
+    /// Pulsing alpha for the thinking state (sine wave: 0.5–0.9 over 1.5s period).
+    func thinkingPulseAlpha() -> CGFloat {
+        let time = CACurrentMediaTime()
+        let period: Double = 1.5
+        return 0.7 + 0.2 * CGFloat(sin(time * 2.0 * .pi / period))
+    }
+
     private func colorForSession(_ session: ClaudeSessionInfo) -> (dot: NSColor, glow: NSColor, alpha: CGFloat) {
         switch session.state {
-        case .working:
-            let color = NSColor(calibratedRed: 1.0, green: 0.8, blue: 0.0, alpha: 1.0)
+        case .thinking:
+            let color = NSColor(calibratedRed: 1.0, green: 0.8, blue: 0.0, alpha: 1.0)  // yellow
+            return (color, color, thinkingPulseAlpha())
+        case .executing:
+            let color = NSColor(calibratedRed: 1.0, green: 0.55, blue: 0.0, alpha: 1.0)  // orange
             return (color, color, 0.9)
-        case .needsAttention:
+        case .waiting:
             let color = completionHighlightColor  // green — waiting for user input
             return (color, color, 0.9)
         case .done:
-            let color = NSColor(calibratedRed: 0.3, green: 0.6, blue: 1.0, alpha: 1.0)  // blue
-            let fadeStart: Float = 5.0
+            let color = completionHighlightColor  // green
             let fadeDuration: Float = 3.0
-            let alpha: CGFloat
-            if session.ageSeconds < fadeStart {
-                alpha = 0.9
-            } else {
-                let progress = CGFloat((session.ageSeconds - fadeStart) / fadeDuration)
-                alpha = max(0.0, 0.9 * (1.0 - progress))
-            }
+            let progress = CGFloat(session.ageSeconds / fadeDuration)
+            let alpha: CGFloat = max(0.0, 0.9 * (1.0 - progress))
             return (color, color, alpha)
         }
     }

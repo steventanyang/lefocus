@@ -62,8 +62,9 @@ final class IslandView: NSView {
         let capped = min(count, 8)
         guard capped > 0 else { return 0 }
         let dotSize: CGFloat = capped <= 4 ? 8.0 : 6.0
-        let columns = capped <= 4 ? capped : Int(ceil(Double(capped) / 2.0))
-        return 22.0 + CGFloat(columns) * dotSize + CGFloat(max(0, columns - 1)) * 5.0 + 16.0
+        let columns = capped <= 2 ? 1 : Int(ceil(Double(capped) / 2.0))
+        let dotsContent = CGFloat(columns) * dotSize + CGFloat(max(0, columns - 1)) * 3.0
+        return 22.0 + dotsContent + 4.0
     }
 
     var trackingArea: NSTrackingArea?
@@ -108,6 +109,9 @@ final class IslandView: NSView {
     // Completion color transition animation
     var completionColorTransition: CGFloat = 0.0  // 0.0 = black, 1.0 = green
     var completionColorAnimationTimer: Timer?
+
+    // Thinking pulse animation timer (15 Hz, active only when thinking sessions exist)
+    private var thinkingAnimationTimer: Timer?
     private(set) var waveformGradient: NSGradient?
 
     override init(frame frameRect: NSRect) {
@@ -168,6 +172,18 @@ final class IslandView: NSView {
 
     func updateClaudeSessions(_ sessions: [ClaudeSessionInfo]) {
         self.claudeSessions = sessions
+
+        // Start/stop pulse timer based on whether any session is thinking
+        let hasThinking = sessions.contains { $0.state == .thinking }
+        if hasThinking && thinkingAnimationTimer == nil {
+            thinkingAnimationTimer = Timer.scheduledTimer(withTimeInterval: 1.0/15.0, repeats: true) { [weak self] _ in
+                self?.needsDisplay = true
+            }
+        } else if !hasThinking && thinkingAnimationTimer != nil {
+            thinkingAnimationTimer?.invalidate()
+            thinkingAnimationTimer = nil
+        }
+
         needsDisplay = true
     }
 
