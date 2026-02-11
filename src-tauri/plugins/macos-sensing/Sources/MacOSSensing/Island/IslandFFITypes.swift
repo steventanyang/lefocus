@@ -12,3 +12,17 @@ public struct IslandStartPayload {
     public let targetMs: Int64
     public let mode: IslandMode
 }
+
+// MARK: - Claude Session Types
+
+public enum ClaudeSessionState: UInt8 {
+    case working = 0
+    case needsAttention = 1
+    case done = 2
+}
+
+public struct ClaudeSessionInfo {
+    public let pid: UInt32
+    public let state: ClaudeSessionState
+    public let ageSeconds: Float
+}

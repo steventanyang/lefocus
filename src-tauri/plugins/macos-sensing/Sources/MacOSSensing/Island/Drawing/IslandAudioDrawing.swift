@@ -90,7 +90,7 @@ extension IslandView {
             return
         }
 
-        let barY: CGFloat = 65.0
+        let barY: CGFloat = 65.0 + Self.dotsBottomPadding
         let horizontalMargin: CGFloat = 28.0  // Consistent margin on both sides
 
         let currentTimeStr = formatPlaybackTime(position)
@@ -207,7 +207,7 @@ extension IslandView {
         let pillHeight: CGFloat = 12.0 * heightScale
         // Add padding to account for notch top corner curve (10px radius)
         let startX = customStartX ?? 22.0
-        let centerY = customCenterY ?? bounds.midY
+        let centerY = customCenterY ?? notchCenterY
 
         let hasPalette = waveformGradient != nil
         let isLiveWaveform = hasPalette && isAudioPlaying
@@ -360,13 +360,11 @@ extension IslandView {
         let leftAlignment = expandedArtworkRect().minX
         if isIdle {
             // No timer: center the playback buttons horizontally, position them lower
-            // Place them in the lower portion of the expanded view (around 10px from bottom)
-            bottomY = 10.0
+            bottomY = 10.0 + Self.dotsBottomPadding
             startX = (bounds.width - buttonsWidth) / 2.0
         } else {
             // Timer running: align playback buttons under metadata, lower in the view
-            // Position them around 10px from bottom to match idle state
-            bottomY = 10.0
+            bottomY = 10.0 + Self.dotsBottomPadding
             startX = leftAlignment
         }
 
@@ -553,17 +551,17 @@ extension IslandView {
         switch compactLayoutState {
         case .audioOnly:
             // Add padding to account for notch top corner curve (10px radius)
-            drawCompactWaveform(startX: 26.0, centerY: bounds.midY)
+            drawCompactWaveform(startX: 26.0, centerY: notchCenterY)
             drawCompactArtworkOnRight()
         case .timerActive:
             drawTimerText()
             if trackInfo != nil {
                 // Add padding to account for notch top corner curve (10px radius)
-                drawCompactWaveform(startX: 26.0, centerY: bounds.midY)
+                drawCompactWaveform(startX: 26.0, centerY: notchCenterY)
             }
         case .idle:
             // Add padding to account for notch top corner curve (10px radius)
-            drawCompactWaveform(startX: 26.0, centerY: bounds.midY)
+            drawCompactWaveform(startX: 26.0, centerY: notchCenterY)
         }
     }
 
@@ -573,7 +571,7 @@ extension IslandView {
         // Add padding to account for notch top corner curve (10px radius)
         let rect = NSRect(
             x: bounds.maxX - size - 22.0,
-            y: bounds.midY - size / 2.0,
+            y: notchCenterY - size / 2.0,
             width: size,
             height: size
         )

@@ -1,4 +1,5 @@
 mod audio;
+mod claude_monitor;
 mod db;
 mod labels;
 mod macos_bridge;
@@ -415,6 +416,16 @@ pub fn run() {
                         initial_sound_settings.enabled,
                         &initial_sound_settings.sound_id,
                     );
+
+                    // Spawn background task to monitor Claude Code sessions
+                    tauri::async_runtime::spawn(async {
+                        let mut monitor = claude_monitor::ClaudeMonitor::new();
+                        loop {
+                            let sessions = monitor.poll();
+                            macos_bridge::island_update_claude_sessions(&sessions);
+                            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                        }
+                    });
                 }
 
                 Ok(())

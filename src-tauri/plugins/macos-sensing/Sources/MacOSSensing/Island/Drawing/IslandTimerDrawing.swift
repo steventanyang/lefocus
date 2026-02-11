@@ -37,7 +37,7 @@ extension IslandView {
         let padding: CGFloat = 18.0
         let origin = NSPoint(
             x: bounds.maxX - textSize.width - padding,
-            y: (bounds.height - textSize.height) / 2.0
+            y: notchCenterY - textSize.height / 2.0
         )
         attributed.draw(at: origin)
     }
@@ -142,7 +142,7 @@ extension IslandView {
         let buttonWidth: CGFloat = 64.0
         let buttonHeight: CGFloat = 26.0
         let spacing: CGFloat = 10.0
-        let bottomY: CGFloat = 18.0
+        let bottomY: CGFloat = 18.0 + Self.dotsBottomPadding
 
         // Determine the horizontal region the buttons should occupy
         let horizontalPadding: CGFloat = 20.0

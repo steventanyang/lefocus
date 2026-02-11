@@ -4,7 +4,12 @@ extension IslandView {
     // MARK: - Drawing Helpers
 
     func createNotchPath() -> NSBezierPath {
-        let rect = bounds
+        let rect = NSRect(
+            x: bounds.minX,
+            y: bounds.minY + Self.dotsBottomPadding,
+            width: bounds.width,
+            height: bounds.height - Self.dotsBottomPadding
+        )
         // Top corner radius - outward curve (at maxY in AppKit coordinates)
         // Increased from 6.0 to make the curve more obvious
         let topCornerRadius: CGFloat = 10.0

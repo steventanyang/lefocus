@@ -42,6 +42,17 @@ final class IslandView: NSView {
             return NSColor(calibratedRed: red, green: greenComponent, blue: blue, alpha: 1.0)
         }
     }
+    var claudeSessions: [ClaudeSessionInfo] = []
+
+    /// Extra height at the bottom of the view reserved for Claude session dots.
+    /// The notch shape sits above this padding; dots are drawn in the padding area.
+    static let dotsBottomPadding: CGFloat = 8.0
+
+    /// Vertical center of the notch content area (above the dots padding).
+    var notchCenterY: CGFloat {
+        Self.dotsBottomPadding + (bounds.height - Self.dotsBottomPadding) / 2.0
+    }
+
     var trackingArea: NSTrackingArea?
     var isExpanded: Bool = false
     var isHovered: Bool = false
@@ -142,6 +153,11 @@ final class IslandView: NSView {
         needsDisplay = true
     }
 
+    func updateClaudeSessions(_ sessions: [ClaudeSessionInfo]) {
+        self.claudeSessions = sessions
+        needsDisplay = true
+    }
+
     func updateAudio(track: TrackInfo?, waveformBars: [CGFloat]?, waveformGradient: NSGradient?) {
         self.waveformGradient = waveformGradient
         let finalTrack = applyPendingSeekIfNeeded(to: track)
@@ -164,8 +180,8 @@ final class IslandView: NSView {
 
         guard let context = NSGraphicsContext.current?.cgContext else { return }
 
+        // Draw notch-clipped content
         context.saveGState()
-        defer { context.restoreGState() }
 
         // Notch-shaped path: bottom corners curve inward, top corners curve outward
         let path = createNotchPath()
@@ -191,6 +207,7 @@ final class IslandView: NSView {
             let locations: [CGFloat] = [0.0, 0.5, 1.0] // Top, 50%, bottom
 
             guard let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: locations) else {
+                context.restoreGState()
                 return
             }
 
@@ -237,6 +254,11 @@ final class IslandView: NSView {
             // Compact layout: timer and audio indicator
             drawCompactLayout()
         }
+
+        context.restoreGState()
+
+        // Draw Claude session dots unclipped, in the padding area below the island
+        drawClaudeSessionDots()
     }
 
     override func updateTrackingAreas() {

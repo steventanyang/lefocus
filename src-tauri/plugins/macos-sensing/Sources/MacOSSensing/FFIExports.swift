@@ -132,6 +132,28 @@ public func macos_sensing_swift_free_ocr_result(_ pointer: UnsafeMutablePointer<
     pointer.deallocate()
 }
 
+// MARK: - Claude session monitoring bridge
+
+@_cdecl("macos_sensing_swift_island_update_claude_sessions")
+public func macos_sensing_swift_island_update_claude_sessions(
+    _ sessions: UnsafePointer<ClaudeSessionFFI>,
+    _ count: Int
+) {
+    var parsed: [ClaudeSessionInfo] = []
+    parsed.reserveCapacity(count)
+    for i in 0..<count {
+        let raw = sessions[i]
+        let state = ClaudeSessionState(rawValue: raw.state) ?? .working
+        parsed.append(ClaudeSessionInfo(pid: raw.pid, state: state, ageSeconds: raw.age_secs))
+    }
+    if !parsed.isEmpty {
+        NSLog("[IslandClaude] FFI received %d sessions", parsed.count)
+    }
+    DispatchQueue.main.async {
+        IslandController.shared.updateClaudeSessions(parsed)
+    }
+}
+
 // MARK: - Island bridge
 
 @_cdecl("macos_sensing_swift_island_init")

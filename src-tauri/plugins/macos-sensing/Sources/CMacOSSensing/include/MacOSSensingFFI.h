@@ -30,6 +30,15 @@ void macos_sensing_free_window_metadata(CMacOSSensing_WindowMetadataFFI *ptr);
 void macos_sensing_free_screenshot_buffer(uint8_t *ptr);
 void macos_sensing_free_ocr_result(CMacOSSensing_OCRResultFFI *ptr);
 
+// Claude session monitoring
+typedef struct {
+    uint32_t pid;
+    uint8_t state;    // 0=Working, 1=NeedsAttention, 2=Done
+    float age_secs;
+} CMacOSSensing_ClaudeSessionFFI;
+
+void macos_sensing_island_update_claude_sessions(const CMacOSSensing_ClaudeSessionFFI *sessions, size_t count);
+
 // Island controls
 void macos_sensing_island_init(void);
 void macos_sensing_island_start(int64_t start_uptime_ms, int64_t target_ms, const char *mode);
