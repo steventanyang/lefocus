@@ -1,53 +1,103 @@
 import Cocoa
 
 extension IslandView {
-    /// Draws a dark grey shelf below the island with colored dots representing active Claude Code sessions.
+    /// Draws Claude session dots inside the island.
+    /// Compact: grid to the left of waveform/timer.
+    /// Expanded: single centered row near the bottom.
     func drawClaudeSessionDots() {
         guard !claudeSessions.isEmpty else { return }
+
+        if isExpanded {
+            drawExpandedSessionDots()
+        } else {
+            drawCompactSessionDots()
+        }
+    }
+
+    // MARK: - Compact Mode (grid to the left)
+
+    private func drawCompactSessionDots() {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
 
-        let dotDiameter: CGFloat = 6.0
-        let dotSpacing: CGFloat = 5.0
         let maxDots = min(claudeSessions.count, 8)
+        guard maxDots > 0 else { return }
 
-        let totalDotsWidth = CGFloat(maxDots) * dotDiameter + CGFloat(maxDots - 1) * dotSpacing
-        let shelfHPadding: CGFloat = 10.0
-        let shelfWidth = totalDotsWidth + shelfHPadding * 2.0
-        let shelfHeight: CGFloat = 6.5
-        let shelfCornerRadius: CGFloat = 4.0
+        let dotSize: CGFloat = maxDots <= 4 ? 8.0 : 6.0
+        let dotSpacing: CGFloat = 5.0
+        let rowSpacing: CGFloat = 4.0
+        let leftMargin: CGFloat = 22.0
 
-        // Shelf sits at the very bottom of the view
-        let shelfRect = NSRect(
-            x: bounds.midX - shelfWidth / 2.0,
-            y: bounds.minY,
-            width: shelfWidth,
-            height: shelfHeight
-        )
+        let rows: Int = maxDots <= 4 ? 1 : 2
+        let topRowCount = maxDots <= 4 ? maxDots : Int(ceil(Double(maxDots) / 2.0))
+        let bottomRowCount = maxDots - topRowCount
 
-        // Draw shelf background
-        let shelfPath = NSBezierPath(roundedRect: shelfRect, xRadius: shelfCornerRadius, yRadius: shelfCornerRadius)
-        NSColor(white: 0.13, alpha: 1.0).setFill()
-        shelfPath.fill()
+        // Total grid height for vertical centering
+        let gridHeight = CGFloat(rows) * dotSize + CGFloat(max(0, rows - 1)) * rowSpacing
+        let gridTopY = notchCenterY + gridHeight / 2.0
 
-        // Center dots inside the shelf
-        let baseX = shelfRect.midX - totalDotsWidth / 2.0
-        let centerY = shelfRect.midY
+        var dotIndex = 0
+
+        for row in 0..<rows {
+            let countInRow = row == 0 ? topRowCount : bottomRowCount
+            let rowY = gridTopY - CGFloat(row) * (dotSize + rowSpacing) - dotSize
+
+            for col in 0..<countInRow {
+                guard dotIndex < maxDots else { break }
+                let session = claudeSessions[dotIndex]
+
+                let dotX = leftMargin + CGFloat(col) * (dotSize + dotSpacing)
+                let dotRect = NSRect(x: dotX, y: rowY, width: dotSize, height: dotSize)
+
+                let (dotColor, glowColor, alpha) = colorForSession(session)
+
+                context.saveGState()
+                if session.state != .done {
+                    context.setShadow(
+                        offset: .zero,
+                        blur: 6.0,
+                        color: glowColor.withAlphaComponent(0.5 * alpha).cgColor
+                    )
+                }
+
+                let path = NSBezierPath(ovalIn: dotRect)
+                dotColor.withAlphaComponent(alpha).setFill()
+                path.fill()
+
+                context.restoreGState()
+                dotIndex += 1
+            }
+        }
+    }
+
+    // MARK: - Expanded Mode (centered row at bottom)
+
+    private func drawExpandedSessionDots() {
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+
+        let maxDots = min(claudeSessions.count, 8)
+        guard maxDots > 0 else { return }
+
+        let dotSize: CGFloat = 6.0
+        let dotSpacing: CGFloat = 5.0
+
+        let totalWidth = CGFloat(maxDots) * dotSize + CGFloat(maxDots - 1) * dotSpacing
+        let startX = bounds.midX - totalWidth / 2.0
+        let centerY: CGFloat = 12.0  // ~12px from bottom
 
         for i in 0..<maxDots {
             let session = claudeSessions[i]
 
-            let dotX = baseX + CGFloat(i) * (dotDiameter + dotSpacing)
+            let dotX = startX + CGFloat(i) * (dotSize + dotSpacing)
             let dotRect = NSRect(
                 x: dotX,
-                y: centerY - dotDiameter / 2.0,
-                width: dotDiameter,
-                height: dotDiameter
+                y: centerY - dotSize / 2.0,
+                width: dotSize,
+                height: dotSize
             )
 
             let (dotColor, glowColor, alpha) = colorForSession(session)
 
             context.saveGState()
-
             if session.state != .done {
                 context.setShadow(
                     offset: .zero,
@@ -63,6 +113,8 @@ extension IslandView {
             context.restoreGState()
         }
     }
+
+    // MARK: - Color Helpers
 
     private func colorForSession(_ session: ClaudeSessionInfo) -> (dot: NSColor, glow: NSColor, alpha: CGFloat) {
         switch session.state {

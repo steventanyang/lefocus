@@ -45,12 +45,25 @@ final class IslandView: NSView {
     var claudeSessions: [ClaudeSessionInfo] = []
 
     /// Extra height at the bottom of the view reserved for Claude session dots.
-    /// The notch shape sits above this padding; dots are drawn in the padding area.
-    static let dotsBottomPadding: CGFloat = 8.0
+    /// Now zero — dots are drawn inside the island itself.
+    static let dotsBottomPadding: CGFloat = 0.0
 
-    /// Vertical center of the notch content area (above the dots padding).
+    /// Vertical center of the notch content area.
     var notchCenterY: CGFloat {
-        Self.dotsBottomPadding + (bounds.height - Self.dotsBottomPadding) / 2.0
+        bounds.height / 2.0
+    }
+
+    /// Width of the dots zone in compact mode (left of waveform/timer).
+    var compactDotsZoneWidth: CGFloat {
+        Self.compactDotsZoneWidth(for: claudeSessions.count)
+    }
+
+    static func compactDotsZoneWidth(for count: Int) -> CGFloat {
+        let capped = min(count, 8)
+        guard capped > 0 else { return 0 }
+        let dotSize: CGFloat = capped <= 4 ? 8.0 : 6.0
+        let columns = capped <= 4 ? capped : Int(ceil(Double(capped) / 2.0))
+        return 22.0 + CGFloat(columns) * dotSize + CGFloat(max(0, columns - 1)) * 5.0 + 16.0
     }
 
     var trackingArea: NSTrackingArea?
@@ -255,10 +268,10 @@ final class IslandView: NSView {
             drawCompactLayout()
         }
 
-        context.restoreGState()
-
-        // Draw Claude session dots unclipped, in the padding area below the island
+        // Draw Claude session dots inside the clipped island
         drawClaudeSessionDots()
+
+        context.restoreGState()
     }
 
     override func updateTrackingAreas() {

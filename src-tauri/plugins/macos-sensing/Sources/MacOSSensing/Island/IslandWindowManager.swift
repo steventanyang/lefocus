@@ -41,6 +41,7 @@ final class IslandWindowManager {
     private var isHovering: Bool = false
     private var isTimerIdle: Bool = true
     private var hasAudioContent: Bool = false
+    private var claudeSessionCount: Int = 0
 
     init(configuration: IslandWindowConfiguration) {
         self.configuration = configuration
@@ -166,6 +167,12 @@ final class IslandWindowManager {
         updateIslandWindowSize(animated: animated, duration: isExpanded ? 0.25 : 0.15)
     }
 
+    func updateSessionCount(_ count: Int, animated: Bool = true) {
+        guard claudeSessionCount != count else { return }
+        claudeSessionCount = count
+        updateIslandWindowSize(animated: animated, duration: 0.15)
+    }
+
     func repositionForCurrentScreen() {
         guard let panel = parentWindow else { return }
         guard let screen = panel.screen ?? NSScreen.lf_preferredIslandDisplay ?? NSScreen.main else {
@@ -220,10 +227,11 @@ final class IslandWindowManager {
             return NSSize(width: expandedWidth, height: expandedHeight)
         }
         
-        // Use configured widths based on timer state
-        let baseWidth: CGFloat = isTimerIdle ? configuration.compactIdleWidth : configuration.compactTimerWidth
+        // Use configured widths based on timer state, plus dots zone
+        let dotsExtra = IslandView.compactDotsZoneWidth(for: claudeSessionCount)
+        let baseWidth: CGFloat = (isTimerIdle ? configuration.compactIdleWidth : configuration.compactTimerWidth) + dotsExtra
         let baseHeight = configuration.compactSize.height
-        
+
         if isHovering {
             return NSSize(
                 width: baseWidth + configuration.hoverDelta.width,
@@ -234,7 +242,9 @@ final class IslandWindowManager {
     }
 
     private func islandFrame(for screen: NSScreen, size: NSSize) -> NSRect {
-        let originX = screen.frame.midX - size.width / 2.0
+        // Shift left so only the left side grows when dots are present
+        let dotsOffset: CGFloat = isExpanded ? 0.0 : IslandView.compactDotsZoneWidth(for: claudeSessionCount) / 2.0
+        let originX = screen.frame.midX - size.width / 2.0 - dotsOffset
 
         if let notch = screen.lf_notchRect {
             // Calculate where the compact island's top edge would be

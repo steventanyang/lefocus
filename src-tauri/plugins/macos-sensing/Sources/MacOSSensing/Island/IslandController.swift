@@ -41,18 +41,17 @@ public final class IslandController {
     }
 
     private init() {
-        let dp = IslandView.dotsBottomPadding
         let configuration = IslandWindowConfiguration(
-            compactSize: NSSize(width: 320.0, height: 38.0 + dp),
-            expandedSize: NSSize(width: 420.0, height: 170.0 + dp),
+            compactSize: NSSize(width: 320.0, height: 38.0),
+            expandedSize: NSSize(width: 420.0, height: 170.0),
             hoverDelta: NSSize(width: 22.0, height: 5.0),
             expandedVerticalOffset: 14.0,
             compactIdleWidth: 280.0,
             compactTimerWidth: 340.0,
             expandedIdleWidth: 300.0,
             expandedTimerWidth: 380.0,
-            expandedIdleHeight: 170.0 + dp,    // With progress bar
-            expandedTimerHeight: 150.0 + dp    // Without progress bar (timer active)
+            expandedIdleHeight: 170.0,     // With progress bar
+            expandedTimerHeight: 150.0     // Without progress bar (timer active)
         )
         windowManager = IslandWindowManager(configuration: configuration)
         windowManager.delegate = self
@@ -139,6 +138,7 @@ public final class IslandController {
     public func updateClaudeSessions(_ sessions: [ClaudeSessionInfo]) {
         claudeSessions = sessions
         islandView?.updateClaudeSessions(sessions)
+        windowManager.updateSessionCount(sessions.count)
     }
 
     public func cleanup() {
@@ -193,6 +193,7 @@ public final class IslandController {
         windowManager.updateTimerState(isIdle: isIdle, animated: false)
         updateAudioUI(for: view)
         view.updateClaudeSessions(claudeSessions)
+        windowManager.updateSessionCount(claudeSessions.count, animated: false)
         view.updateInteractionState(isExpanded: isExpanded, isHovered: isHovering)
     }
 
