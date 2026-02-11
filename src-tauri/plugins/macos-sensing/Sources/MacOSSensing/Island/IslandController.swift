@@ -46,8 +46,8 @@ public final class IslandController {
             expandedSize: NSSize(width: 420.0, height: 190.0),
             hoverDelta: NSSize(width: 22.0, height: 5.0),
             expandedVerticalOffset: 14.0,
-            compactIdleWidth: 280.0,
-            compactTimerWidth: 340.0,
+            compactIdleWidth: 250.0,
+            compactTimerWidth: 310.0,
             expandedIdleWidth: 300.0,
             expandedTimerWidth: 380.0,
             expandedIdleHeight: 190.0,     // With progress bar

@@ -49,8 +49,8 @@ extension IslandView {
         let lineSpacing: CGFloat = 2.0
         let titleHeight = titleFont.ascender - titleFont.descender
         let artistHeight = artistFont.ascender - artistFont.descender
-        // Position metadata block lower to avoid notch (around 50px from top)
-        let blockTop = bounds.height - 50.0
+        // Position metadata block below top-left dots and waveform row
+        let blockTop = bounds.height - 58.0
 
         let titleRect = NSRect(
             x: textStartX,
@@ -256,10 +256,11 @@ extension IslandView {
         let pillWidth = basePillWidth * widthScale
         let pillHeight: CGFloat = 12.0 * heightScale
         
-        // Position waveform at top left (around 28px from top) - stays fixed regardless of title/artist position
+        // Position waveform at top right (around 28px from top) - stays fixed regardless of title/artist position
         let waveformCenterY = bounds.height - 28.0
-        // Position waveform left edge - add padding to account for notch top corner curve (10px radius)
-        let startX: CGFloat = 38.0
+        // Position waveform right edge - mirror the left margin to the right side
+        let totalWaveformWidth = 4.0 * pillWidth + 3.0 * spacing
+        let startX = bounds.maxX - totalWaveformWidth - 38.0
 
         let hasPalette = waveformGradient != nil
         let isLiveWaveform = hasPalette && isAudioPlaying
@@ -392,8 +393,8 @@ extension IslandView {
 
     private func expandedArtworkRect() -> NSRect {
         let size = AudioArtworkLayout.expandedSize
-        // Align artwork center with title/artist block center (which is at blockTop = bounds.height - 50.0)
-        let blockTop = bounds.height - 50.0
+        // Align artwork center with title/artist block center
+        let blockTop = bounds.height - 58.0
         let titleFont = NSFont.systemFont(ofSize: 14, weight: .semibold)
         let titleHeight = titleFont.ascender - titleFont.descender
         let artistFont = NSFont.systemFont(ofSize: 12, weight: .regular)

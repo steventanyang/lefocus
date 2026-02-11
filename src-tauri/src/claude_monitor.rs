@@ -1,6 +1,6 @@
 use log;
 use std::collections::{HashMap, HashSet};
-use sysinfo::{System, ProcessesToUpdate, ProcessRefreshKind};
+use sysinfo::{System, ProcessesToUpdate, ProcessRefreshKind, UpdateKind};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SessionState {
@@ -48,10 +48,11 @@ impl ClaudeMonitor {
     pub fn poll(&mut self) -> Vec<ClaudeSession> {
         self.poll_count += 1;
 
-        // Use everything() to ensure process names and exe paths are populated
         self.system.refresh_processes_specifics(
             ProcessesToUpdate::All,
-            ProcessRefreshKind::everything(),
+            ProcessRefreshKind::new()
+                .with_cpu()
+                .with_exe(UpdateKind::OnlyIfNotSet),
         );
 
         // Pass 1: Find all Claude PIDs and record CPU
