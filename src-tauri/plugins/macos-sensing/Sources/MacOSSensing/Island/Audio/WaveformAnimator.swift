@@ -49,7 +49,7 @@ public final class WaveformAnimator {
     private func step() {
         // Update targets less frequently (every ~8 frames) for smoother animation
         targetUpdateCounter += 1
-        if targetUpdateCounter >= 8 {
+        if targetUpdateCounter >= 10 {
             targetUpdateCounter = 0
             // Bigger range: base values allow bars to go much higher
             let base: CGFloat = state == .playing ? 0.2 : state == .paused ? 0.15 : 0.1
@@ -60,7 +60,7 @@ public final class WaveformAnimator {
         
         // Smooth interpolation towards targets
         currentBars = zip(currentBars, targetBars).map { current, target in
-            current * 0.85 + target * 0.15
+            current * 0.88 + target * 0.12
         }
         onFrame?(currentBars)
     }
