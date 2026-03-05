@@ -1,5 +1,5 @@
 mod audio;
-mod claude_monitor;
+mod agent_monitor;
 mod db;
 mod labels;
 mod macos_bridge;
@@ -425,12 +425,12 @@ pub fn run() {
                         &initial_sound_settings.sound_id,
                     );
 
-                    // Spawn background task to monitor Claude Code sessions
+                    // Spawn background task to monitor agent terminal sessions
                     tauri::async_runtime::spawn(async {
-                        let mut monitor = claude_monitor::ClaudeMonitor::new();
+                        let mut monitor = agent_monitor::AgentMonitor::new();
                         loop {
                             let sessions = monitor.poll();
-                            macos_bridge::island_update_claude_sessions(&sessions);
+                            macos_bridge::island_update_agent_sessions(&sessions);
                             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                         }
                     });

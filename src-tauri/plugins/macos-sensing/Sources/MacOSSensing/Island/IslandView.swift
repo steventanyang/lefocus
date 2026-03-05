@@ -42,9 +42,9 @@ final class IslandView: NSView {
             return NSColor(calibratedRed: red, green: greenComponent, blue: blue, alpha: 1.0)
         }
     }
-    var claudeSessions: [ClaudeSessionInfo] = []
+    var agentSessions: [AgentSessionInfo] = []
 
-    /// Extra height at the bottom of the view reserved for Claude session dots.
+    /// Extra height at the bottom of the view reserved for Agent session dots.
     /// Now zero — dots are drawn inside the island itself.
     static let dotsBottomPadding: CGFloat = 0.0
 
@@ -55,7 +55,7 @@ final class IslandView: NSView {
 
     /// Width of the dots zone in compact mode (left of waveform/timer).
     var compactDotsZoneWidth: CGFloat {
-        Self.compactDotsZoneWidth(for: claudeSessions.count)
+        Self.compactDotsZoneWidth(for: agentSessions.count)
     }
 
     static func compactDotsZoneWidth(for count: Int) -> CGFloat {
@@ -117,7 +117,7 @@ final class IslandView: NSView {
     // Dot removal animation state
     private var previousSessionPIDs: Set<UInt32> = []
     struct FadingDot {
-        let session: ClaudeSessionInfo
+        let session: AgentSessionInfo
         let oldIndex: Int       // position in the old layout
         let oldCount: Int       // total count of old layout
         let startTime: CFTimeInterval
@@ -183,9 +183,9 @@ final class IslandView: NSView {
         needsDisplay = true
     }
 
-    func updateClaudeSessions(_ sessions: [ClaudeSessionInfo]) {
+    func updateAgentSessions(_ sessions: [AgentSessionInfo]) {
         let newPIDs = Set(sessions.map { $0.pid })
-        let oldSessions = self.claudeSessions
+        let oldSessions = self.agentSessions
         let removedPIDs = previousSessionPIDs.subtracting(newPIDs)
 
         // If an animation is already running, complete it instantly
@@ -208,7 +208,7 @@ final class IslandView: NSView {
             }
         }
 
-        self.claudeSessions = sessions
+        self.agentSessions = sessions
         self.previousSessionPIDs = newPIDs
 
         // Start removal animation timer if we have fading dots
@@ -343,8 +343,8 @@ final class IslandView: NSView {
             drawCompactLayout()
         }
 
-        // Draw Claude session dots inside the clipped island
-        drawClaudeSessionDots()
+        // Draw Agent session dots inside the clipped island
+        drawAgentSessionDots()
 
         context.restoreGState()
     }

@@ -5,7 +5,7 @@ use std::ffi::{c_char, CStr, CString};
 use std::sync::OnceLock;
 use tauri::{AppHandle, Manager};
 
-use crate::claude_monitor::ClaudeSession;
+use crate::agent_monitor::AgentSession;
 
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 
@@ -20,7 +20,7 @@ fn get_app_handle() -> Option<&'static AppHandle> {
 }
 
 #[repr(C)]
-pub struct ClaudeSessionFFI {
+pub struct AgentSessionFFI {
     pub pid: u32,
     pub state: u8,     // 0=Thinking, 1=Executing, 2=Waiting, 3=Done
     pub age_secs: f32,
@@ -71,7 +71,7 @@ extern "C" {
     fn macos_sensing_island_update_chime_preferences(enabled: bool, sound_id: *const c_char);
     fn macos_sensing_island_preview_chime(sound_id: *const c_char);
     fn macos_sensing_island_set_visible(visible: bool);
-    fn macos_sensing_island_update_claude_sessions(sessions: *const ClaudeSessionFFI, count: usize);
+    fn macos_sensing_island_update_agent_sessions(sessions: *const AgentSessionFFI, count: usize);
 
     // Permission checking
     fn macos_sensing_check_screen_recording_permission() -> bool;
@@ -269,11 +269,11 @@ pub fn island_preview_chime(_sound_id: &str) {}
 pub fn island_set_visible(_visible: bool) {}
 
 #[cfg(target_os = "macos")]
-pub fn island_update_claude_sessions(sessions: &[ClaudeSession]) {
-    use crate::claude_monitor::SessionState;
-    let ffi_sessions: Vec<ClaudeSessionFFI> = sessions
+pub fn island_update_agent_sessions(sessions: &[AgentSession]) {
+    use crate::agent_monitor::SessionState;
+    let ffi_sessions: Vec<AgentSessionFFI> = sessions
         .iter()
-        .map(|s| ClaudeSessionFFI {
+        .map(|s| AgentSessionFFI {
             pid: s.pid,
             state: match s.state {
                 SessionState::Thinking => 0,
@@ -285,12 +285,12 @@ pub fn island_update_claude_sessions(sessions: &[ClaudeSession]) {
         })
         .collect();
     unsafe {
-        macos_sensing_island_update_claude_sessions(ffi_sessions.as_ptr(), ffi_sessions.len());
+        macos_sensing_island_update_agent_sessions(ffi_sessions.as_ptr(), ffi_sessions.len());
     }
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn island_update_claude_sessions(_sessions: &[ClaudeSession]) {}
+pub fn island_update_agent_sessions(_sessions: &[AgentSession]) {}
 
 // Permission checking functions
 pub fn check_screen_recording_permission() -> bool {

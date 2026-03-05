@@ -41,7 +41,7 @@ final class IslandWindowManager {
     private var isHovering: Bool = false
     private var isTimerIdle: Bool = true
     private var hasAudioContent: Bool = false
-    private var claudeSessionCount: Int = 0
+    private var agentSessionCount: Int = 0
 
     init(configuration: IslandWindowConfiguration) {
         self.configuration = configuration
@@ -168,8 +168,8 @@ final class IslandWindowManager {
     }
 
     func updateSessionCount(_ count: Int, animated: Bool = true) {
-        guard claudeSessionCount != count else { return }
-        claudeSessionCount = count
+        guard agentSessionCount != count else { return }
+        agentSessionCount = count
         updateIslandWindowSize(animated: animated, duration: 0.15)
     }
 
@@ -228,13 +228,13 @@ final class IslandWindowManager {
         }
         
         // Use configured widths based on timer state.
-        // When Claude sessions are present, widen the island so the left ear
+        // When agent sessions are present, widen the island so the left ear
         // has enough room for the dot grid (island is centered over the notch).
         var baseWidth: CGFloat = isTimerIdle ? configuration.compactIdleWidth : configuration.compactTimerWidth
-        if claudeSessionCount > 0 {
-            let dotsZone = IslandView.compactDotsZoneWidth(for: claudeSessionCount)
+        if agentSessionCount > 0 {
+            let dotsZone = IslandView.compactDotsZoneWidth(for: agentSessionCount)
             // When 1-2 dots + audio, artwork sits beside dots — add its width too
-            let artworkExtra: CGFloat = (claudeSessionCount <= 2 && hasAudioContent)
+            let artworkExtra: CGFloat = (agentSessionCount <= 2 && hasAudioContent)
                 ? AudioArtworkLayout.compactSize + 4.0
                 : 0.0
             baseWidth += dotsZone + artworkExtra

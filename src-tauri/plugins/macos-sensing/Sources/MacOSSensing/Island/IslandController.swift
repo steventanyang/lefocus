@@ -30,7 +30,7 @@ public final class IslandController {
     private var waveformGradient: NSGradient?
     private var hasPlayedCompletionChime: Bool = false
 
-    private var claudeSessions: [ClaudeSessionInfo] = []
+    private var agentSessions: [AgentSessionInfo] = []
 
     private var isExpanded: Bool = false
     private var isHovering: Bool = false
@@ -135,15 +135,15 @@ public final class IslandController {
         }
     }
 
-    public func updateClaudeSessions(_ sessions: [ClaudeSessionInfo]) {
-        claudeSessions = sessions
-        islandView?.updateClaudeSessions(sessions)
+    public func updateAgentSessions(_ sessions: [AgentSessionInfo]) {
+        agentSessions = sessions
+        islandView?.updateAgentSessions(sessions)
 
         // If a removal animation is active, defer the width update until it finishes
         if let view = islandView, !view.fadingDots.isEmpty {
             view.onRemovalAnimationComplete = { [weak self] in
                 guard let self else { return }
-                self.windowManager.updateSessionCount(self.claudeSessions.count)
+                self.windowManager.updateSessionCount(self.agentSessions.count)
             }
         } else {
             windowManager.updateSessionCount(sessions.count)
@@ -201,8 +201,8 @@ public final class IslandController {
         // Set initial timer state for window sizing
         windowManager.updateTimerState(isIdle: isIdle, animated: false)
         updateAudioUI(for: view)
-        view.updateClaudeSessions(claudeSessions)
-        windowManager.updateSessionCount(claudeSessions.count, animated: false)
+        view.updateAgentSessions(agentSessions)
+        windowManager.updateSessionCount(agentSessions.count, animated: false)
         view.updateInteractionState(isExpanded: isExpanded, isHovered: isHovering)
     }
 

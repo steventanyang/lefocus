@@ -549,11 +549,11 @@ extension IslandView {
     }
 
     func drawCompactLayout() {
-        let hasDots = !claudeSessions.isEmpty
+        let hasDots = !agentSessions.isEmpty
         switch compactLayoutState {
         case .audioOnly:
             if hasDots {
-                if claudeSessions.count <= 2 {
+                if agentSessions.count <= 2 {
                     // Few dots: album cover on left, waveform on right
                     drawCompactArtworkOnLeft()
                     drawCompactWaveformOnRight()

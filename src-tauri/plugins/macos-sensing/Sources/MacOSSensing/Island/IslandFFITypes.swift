@@ -13,17 +13,17 @@ public struct IslandStartPayload {
     public let mode: IslandMode
 }
 
-// MARK: - Claude Session Types
+// MARK: - Agent Session Types
 
-public enum ClaudeSessionState: UInt8 {
+public enum AgentSessionState: UInt8 {
     case thinking = 0
     case executing = 1
     case waiting = 2
     case done = 3
 }
 
-public struct ClaudeSessionInfo {
+public struct AgentSessionInfo {
     public let pid: UInt32
-    public let state: ClaudeSessionState
+    public let state: AgentSessionState
     public let ageSeconds: Float
 }

@@ -5,8 +5,8 @@ extension IslandView {
     /// Draws Claude session dots inside the island.
     /// Compact: grid to the left of waveform/timer.
     /// Expanded: single centered row near the bottom.
-    func drawClaudeSessionDots() {
-        let hasLiveDots = !claudeSessions.isEmpty
+    func drawAgentSessionDots() {
+        let hasLiveDots = !agentSessions.isEmpty
         let hasFadingDots = !fadingDots.isEmpty
 
         guard hasLiveDots || hasFadingDots else { return }
@@ -96,7 +96,7 @@ extension IslandView {
                 // against the old session list (which we don't have anymore).
                 // Instead, store: for each fading dot we have oldIndex.
                 // For surviving dots, we need their old index. We can infer this:
-                // The old layout was: claudeSessions (current) + removed sessions, ordered by old index.
+                // The old layout was: agentSessions (current) + removed sessions, ordered by old index.
                 // Since we don't store the old order, we use a simpler heuristic:
                 // match current sessions to old indices by their position relative to removed indices.
 
@@ -108,7 +108,7 @@ extension IslandView {
                     }
                 }
                 // Map each surviving session (in current order) to its old index
-                for (newIdx, session) in claudeSessions.prefix(min(claudeSessions.count, survivingOldIndices.count)).enumerated() {
+                for (newIdx, session) in agentSessions.prefix(min(agentSessions.count, survivingOldIndices.count)).enumerated() {
                     if newIdx < survivingOldIndices.count {
                         oldIndexByPID[session.pid] = (survivingOldIndices[newIdx], oldCount)
                     }
@@ -141,10 +141,10 @@ extension IslandView {
         }
 
         // Draw surviving (current) dots
-        let maxDots = min(claudeSessions.count, 8)
+        let maxDots = min(agentSessions.count, 8)
         for dotIndex in 0..<maxDots {
-            let session = claudeSessions[dotIndex]
-            let (newRect, _) = dotPosition(index: dotIndex, count: claudeSessions.count, expanded: false)
+            let session = agentSessions[dotIndex]
+            let (newRect, _) = dotPosition(index: dotIndex, count: agentSessions.count, expanded: false)
 
             var drawRect = newRect
 
@@ -199,7 +199,7 @@ extension IslandView {
                     survivingOldIndices.append(i)
                 }
             }
-            for (newIdx, session) in claudeSessions.prefix(min(claudeSessions.count, survivingOldIndices.count)).enumerated() {
+            for (newIdx, session) in agentSessions.prefix(min(agentSessions.count, survivingOldIndices.count)).enumerated() {
                 if newIdx < survivingOldIndices.count {
                     oldIndexByPID[session.pid] = (survivingOldIndices[newIdx], oldCount)
                 }
@@ -231,10 +231,10 @@ extension IslandView {
         }
 
         // Draw surviving dots
-        let maxDots = min(claudeSessions.count, 8)
+        let maxDots = min(agentSessions.count, 8)
         for dotIndex in 0..<maxDots {
-            let session = claudeSessions[dotIndex]
-            let (newRect, _) = dotPosition(index: dotIndex, count: claudeSessions.count, expanded: true)
+            let session = agentSessions[dotIndex]
+            let (newRect, _) = dotPosition(index: dotIndex, count: agentSessions.count, expanded: true)
 
             var drawRect = newRect
 
@@ -278,7 +278,7 @@ extension IslandView {
         return 0.7 + 0.2 * CGFloat(sin(time * 2.0 * .pi / period))
     }
 
-    private func colorForSession(_ session: ClaudeSessionInfo) -> (dot: NSColor, glow: NSColor, alpha: CGFloat) {
+    private func colorForSession(_ session: AgentSessionInfo) -> (dot: NSColor, glow: NSColor, alpha: CGFloat) {
         switch session.state {
         case .thinking:
             let color = NSColor(calibratedRed: 1.0, green: 0.8, blue: 0.0, alpha: 1.0)  // yellow
