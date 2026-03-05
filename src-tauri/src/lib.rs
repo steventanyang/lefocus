@@ -425,6 +425,17 @@ pub fn run() {
                         &initial_sound_settings.sound_id,
                     );
 
+                    // Set white title bar background (via Cocoa to avoid Tauri color-inversion bug)
+                    if let Some(main_window) = app.get_webview_window("main") {
+                        use cocoa::appkit::{NSColor, NSWindow};
+                        use cocoa::base::{id, nil};
+                        let ns_window = main_window.ns_window().unwrap() as id;
+                        unsafe {
+                            let bg_color = NSColor::colorWithRed_green_blue_alpha_(nil, 1.0, 1.0, 1.0, 1.0);
+                            ns_window.setBackgroundColor_(bg_color);
+                        }
+                    }
+
                     // Spawn background task to monitor agent terminal sessions
                     tauri::async_runtime::spawn(async {
                         let mut monitor = agent_monitor::AgentMonitor::new();

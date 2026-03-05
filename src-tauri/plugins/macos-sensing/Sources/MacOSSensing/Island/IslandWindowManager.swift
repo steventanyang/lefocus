@@ -214,31 +214,37 @@ final class IslandWindowManager {
 
     // MARK: - Private
 
+    /// Extra width needed for agent session dots.
+    private var agentDotsExtraWidth: CGFloat {
+        guard agentSessionCount > 0 else { return 0 }
+        let dotsZone = IslandView.compactDotsZoneWidth(for: agentSessionCount)
+        let artworkExtra: CGFloat = (agentSessionCount <= 2 && hasAudioContent)
+            ? AudioArtworkLayout.compactSize + 4.0
+            : 0.0
+        return dotsZone + artworkExtra
+    }
+
     private func currentIslandSize() -> NSSize {
         if isExpanded {
             // Use configured widths and heights based on timer and audio state
-            let expandedWidth: CGFloat
+            var expandedWidth: CGFloat
             if isTimerIdle {
                 expandedWidth = configuration.expandedIdleWidth
             } else {
                 expandedWidth = hasAudioContent ? configuration.expandedTimerWidth : configuration.expandedIdleWidth
             }
-            let expandedHeight: CGFloat = isTimerIdle ? configuration.expandedIdleHeight : configuration.expandedTimerHeight
+            // Ensure expanded is at least as wide as compact so agent dots aren't hidden by the notch
+            let compactWidth = (isTimerIdle ? configuration.compactIdleWidth : configuration.compactTimerWidth) + agentDotsExtraWidth
+            expandedWidth = max(expandedWidth, compactWidth)
+            let expandedHeight: CGFloat = (isTimerIdle || hasAudioContent) ? configuration.expandedIdleHeight : configuration.expandedTimerHeight
             return NSSize(width: expandedWidth, height: expandedHeight)
         }
-        
+
         // Use configured widths based on timer state.
         // When agent sessions are present, widen the island so the left ear
         // has enough room for the dot grid (island is centered over the notch).
         var baseWidth: CGFloat = isTimerIdle ? configuration.compactIdleWidth : configuration.compactTimerWidth
-        if agentSessionCount > 0 {
-            let dotsZone = IslandView.compactDotsZoneWidth(for: agentSessionCount)
-            // When 1-2 dots + audio, artwork sits beside dots — add its width too
-            let artworkExtra: CGFloat = (agentSessionCount <= 2 && hasAudioContent)
-                ? AudioArtworkLayout.compactSize + 4.0
-                : 0.0
-            baseWidth += dotsZone + artworkExtra
-        }
+        baseWidth += agentDotsExtraWidth
         let baseHeight = configuration.compactSize.height
 
         if isHovering {
