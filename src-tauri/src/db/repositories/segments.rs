@@ -1,6 +1,7 @@
 use anyhow::Result;
 use rusqlite::{params, Row};
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use crate::db::{
     connection::Database,
@@ -96,27 +97,52 @@ fn spawn_icon_fetch_task(db: Database, bundle_ids: HashSet<String>) {
     );
 
     tokio::spawn(async move {
+        // Limit concurrent icon fetches to avoid flooding the main thread with AppKit dispatches
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(2));
+        let mut handles = Vec::new();
+
         for bundle_id in bundle_ids_to_fetch {
-            match crate::macos_bridge::get_app_icon_and_color(&bundle_id) {
-                Some((icon_data_url, icon_color)) => {
-                    let color_opt = if icon_color.is_empty() {
-                        None
-                    } else {
-                        Some(icon_color.as_str())
-                    };
-                    if let Err(e) = db
-                        .update_app_icon(&bundle_id, &icon_data_url, color_opt)
-                        .await
-                    {
-                        log::warn!("Failed to store icon for {}: {}", bundle_id, e);
-                    } else {
-                        log::debug!("Stored icon and color for {}", bundle_id);
+            let sem = semaphore.clone();
+            let db = db.clone();
+
+            let handle = tokio::spawn(async move {
+                let _permit = sem.acquire().await;
+                // Use spawn_blocking since the FFI call is synchronous
+                let bid = bundle_id.clone();
+                let icon_result = tokio::task::spawn_blocking(move || {
+                    crate::macos_bridge::get_app_icon_and_color(&bid)
+                })
+                .await;
+
+                match icon_result {
+                    Ok(Some((icon_data_url, icon_color))) => {
+                        let color_opt = if icon_color.is_empty() {
+                            None
+                        } else {
+                            Some(icon_color.as_str())
+                        };
+                        if let Err(e) = db
+                            .update_app_icon(&bundle_id, &icon_data_url, color_opt)
+                            .await
+                        {
+                            log::warn!("Failed to store icon for {}: {}", bundle_id, e);
+                        } else {
+                            log::debug!("Stored icon and color for {}", bundle_id);
+                        }
+                    }
+                    Ok(None) => {
+                        log::warn!("Failed to fetch icon for {}", bundle_id);
+                    }
+                    Err(e) => {
+                        log::warn!("Icon fetch task panicked for {}: {}", bundle_id, e);
                     }
                 }
-                None => {
-                    log::warn!("Failed to fetch icon for {}", bundle_id);
-                }
-            }
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            let _ = handle.await;
         }
     });
 }

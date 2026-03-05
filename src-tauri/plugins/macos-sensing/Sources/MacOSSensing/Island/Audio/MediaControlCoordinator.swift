@@ -142,22 +142,48 @@ private final class MediaKeyController {
 // MARK: - AppleScript helpers
 
 enum AppleScriptRunner {
+    /// Default timeout for AppleScript execution (seconds).
+    /// 3s is generous for normal execution (~100ms) but prevents multi-second hangs
+    /// when apps like Spotify are starting up or unresponsive.
+    private static let defaultTimeout: TimeInterval = 3.0
+
     static func execute(_ source: String) -> Bool {
-        guard let script = NSAppleScript(source: source) else {
-            return false
-        }
-        var error: NSDictionary?
-        script.executeAndReturnError(&error)
-        return error == nil
+        return runWithTimeout(timeout: defaultTimeout) {
+            guard let script = NSAppleScript(source: source) else {
+                return false
+            }
+            var error: NSDictionary?
+            script.executeAndReturnError(&error)
+            return error == nil
+        } ?? false
     }
 
     static func evaluateString(_ source: String) -> String? {
-        guard let script = NSAppleScript(source: source) else {
+        return runWithTimeout(timeout: defaultTimeout) {
+            guard let script = NSAppleScript(source: source) else {
+                return nil as String?
+            }
+            var error: NSDictionary?
+            let descriptor = script.executeAndReturnError(&error)
+            guard error == nil else { return nil }
+            return descriptor.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines)
+        } ?? nil
+    }
+
+    /// Run a closure on a background queue with a timeout.
+    /// Returns nil if the timeout expires — the next poll cycle will retry.
+    private static func runWithTimeout<T>(timeout: TimeInterval, body: @escaping () -> T) -> T? {
+        let semaphore = DispatchSemaphore(value: 0)
+        var result: T?
+        DispatchQueue.global(qos: .userInitiated).async {
+            result = body()
+            semaphore.signal()
+        }
+        let waitResult = semaphore.wait(timeout: .now() + timeout)
+        if waitResult == .timedOut {
+            // NSLog("[MediaMonitor] AppleScript timed out after %.1fs", timeout)
             return nil
         }
-        var error: NSDictionary?
-        let descriptor = script.executeAndReturnError(&error)
-        guard error == nil else { return nil }
-        return descriptor.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return result
     }
 }

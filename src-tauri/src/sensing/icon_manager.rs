@@ -107,8 +107,15 @@ async fn prefetch_icon_for_app(
         log::debug!("Pre-fetching icon for {} during session", bundle_id);
     }
 
-    match crate::macos_bridge::get_app_icon_and_color(bundle_id) {
-        Some((icon_data_url, icon_color)) => {
+    // Use spawn_blocking since the FFI call is synchronous
+    let bid = bundle_id.to_string();
+    let icon_result = tokio::task::spawn_blocking(move || {
+        crate::macos_bridge::get_app_icon_and_color(&bid)
+    })
+    .await;
+
+    match icon_result {
+        Ok(Some((icon_data_url, icon_color))) => {
             // Store the icon and color in the database
             let color_opt = if icon_color.is_empty() {
                 None
@@ -128,12 +135,15 @@ async fn prefetch_icon_for_app(
                 }
             }
         }
-        None => {
+        Ok(None) => {
             // Don't log as warning during prefetch - this is expected for some apps
             log::debug!(
                 "Could not fetch icon/color for {} (app might not be installed)",
                 bundle_id
             );
+        }
+        Err(e) => {
+            log::warn!("Icon prefetch task panicked for {}: {}", bundle_id, e);
         }
     }
 
