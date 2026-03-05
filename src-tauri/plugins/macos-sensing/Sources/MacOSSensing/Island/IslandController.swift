@@ -30,6 +30,8 @@ public final class IslandController {
     private var waveformGradient: NSGradient?
     private var hasPlayedCompletionChime: Bool = false
 
+    private var agentSessions: [AgentSessionInfo] = []
+
     private var isExpanded: Bool = false
     private var isHovering: Bool = false
     private var collapseWorkItem: DispatchWorkItem?
@@ -41,15 +43,15 @@ public final class IslandController {
     private init() {
         let configuration = IslandWindowConfiguration(
             compactSize: NSSize(width: 320.0, height: 38.0),
-            expandedSize: NSSize(width: 420.0, height: 170.0),
+            expandedSize: NSSize(width: 420.0, height: 190.0),
             hoverDelta: NSSize(width: 22.0, height: 5.0),
             expandedVerticalOffset: 14.0,
-            compactIdleWidth: 280.0,
-            compactTimerWidth: 340.0,
+            compactIdleWidth: 250.0,
+            compactTimerWidth: 310.0,
             expandedIdleWidth: 300.0,
             expandedTimerWidth: 380.0,
-            expandedIdleHeight: 170.0,    // With progress bar
-            expandedTimerHeight: 150.0    // Without progress bar (timer active)
+            expandedIdleHeight: 190.0,     // With progress bar
+            expandedTimerHeight: 170.0     // Without progress bar (timer active)
         )
         windowManager = IslandWindowManager(configuration: configuration)
         windowManager.delegate = self
@@ -133,6 +135,21 @@ public final class IslandController {
         }
     }
 
+    public func updateAgentSessions(_ sessions: [AgentSessionInfo]) {
+        agentSessions = sessions
+        islandView?.updateAgentSessions(sessions)
+
+        // If a removal animation is active, defer the width update until it finishes
+        if let view = islandView, !view.fadingDots.isEmpty {
+            view.onRemovalAnimationComplete = { [weak self] in
+                guard let self else { return }
+                self.windowManager.updateSessionCount(self.agentSessions.count)
+            }
+        } else {
+            windowManager.updateSessionCount(sessions.count)
+        }
+    }
+
     public func cleanup() {
         stateQueue.sync { [weak self] in
             let cleanupWork = { [weak self] in
@@ -184,6 +201,8 @@ public final class IslandController {
         // Set initial timer state for window sizing
         windowManager.updateTimerState(isIdle: isIdle, animated: false)
         updateAudioUI(for: view)
+        view.updateAgentSessions(agentSessions)
+        windowManager.updateSessionCount(agentSessions.count, animated: false)
         view.updateInteractionState(isExpanded: isExpanded, isHovered: isHovering)
     }
 

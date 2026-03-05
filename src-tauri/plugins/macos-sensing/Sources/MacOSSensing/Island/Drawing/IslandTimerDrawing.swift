@@ -37,7 +37,7 @@ extension IslandView {
         let padding: CGFloat = 18.0
         let origin = NSPoint(
             x: bounds.maxX - textSize.width - padding,
-            y: (bounds.height - textSize.height) / 2.0
+            y: notchCenterY - textSize.height / 2.0
         )
         attributed.draw(at: origin)
     }
@@ -70,7 +70,7 @@ extension IslandView {
         // Title rect is at y: bounds.height - 56.0 with height 18.0
         // Title top is at: bounds.height - 56.0 + 18.0 = bounds.height - 38.0
         // To align timer top with title top: origin.y + textSize.height = bounds.height - 38.0
-        let titleTop = bounds.height - 44.0
+        let titleTop = bounds.height - 58.0
         let timerY = titleTop - textSize.height
 
         let originX: CGFloat
@@ -207,7 +207,7 @@ extension IslandView {
     }
 
     func drawBreakLabel() {
-        guard isExpanded, mode == .break, !isIdle else { return }
+        guard isExpanded, mode == .break, !isIdle, trackInfo == nil else { return }
         
         let labelText = "Break"
         let labelFont = NSFont.systemFont(ofSize: 10, weight: .medium)

@@ -60,16 +60,8 @@ export function useSpotifyPermission() {
   } = useQuery<boolean>({
     queryKey: SPOTIFY_PERMISSION_QUERY_KEY,
     queryFn: fetchSpotifyPermission,
-    refetchInterval: (query) => {
-      // Stop polling if permission is granted
-      if (query.state.data === true) {
-        return false;
-      }
-      return 5000; // Poll every 5 seconds
-    },
-    refetchIntervalInBackground: false,
     retry: false,
-    staleTime: 0,
+    staleTime: Infinity, // Only check on mount and after explicit user action
   });
 
   const checkPermissions = useCallback(() => {

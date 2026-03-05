@@ -42,6 +42,31 @@ final class IslandView: NSView {
             return NSColor(calibratedRed: red, green: greenComponent, blue: blue, alpha: 1.0)
         }
     }
+    var agentSessions: [AgentSessionInfo] = []
+
+    /// Extra height at the bottom of the view reserved for Agent session dots.
+    /// Now zero — dots are drawn inside the island itself.
+    static let dotsBottomPadding: CGFloat = 0.0
+
+    /// Vertical center of the notch content area.
+    var notchCenterY: CGFloat {
+        bounds.height / 2.0
+    }
+
+    /// Width of the dots zone in compact mode (left of waveform/timer).
+    var compactDotsZoneWidth: CGFloat {
+        Self.compactDotsZoneWidth(for: agentSessions.count)
+    }
+
+    static func compactDotsZoneWidth(for count: Int) -> CGFloat {
+        let capped = min(count, 8)
+        guard capped > 0 else { return 0 }
+        let dotSize: CGFloat = capped <= 4 ? 8.0 : 6.0
+        let columns = capped <= 2 ? 1 : Int(ceil(Double(capped) / 2.0))
+        let dotsContent = CGFloat(columns) * dotSize + CGFloat(max(0, columns - 1)) * 3.0
+        return 22.0 + dotsContent + 4.0
+    }
+
     var trackingArea: NSTrackingArea?
     var isExpanded: Bool = false
     var isHovered: Bool = false
@@ -84,7 +109,23 @@ final class IslandView: NSView {
     // Completion color transition animation
     var completionColorTransition: CGFloat = 0.0  // 0.0 = black, 1.0 = green
     var completionColorAnimationTimer: Timer?
+
+    // Thinking pulse animation timer (15 Hz, active only when thinking sessions exist)
+    private var thinkingAnimationTimer: Timer?
     private(set) var waveformGradient: NSGradient?
+
+    // Dot removal animation state
+    private var previousSessionPIDs: Set<UInt32> = []
+    struct FadingDot {
+        let session: AgentSessionInfo
+        let oldIndex: Int       // position in the old layout
+        let oldCount: Int       // total count of old layout
+        let startTime: CFTimeInterval
+    }
+    var fadingDots: [FadingDot] = []
+    private var removalAnimationTimer: Timer?
+    static let removalDuration: TimeInterval = 0.3
+    var onRemovalAnimationComplete: (() -> Void)?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -142,6 +183,69 @@ final class IslandView: NSView {
         needsDisplay = true
     }
 
+    func updateAgentSessions(_ sessions: [AgentSessionInfo]) {
+        let newPIDs = Set(sessions.map { $0.pid })
+        let oldSessions = self.agentSessions
+        let removedPIDs = previousSessionPIDs.subtracting(newPIDs)
+
+        // If an animation is already running, complete it instantly
+        if !fadingDots.isEmpty {
+            completeRemovalAnimation()
+        }
+
+        // Create fading dots for removed sessions
+        if !removedPIDs.isEmpty {
+            let now = CACurrentMediaTime()
+            for (oldIndex, oldSession) in oldSessions.enumerated() {
+                if removedPIDs.contains(oldSession.pid) {
+                    fadingDots.append(FadingDot(
+                        session: oldSession,
+                        oldIndex: oldIndex,
+                        oldCount: oldSessions.count,
+                        startTime: now
+                    ))
+                }
+            }
+        }
+
+        self.agentSessions = sessions
+        self.previousSessionPIDs = newPIDs
+
+        // Start removal animation timer if we have fading dots
+        if !fadingDots.isEmpty && removalAnimationTimer == nil {
+            removalAnimationTimer = Timer.scheduledTimer(withTimeInterval: 1.0/60.0, repeats: true) { [weak self] _ in
+                guard let self else { return }
+                let now = CACurrentMediaTime()
+                let allDone = self.fadingDots.allSatisfy { now - $0.startTime >= Self.removalDuration }
+                if allDone {
+                    self.completeRemovalAnimation()
+                }
+                self.needsDisplay = true
+            }
+        }
+
+        // Start/stop pulse timer based on whether any session is thinking
+        let hasThinking = sessions.contains { $0.state == .thinking }
+        if hasThinking && thinkingAnimationTimer == nil {
+            thinkingAnimationTimer = Timer.scheduledTimer(withTimeInterval: 1.0/15.0, repeats: true) { [weak self] _ in
+                self?.needsDisplay = true
+            }
+        } else if !hasThinking && thinkingAnimationTimer != nil {
+            thinkingAnimationTimer?.invalidate()
+            thinkingAnimationTimer = nil
+        }
+
+        needsDisplay = true
+    }
+
+    private func completeRemovalAnimation() {
+        fadingDots.removeAll()
+        removalAnimationTimer?.invalidate()
+        removalAnimationTimer = nil
+        onRemovalAnimationComplete?()
+        onRemovalAnimationComplete = nil
+    }
+
     func updateAudio(track: TrackInfo?, waveformBars: [CGFloat]?, waveformGradient: NSGradient?) {
         self.waveformGradient = waveformGradient
         let finalTrack = applyPendingSeekIfNeeded(to: track)
@@ -164,8 +268,8 @@ final class IslandView: NSView {
 
         guard let context = NSGraphicsContext.current?.cgContext else { return }
 
+        // Draw notch-clipped content
         context.saveGState()
-        defer { context.restoreGState() }
 
         // Notch-shaped path: bottom corners curve inward, top corners curve outward
         let path = createNotchPath()
@@ -191,6 +295,7 @@ final class IslandView: NSView {
             let locations: [CGFloat] = [0.0, 0.5, 1.0] // Top, 50%, bottom
 
             guard let gradient = CGGradient(colorsSpace: colorSpace, colors: colors, locations: locations) else {
+                context.restoreGState()
                 return
             }
 
@@ -237,6 +342,11 @@ final class IslandView: NSView {
             // Compact layout: timer and audio indicator
             drawCompactLayout()
         }
+
+        // Draw Agent session dots inside the clipped island
+        drawAgentSessionDots()
+
+        context.restoreGState()
     }
 
     override func updateTrackingAreas() {

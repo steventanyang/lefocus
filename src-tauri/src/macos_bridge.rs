@@ -5,6 +5,8 @@ use std::ffi::{c_char, CStr, CString};
 use std::sync::OnceLock;
 use tauri::{AppHandle, Manager};
 
+use crate::agent_monitor::AgentSession;
+
 static APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
 
 pub fn set_app_handle(handle: AppHandle) {
@@ -15,6 +17,13 @@ pub fn set_app_handle(handle: AppHandle) {
 
 fn get_app_handle() -> Option<&'static AppHandle> {
     APP_HANDLE.get()
+}
+
+#[repr(C)]
+pub struct AgentSessionFFI {
+    pub pid: u32,
+    pub state: u8,     // 0=Thinking, 1=Executing, 2=Waiting, 3=Done
+    pub age_secs: f32,
 }
 
 #[repr(C)]
@@ -62,6 +71,7 @@ extern "C" {
     fn macos_sensing_island_update_chime_preferences(enabled: bool, sound_id: *const c_char);
     fn macos_sensing_island_preview_chime(sound_id: *const c_char);
     fn macos_sensing_island_set_visible(visible: bool);
+    fn macos_sensing_island_update_agent_sessions(sessions: *const AgentSessionFFI, count: usize);
 
     // Permission checking
     fn macos_sensing_check_screen_recording_permission() -> bool;
@@ -257,6 +267,30 @@ pub fn island_preview_chime(_sound_id: &str) {}
 
 #[cfg(not(target_os = "macos"))]
 pub fn island_set_visible(_visible: bool) {}
+
+#[cfg(target_os = "macos")]
+pub fn island_update_agent_sessions(sessions: &[AgentSession]) {
+    use crate::agent_monitor::SessionState;
+    let ffi_sessions: Vec<AgentSessionFFI> = sessions
+        .iter()
+        .map(|s| AgentSessionFFI {
+            pid: s.pid,
+            state: match s.state {
+                SessionState::Thinking => 0,
+                SessionState::Executing => 1,
+                SessionState::Waiting => 2,
+                SessionState::Done => 3,
+            },
+            age_secs: s.age_secs,
+        })
+        .collect();
+    unsafe {
+        macos_sensing_island_update_agent_sessions(ffi_sessions.as_ptr(), ffi_sessions.len());
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn island_update_agent_sessions(_sessions: &[AgentSession]) {}
 
 // Permission checking functions
 pub fn check_screen_recording_permission() -> bool {

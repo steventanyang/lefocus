@@ -49,8 +49,8 @@ extension IslandView {
         let lineSpacing: CGFloat = 2.0
         let titleHeight = titleFont.ascender - titleFont.descender
         let artistHeight = artistFont.ascender - artistFont.descender
-        // Position metadata block lower to avoid notch (around 50px from top)
-        let blockTop = bounds.height - 50.0
+        // Position metadata block below top-left dots and waveform row
+        let blockTop = bounds.height - 58.0
 
         let titleRect = NSRect(
             x: textStartX,
@@ -207,7 +207,7 @@ extension IslandView {
         let pillHeight: CGFloat = 12.0 * heightScale
         // Add padding to account for notch top corner curve (10px radius)
         let startX = customStartX ?? 22.0
-        let centerY = customCenterY ?? bounds.midY
+        let centerY = customCenterY ?? notchCenterY
 
         let hasPalette = waveformGradient != nil
         let isLiveWaveform = hasPalette && isAudioPlaying
@@ -256,10 +256,11 @@ extension IslandView {
         let pillWidth = basePillWidth * widthScale
         let pillHeight: CGFloat = 12.0 * heightScale
         
-        // Position waveform at top left (around 28px from top) - stays fixed regardless of title/artist position
+        // Position waveform at top right (around 28px from top) - stays fixed regardless of title/artist position
         let waveformCenterY = bounds.height - 28.0
-        // Position waveform left edge - add padding to account for notch top corner curve (10px radius)
-        let startX: CGFloat = 38.0
+        // Position waveform right edge - mirror the left margin to the right side
+        let totalWaveformWidth = 4.0 * pillWidth + 3.0 * spacing
+        let startX = bounds.maxX - totalWaveformWidth - 38.0
 
         let hasPalette = waveformGradient != nil
         let isLiveWaveform = hasPalette && isAudioPlaying
@@ -360,12 +361,10 @@ extension IslandView {
         let leftAlignment = expandedArtworkRect().minX
         if isIdle {
             // No timer: center the playback buttons horizontally, position them lower
-            // Place them in the lower portion of the expanded view (around 10px from bottom)
             bottomY = 10.0
             startX = (bounds.width - buttonsWidth) / 2.0
         } else {
             // Timer running: align playback buttons under metadata, lower in the view
-            // Position them around 10px from bottom to match idle state
             bottomY = 10.0
             startX = leftAlignment
         }
@@ -394,8 +393,8 @@ extension IslandView {
 
     private func expandedArtworkRect() -> NSRect {
         let size = AudioArtworkLayout.expandedSize
-        // Align artwork center with title/artist block center (which is at blockTop = bounds.height - 50.0)
-        let blockTop = bounds.height - 50.0
+        // Align artwork center with title/artist block center
+        let blockTop = bounds.height - 58.0
         let titleFont = NSFont.systemFont(ofSize: 14, weight: .semibold)
         let titleHeight = titleFont.ascender - titleFont.descender
         let artistFont = NSFont.systemFont(ofSize: 12, weight: .regular)
@@ -550,34 +549,73 @@ extension IslandView {
     }
 
     func drawCompactLayout() {
+        let hasDots = !agentSessions.isEmpty
         switch compactLayoutState {
         case .audioOnly:
-            // Add padding to account for notch top corner curve (10px radius)
-            drawCompactWaveform(startX: 26.0, centerY: bounds.midY)
-            drawCompactArtworkOnRight()
+            if hasDots {
+                if agentSessions.count <= 2 {
+                    // Few dots: album cover on left, waveform on right
+                    drawCompactArtworkOnLeft()
+                    drawCompactWaveformOnRight()
+                } else {
+                    // 3+ dots: waveform on right, no album cover
+                    drawCompactWaveformOnRight()
+                }
+            } else {
+                // No dots — original layout: waveform left, artwork right
+                drawCompactWaveform(startX: 26.0, centerY: notchCenterY)
+                drawCompactArtworkOnRight()
+            }
         case .timerActive:
             drawTimerText()
             if trackInfo != nil {
-                // Add padding to account for notch top corner curve (10px radius)
-                drawCompactWaveform(startX: 26.0, centerY: bounds.midY)
+                let waveformX: CGFloat = hasDots ? compactDotsZoneWidth + 8.0 : 26.0
+                drawCompactWaveform(startX: waveformX, centerY: notchCenterY)
             }
         case .idle:
-            // Add padding to account for notch top corner curve (10px radius)
-            drawCompactWaveform(startX: 26.0, centerY: bounds.midY)
+            drawCompactWaveform(startX: 26.0, centerY: notchCenterY)
         }
+    }
+
+    func drawCompactArtworkOnLeft() {
+        guard let track = trackInfo else { return }
+        let size = AudioArtworkLayout.compactSize
+        // Position artwork after the dots zone so they sit side by side
+        let artworkX = compactDotsZoneWidth + 2.0
+        let rect = NSRect(
+            x: artworkX,
+            y: notchCenterY - size / 2.0,
+            width: size,
+            height: size
+        )
+        drawArtworkImage(track.artwork, in: rect, cornerRadius: 3.0, emphasize: false)
     }
 
     func drawCompactArtworkOnRight() {
         guard let track = trackInfo else { return }
         let size = AudioArtworkLayout.compactSize
-        // Add padding to account for notch top corner curve (10px radius)
         let rect = NSRect(
             x: bounds.maxX - size - 22.0,
-            y: bounds.midY - size / 2.0,
+            y: notchCenterY - size / 2.0,
             width: size,
             height: size
         )
-        // Use rounded corners (3px) instead of circle (size/2) for square shape
         drawArtworkImage(track.artwork, in: rect, cornerRadius: 3.0, emphasize: false)
+    }
+
+    private func drawCompactWaveformOnRight() {
+        guard !waveformBars.isEmpty, waveformBars.count == 4 else { return }
+        let emojiString = NSAttributedString(string: "🎵", attributes: [
+            .font: NSFont.systemFont(ofSize: 11, weight: .regular)
+        ])
+        let emojiWidth = emojiString.size().width
+        let baseSpacing: CGFloat = 3.0
+        let widthScale: CGFloat = 1.2
+        let spacing = baseSpacing * widthScale
+        let basePillWidth = (emojiWidth - baseSpacing * 3.0) / 4.0
+        let pillWidth = basePillWidth * widthScale
+        let totalWaveformWidth = 4.0 * pillWidth + 3.0 * spacing
+        let startX = bounds.maxX - totalWaveformWidth - 22.0
+        drawCompactWaveform(startX: startX, centerY: notchCenterY)
     }
 }

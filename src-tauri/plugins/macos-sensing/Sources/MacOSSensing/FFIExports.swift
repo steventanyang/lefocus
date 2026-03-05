@@ -132,6 +132,28 @@ public func macos_sensing_swift_free_ocr_result(_ pointer: UnsafeMutablePointer<
     pointer.deallocate()
 }
 
+// MARK: - Agent session monitoring bridge
+
+@_cdecl("macos_sensing_swift_island_update_agent_sessions")
+public func macos_sensing_swift_island_update_agent_sessions(
+    _ sessions: UnsafePointer<AgentSessionFFI>,
+    _ count: Int
+) {
+    var parsed: [AgentSessionInfo] = []
+    parsed.reserveCapacity(count)
+    for i in 0..<count {
+        let raw = sessions[i]
+        let state = AgentSessionState(rawValue: raw.state) ?? .thinking
+        parsed.append(AgentSessionInfo(pid: raw.pid, state: state, ageSeconds: raw.age_secs))
+    }
+    if !parsed.isEmpty {
+        NSLog("[IslandAgent] FFI received %d sessions", parsed.count)
+    }
+    DispatchQueue.main.async {
+        IslandController.shared.updateAgentSessions(parsed)
+    }
+}
+
 // MARK: - Island bridge
 
 @_cdecl("macos_sensing_swift_island_init")

@@ -41,6 +41,7 @@ final class IslandWindowManager {
     private var isHovering: Bool = false
     private var isTimerIdle: Bool = true
     private var hasAudioContent: Bool = false
+    private var agentSessionCount: Int = 0
 
     init(configuration: IslandWindowConfiguration) {
         self.configuration = configuration
@@ -166,6 +167,12 @@ final class IslandWindowManager {
         updateIslandWindowSize(animated: animated, duration: isExpanded ? 0.25 : 0.15)
     }
 
+    func updateSessionCount(_ count: Int, animated: Bool = true) {
+        guard agentSessionCount != count else { return }
+        agentSessionCount = count
+        updateIslandWindowSize(animated: animated, duration: 0.15)
+    }
+
     func repositionForCurrentScreen() {
         guard let panel = parentWindow else { return }
         guard let screen = panel.screen ?? NSScreen.lf_preferredIslandDisplay ?? NSScreen.main else {
@@ -220,10 +227,20 @@ final class IslandWindowManager {
             return NSSize(width: expandedWidth, height: expandedHeight)
         }
         
-        // Use configured widths based on timer state
-        let baseWidth: CGFloat = isTimerIdle ? configuration.compactIdleWidth : configuration.compactTimerWidth
+        // Use configured widths based on timer state.
+        // When agent sessions are present, widen the island so the left ear
+        // has enough room for the dot grid (island is centered over the notch).
+        var baseWidth: CGFloat = isTimerIdle ? configuration.compactIdleWidth : configuration.compactTimerWidth
+        if agentSessionCount > 0 {
+            let dotsZone = IslandView.compactDotsZoneWidth(for: agentSessionCount)
+            // When 1-2 dots + audio, artwork sits beside dots — add its width too
+            let artworkExtra: CGFloat = (agentSessionCount <= 2 && hasAudioContent)
+                ? AudioArtworkLayout.compactSize + 4.0
+                : 0.0
+            baseWidth += dotsZone + artworkExtra
+        }
         let baseHeight = configuration.compactSize.height
-        
+
         if isHovering {
             return NSSize(
                 width: baseWidth + configuration.hoverDelta.width,

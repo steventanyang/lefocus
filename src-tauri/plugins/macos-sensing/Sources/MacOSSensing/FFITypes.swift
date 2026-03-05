@@ -3,3 +3,4 @@ import CMacOSSensing
 
 public typealias WindowMetadataFFI = CMacOSSensing_WindowMetadataFFI
 public typealias OCRResultFFI = CMacOSSensing_OCRResultFFI
+public typealias AgentSessionFFI = CMacOSSensing_AgentSessionFFI

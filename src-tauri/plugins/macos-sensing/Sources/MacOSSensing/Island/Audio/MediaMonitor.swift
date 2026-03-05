@@ -19,6 +19,8 @@ public final class MediaMonitor {
     private var metadataTimer: Timer?
     private var metadataInterval: TimeInterval = 1.0
     private var isPolling = false
+    private var pollStartTime: Date?
+    private static let maxPollDuration: TimeInterval = 10.0
     private var currentTrack: TrackInfo?
     private var pendingArtworkTimestamp: Date?
     private var hasRequestedSpotifyPermission = false
@@ -31,6 +33,7 @@ public final class MediaMonitor {
         guard metadataTimer == nil else { return }
         metadataInterval = 1.0
         isPolling = false
+        registerSleepWakeObservers()
         ensureMetadataTimer()
         refreshMetadata()
     }
@@ -43,6 +46,7 @@ public final class MediaMonitor {
         currentTrack = nil
         activeBundleID = nil
         pendingArtworkTimestamp = nil
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 
     public func togglePlayback() {
@@ -59,6 +63,34 @@ public final class MediaMonitor {
 
     public func seek(to position: TimeInterval, bundleID: String?) {
         controlCoordinator.seek(to: position, bundleID: bundleID)
+    }
+
+    // MARK: - Sleep/Wake
+
+    private func registerSleepWakeObservers() {
+        let center = NSWorkspace.shared.notificationCenter
+        center.addObserver(self, selector: #selector(handleSleep),
+                           name: NSWorkspace.willSleepNotification, object: nil)
+        center.addObserver(self, selector: #selector(handleWake),
+                           name: NSWorkspace.didWakeNotification, object: nil)
+    }
+
+    @objc private func handleSleep(_ notification: Notification) {
+        NSLog("[MediaMonitor] System going to sleep")
+    }
+
+    @objc private func handleWake(_ notification: Notification) {
+        NSLog("[MediaMonitor] System woke up — resetting poll state and rescheduling timer")
+        isPolling = false
+        metadataTimer?.invalidate()
+        metadataTimer = nil
+        metadataInterval = 1.0
+        ensureMetadataTimer()
+        // Delay refresh slightly to let apps recover
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            NSLog("[MediaMonitor] Post-wake refresh triggered")
+            self?.refreshMetadata()
+        }
     }
 
     // MARK: - Polling
@@ -79,8 +111,19 @@ public final class MediaMonitor {
     }
 
     private func refreshMetadata() {
-        guard !isPolling else { return }
+        if isPolling {
+            // Check if the previous poll has been stuck too long
+            if let start = pollStartTime, Date().timeIntervalSince(start) > Self.maxPollDuration {
+                NSLog("[MediaMonitor] Poll stuck for >%.0fs — force-resetting isPolling", Self.maxPollDuration)
+                isPolling = false
+                pollStartTime = nil
+            } else {
+                // NSLog("[MediaMonitor] refreshMetadata skipped — previous poll still in progress")
+                return
+            }
+        }
         isPolling = true
+        pollStartTime = Date()
         pollingQueue.async { [weak self] in
             guard let self else { return }
             let snapshot = self.captureSnapshot()
@@ -91,18 +134,32 @@ public final class MediaMonitor {
                     self.scheduleMetadataTimer(interval: desiredInterval)
                 }
                 self.isPolling = false
+                self.pollStartTime = nil
             }
         }
     }
 
     private func captureSnapshot() -> MediaSnapshot? {
-        // Check if Spotify is running and request automation permission lazily
-        if !hasRequestedSpotifyPermission && isSpotifyRunning() {
+        // Check if Spotify is running and request automation permission lazily (off polling queue)
+        if !hasRequestedSpotifyPermission {
             hasRequestedSpotifyPermission = true
-            requestSpotifyAutomationPermissionIfNeeded()
+            DispatchQueue.global(qos: .utility).async { [weak self] in
+                guard let self else { return }
+                // NSWorkspace.shared.runningApplications should be accessed carefully
+                let running = DispatchQueue.main.sync {
+                    NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier == "com.spotify.client" }
+                }
+                if running {
+                    self.requestSpotifyAutomationPermissionIfNeeded()
+                } else {
+                    // Reset flag so we check again next poll
+                    self.hasRequestedSpotifyPermission = false
+                }
+            }
         }
-        
-        if let spotify = spotifyProbe.snapshot() {
+
+        let spotify = spotifyProbe.snapshot()
+        if let spotify {
             return MediaSnapshot(
                 track: spotify.track,
                 bundleID: spotify.track.sourceBundleID,
@@ -110,7 +167,8 @@ public final class MediaMonitor {
             )
         }
 
-        if let music = musicProbe.snapshot() {
+        let music = musicProbe.snapshot()
+        if let music {
             return MediaSnapshot(
                 track: music.track,
                 bundleID: music.track.sourceBundleID,
@@ -119,9 +177,15 @@ public final class MediaMonitor {
         }
 
         // Fallback to MPNowPlayingInfoCenter for generic sources
-        if let nowPlaying = nowPlayingSnapshot() {
+        let nowPlaying = nowPlayingSnapshot()
+        if let nowPlaying {
             return MediaSnapshot(track: nowPlaying, bundleID: nowPlaying.sourceBundleID, artworkHint: nil)
         }
+
+        // NSLog("[MediaMonitor] All probes nil — Spotify: %@, Music: %@, NowPlaying: %@",
+        //       spotify == nil ? "nil" : "ok",
+        //       music == nil ? "nil" : "ok",
+        //       nowPlaying == nil ? "nil" : "ok")
         return nil
     }
 
@@ -130,6 +194,8 @@ public final class MediaMonitor {
 
         guard let snapshot else {
             if currentTrack != nil {
+                // NSLog("[MediaMonitor] Track disappeared — was: %@ by %@",
+                //       currentTrack?.title ?? "?", currentTrack?.artist ?? "?")
                 currentTrack = nil
                 onTrackChange?(nil)
             }
@@ -220,10 +286,27 @@ public final class MediaMonitor {
     }
 
     private func nowPlayingSnapshot() -> TrackInfo? {
-        if !Thread.isMainThread {
-            return DispatchQueue.main.sync { self.nowPlayingSnapshot() }
+        if Thread.isMainThread {
+            return nowPlayingSnapshotOnMain()
         }
 
+        // Use async + semaphore with timeout instead of main.sync to avoid deadlock
+        // when the main thread is blocked (e.g. by icon fetching).
+        let semaphore = DispatchSemaphore(value: 0)
+        var result: TrackInfo?
+        DispatchQueue.main.async {
+            result = self.nowPlayingSnapshotOnMain()
+            semaphore.signal()
+        }
+        let waitResult = semaphore.wait(timeout: .now() + 1.0)
+        if waitResult == .timedOut {
+            return nil
+        }
+        return result
+    }
+
+    /// Must be called on the main thread.
+    private func nowPlayingSnapshotOnMain() -> TrackInfo? {
         guard let info = nowPlayingCenter.nowPlayingInfo else { return nil }
 
         let title = (info[MPMediaItemPropertyTitle] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -254,12 +337,6 @@ public final class MediaMonitor {
     }
     
     // MARK: - Lazy Spotify Permission
-    
-    private func isSpotifyRunning() -> Bool {
-        return NSWorkspace.shared.runningApplications.contains { app in
-            app.bundleIdentifier == "com.spotify.client"
-        }
-    }
     
     private func requestSpotifyAutomationPermissionIfNeeded() {
         let bundleID = "com.spotify.client"

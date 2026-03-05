@@ -1,4 +1,5 @@
 mod audio;
+mod agent_monitor;
 mod db;
 mod labels;
 mod macos_bridge;
@@ -280,10 +281,14 @@ fn open_accessibility_settings() -> Result<(), String> {
 }
 
 #[tauri::command]
-fn check_media_automation_permission(bundle_id: String) -> Result<bool, String> {
+async fn check_media_automation_permission(bundle_id: String) -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
-        Ok(macos_bridge::check_media_automation_permission(&bundle_id))
+        tokio::task::spawn_blocking(move || {
+            macos_bridge::check_media_automation_permission(&bundle_id)
+        })
+        .await
+        .map_err(|e| e.to_string())
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -294,14 +299,18 @@ fn check_media_automation_permission(bundle_id: String) -> Result<bool, String> 
 }
 
 #[tauri::command]
-fn request_media_automation_permission(bundle_id: String) -> Result<AutomationPermissionRequestResult, String> {
+async fn request_media_automation_permission(bundle_id: String) -> Result<AutomationPermissionRequestResult, String> {
     #[cfg(target_os = "macos")]
     {
-        let status = macos_bridge::request_media_automation_permission_status(&bundle_id);
-        Ok(AutomationPermissionRequestResult {
-            granted: status == 0,
-            status,
+        tokio::task::spawn_blocking(move || {
+            let status = macos_bridge::request_media_automation_permission_status(&bundle_id);
+            AutomationPermissionRequestResult {
+                granted: status == 0,
+                status,
+            }
         })
+        .await
+        .map_err(|e| e.to_string())
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -415,6 +424,16 @@ pub fn run() {
                         initial_sound_settings.enabled,
                         &initial_sound_settings.sound_id,
                     );
+
+                    // Spawn background task to monitor agent terminal sessions
+                    tauri::async_runtime::spawn(async {
+                        let mut monitor = agent_monitor::AgentMonitor::new();
+                        loop {
+                            let sessions = monitor.poll();
+                            macos_bridge::island_update_agent_sessions(&sessions);
+                            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                        }
+                    });
                 }
 
                 Ok(())
