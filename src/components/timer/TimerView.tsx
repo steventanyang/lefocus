@@ -334,7 +334,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
       {/* Label section in top right */}
       {state.status === "idle" && (
         <div
-          className={`fixed top-8 right-8 z-10 transition-opacity duration-300 ${
+          className={`fixed top-2 right-8 z-10 transition-opacity duration-300 ${
             controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
           }`}
         >
@@ -383,7 +383,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
       {/* Timer mode buttons in top left */}
       {state.status === "idle" && (
         <div
-          className={`fixed top-8 left-8 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
+          className={`fixed top-2 left-8 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
             controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
           }`}
         >
@@ -426,7 +426,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
       {/* Navigation buttons - aligned with top of clock */}
       {state.status === "idle" && (
         <div
-          className={`fixed left-8 top-52 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
+          className={`fixed left-8 top-44 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
             showCommandControls
               ? "opacity-100"
               : "opacity-0 pointer-events-none"

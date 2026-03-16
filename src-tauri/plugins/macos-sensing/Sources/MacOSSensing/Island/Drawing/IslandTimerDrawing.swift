@@ -47,7 +47,7 @@ extension IslandView {
         let timeString = formatTime(ms: displayMs)
 
         // Larger font for expanded view with timer
-        guard let timerFont = IslandView.monospacedFont(size: 28, weight: .semibold) else {
+        guard let timerFont = IslandView.monospacedFont(size: 32, weight: .semibold) else {
             return
         }
 
@@ -66,12 +66,10 @@ extension IslandView {
         let attributed = NSAttributedString(string: timeString, attributes: attributes)
         let textSize = attributed.size()
 
-        // Align timer top with title top
-        // Title rect is at y: bounds.height - 56.0 with height 18.0
-        // Title top is at: bounds.height - 56.0 + 18.0 = bounds.height - 38.0
-        // To align timer top with title top: origin.y + textSize.height = bounds.height - 38.0
-        let titleTop = bounds.height - 58.0
-        let timerY = titleTop - textSize.height
+        // Center timer vertically in the right column area (between top content and control buttons)
+        let topArea = bounds.height - 48.0
+        let bottomArea: CGFloat = 50.0
+        let timerY = bottomArea + (topArea - bottomArea) / 2.0 - textSize.height / 2.0
 
         let originX: CGFloat
         if trackInfo == nil {

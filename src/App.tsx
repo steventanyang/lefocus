@@ -141,10 +141,10 @@ function App() {
     <>
       {showGrid && <GridOverlay lines={gridLines} />}
       <main
-        className={`flex-1 flex flex-col p-8 bg-white ${
+        className={`flex-1 flex flex-col px-8 pb-8 bg-white ${
           isTimerView
-            ? "items-center justify-center"
-            : "items-center justify-start overflow-y-auto"
+            ? "pt-0 items-center justify-center"
+            : "pt-8 items-center justify-start overflow-y-auto"
         }`}
         style={{ height: height > 0 ? `${height}px` : "100vh" }}
       >
