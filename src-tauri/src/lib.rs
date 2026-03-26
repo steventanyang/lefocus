@@ -1,5 +1,6 @@
 mod audio;
 mod agent_monitor;
+mod companion;
 mod db;
 mod labels;
 mod macos_bridge;
@@ -12,6 +13,10 @@ mod utils;
 
 use audio::AudioEngineHandle;
 use chrono::Utc;
+use companion::{
+    get_companion_status, rotate_companion_pin, start_companion_server, stop_companion_server,
+    CompanionManager,
+};
 use db::Database;
 use labels::commands::{
     create_label, delete_label, get_labels, update_label, update_session_label,
@@ -43,6 +48,7 @@ pub(crate) struct AppState {
     pub(crate) timer: TimerController,
     pub(crate) settings: SettingsStore,
     pub(crate) metrics: MetricsCollector,
+    pub(crate) companion: CompanionManager,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
@@ -395,10 +401,12 @@ pub fn run() {
                 }
 
                 let metrics_collector = MetricsCollector::new();
+                let companion_manager = CompanionManager::new();
                 let timer_controller = TimerController::new(
                     app.handle().clone(),
                     database.clone(),
                     metrics_collector.clone(),
+                    companion_manager.clone(),
                 );
 
                 let settings_path = app_data_dir.join("settings.json");
@@ -411,6 +419,7 @@ pub fn run() {
                     timer: timer_controller,
                     settings: settings_store,
                     metrics: metrics_collector,
+                    companion: companion_manager,
                 });
 
                 // Initialize the island window on macOS to show "00:00" when idle
@@ -425,14 +434,18 @@ pub fn run() {
                         &initial_sound_settings.sound_id,
                     );
 
-                    // Set white title bar background (via Cocoa to avoid Tauri color-inversion bug)
+                    // Set white title bar background (objc2-app-kit; avoids deprecated cocoa + Tauri color-inversion bug)
                     if let Some(main_window) = app.get_webview_window("main") {
-                        use cocoa::appkit::{NSColor, NSWindow};
-                        use cocoa::base::{id, nil};
-                        let ns_window = main_window.ns_window().unwrap() as id;
-                        unsafe {
-                            let bg_color = NSColor::colorWithRed_green_blue_alpha_(nil, 1.0, 1.0, 1.0, 1.0);
-                            ns_window.setBackgroundColor_(bg_color);
+                        if let Ok(ns_window_ptr) = main_window.ns_window() {
+                            if !ns_window_ptr.is_null() {
+                                use objc2_app_kit::{NSColor, NSWindow};
+                                unsafe {
+                                    let window = &*ns_window_ptr.cast::<NSWindow>();
+                                    let color =
+                                        NSColor::colorWithSRGBRed_green_blue_alpha(1.0, 1.0, 1.0, 1.0);
+                                    window.setBackgroundColor(Some(&*color));
+                                }
+                            }
                         }
                     }
 
@@ -491,6 +504,10 @@ pub fn run() {
         open_automation_settings,
         restart_app_instance,
         get_metrics_snapshot,
+            start_companion_server,
+            stop_companion_server,
+            get_companion_status,
+            rotate_companion_pin,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>LeFocus Companion</title>
+    <style>
+      :root {
+        --bg: #0d0d0d;
+        --card: #171717;
+        --text: #f5f5f5;
+        --muted: #a3a3a3;
+        --accent: #ffffff;
+        --danger: #f97316;
+      }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      .container {
+        max-width: 480px;
+        margin: 0 auto;
+        min-height: 100vh;
+        padding: 24px 16px;
+        box-sizing: border-box;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid #2a2a2a;
+        border-radius: 14px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+      input, button {
+        width: 100%;
+        font-size: 16px;
+        border-radius: 10px;
+        border: 1px solid #333;
+        padding: 12px;
+        box-sizing: border-box;
+      }
+      input { background: #101010; color: var(--text); margin-bottom: 10px; }
+      button { background: var(--accent); color: #101010; font-weight: 600; }
+      button.secondary { background: transparent; color: var(--text); }
+      button.danger { background: var(--danger); color: #fff; }
+      .muted { color: var(--muted); font-size: 14px; }
+      .time { font-size: 56px; font-weight: 700; letter-spacing: 1px; text-align: center; }
+      .hidden { display: none; }
+      .row { display: flex; gap: 8px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div id="joinCard" class="card">
+        <h2>Join LeFocus Session</h2>
+        <p class="muted">Enter the 6-digit PIN shown on your Mac.</p>
+        <input id="pinInput" type="text" inputmode="numeric" maxlength="6" placeholder="000000" />
+        <button id="joinBtn">Join</button>
+        <p id="joinError" class="muted"></p>
+      </div>
+
+      <div id="sessionCard" class="card hidden">
+        <div id="modeText" class="muted" style="text-align:center"></div>
+        <div id="timeText" class="time">00:00</div>
+        <p id="statusText" class="muted" style="text-align:center"></p>
+      </div>
+
+      <div id="actionsCard" class="card hidden">
+        <div class="row">
+          <button id="endBtn">End</button>
+          <button id="cancelBtn" class="danger">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let token = null;
+      let ws = null;
+
+      const joinCard = document.getElementById("joinCard");
+      const sessionCard = document.getElementById("sessionCard");
+      const actionsCard = document.getElementById("actionsCard");
+      const pinInput = document.getElementById("pinInput");
+      const joinBtn = document.getElementById("joinBtn");
+      const joinError = document.getElementById("joinError");
+      const modeText = document.getElementById("modeText");
+      const timeText = document.getElementById("timeText");
+      const statusText = document.getElementById("statusText");
+
+      joinBtn.addEventListener("click", joinSession);
+      document.getElementById("endBtn").addEventListener("click", () => sendAction("end"));
+      document.getElementById("cancelBtn").addEventListener("click", () => sendAction("cancel"));
+
+      async function joinSession() {
+        joinError.textContent = "";
+        const pin = (pinInput.value || "").trim();
+        if (pin.length !== 6) {
+          joinError.textContent = "PIN must be 6 digits";
+          return;
+        }
+
+        const res = await fetch("/api/join", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin }),
+        });
+
+        if (!res.ok) {
+          joinError.textContent = "Failed to join. Check PIN.";
+          return;
+        }
+
+        const data = await res.json();
+        token = data.token;
+        joinCard.classList.add("hidden");
+        sessionCard.classList.remove("hidden");
+        actionsCard.classList.remove("hidden");
+        renderSnapshot(data.snapshot);
+        connectWs();
+      }
+
+      function connectWs() {
+        const protocol = location.protocol === "https:" ? "wss" : "ws";
+        ws = new WebSocket(`${protocol}://${location.host}/ws?token=${encodeURIComponent(token)}`);
+        ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.event === "timerSnapshot") {
+              renderSnapshot(msg.payload);
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        };
+      }
+
+      function formatMs(ms) {
+        const secs = Math.max(0, Math.floor(ms / 1000));
+        const hh = Math.floor(secs / 3600);
+        const mm = Math.floor((secs % 3600) / 60);
+        const ss = secs % 60;
+        if (hh > 0) {
+          return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+        }
+        return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+      }
+
+      function renderSnapshot(snapshot) {
+        const state = snapshot?.state || {};
+        const mode = state.mode || "countdown";
+        const status = state.status || "idle";
+        const remaining = snapshot?.remaining_ms ?? 0;
+        modeText.textContent = mode;
+        statusText.textContent = status;
+        if (mode === "stopwatch") {
+          timeText.textContent = formatMs(state.active_ms || 0);
+        } else {
+          timeText.textContent = formatMs(remaining);
+        }
+      }
+
+      async function sendAction(action) {
+        if (!token) return;
+        const res = await fetch("/api/action", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, action }),
+        });
+        if (!res.ok) {
+          const msg = await res.text();
+          alert(msg || "Action failed");
+        }
+      }
+    </script>
+  </body>
+  </html>

@@ -11,6 +11,7 @@ use tokio::{sync::Mutex, task::JoinHandle, time};
 use uuid::Uuid;
 
 use crate::{
+    companion::CompanionManager,
     db::{Database, Session, SessionInfo, SessionStatus},
     metrics::MetricsCollector,
     sensing::SensingController,
@@ -58,10 +59,16 @@ pub struct TimerController {
     heartbeat_every_ticks: u32,
     sensing: Arc<Mutex<SensingController>>,
     metrics: MetricsCollector,
+    companion: CompanionManager,
 }
 
 impl TimerController {
-    pub fn new(app_handle: AppHandle, db: Database, metrics: MetricsCollector) -> Self {
+    pub fn new(
+        app_handle: AppHandle,
+        db: Database,
+        metrics: MetricsCollector,
+        companion: CompanionManager,
+    ) -> Self {
         let debug_mode = std::env::var("LEFOCUS_DEBUG")
             .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
@@ -75,6 +82,7 @@ impl TimerController {
             heartbeat_every_ticks: if debug_mode { 1 } else { 10 },
             sensing: Arc::new(Mutex::new(SensingController::new())),
             metrics,
+            companion,
         }
     }
 
@@ -442,6 +450,7 @@ impl TimerController {
         let tick_interval = self.tick_interval;
         let heartbeat_every = self.heartbeat_every_ticks;
         let sensing = self.sensing.clone();
+        let companion = self.companion.clone();
 
         let handle = tokio::spawn(async move {
             let mut interval = time::interval(tick_interval);
@@ -465,6 +474,14 @@ impl TimerController {
                     island_sync(snapshot.remaining_ms());
                 }
 
+                // Companion clients should feel as realtime as the desktop timer.
+                // Broadcast on every tick (1s), not only heartbeat intervals.
+                let tick_snapshot = TimerSnapshot {
+                    state: snapshot.clone(),
+                    remaining_ms: remaining,
+                };
+                companion.broadcast_timer_snapshot(&tick_snapshot).await;
+
                 // Auto-stop in countdown and break modes when timer reaches 0
                 if remaining <= 0
                     && (snapshot.mode == TimerMode::Countdown || snapshot.mode == TimerMode::Break)
@@ -485,6 +502,12 @@ impl TimerController {
                     }
 
                     emit_timer_state(&app_handle, final_snapshot.clone());
+                    let final_timer_snapshot = TimerSnapshot {
+                        state: final_snapshot.clone(),
+                        remaining_ms: final_snapshot.remaining_ms(),
+                    };
+                    companion.broadcast_timer_snapshot(&final_timer_snapshot).await;
+                    companion.stop_if_not_running(&final_timer_snapshot).await;
 
                     // Skip DB update for Break mode
                     if final_snapshot.mode != TimerMode::Break {
@@ -519,6 +542,7 @@ impl TimerController {
                         let app_handle_clone = app_handle.clone();
                         let session_id_clone = session_id.clone();
                         let snapshot_clone = snapshot.clone();
+                        let companion_clone = companion.clone();
 
                         tokio::spawn(async move {
                             let now = Utc::now();
@@ -531,6 +555,11 @@ impl TimerController {
                                 .await;
 
                             let _ = app_handle_clone.emit("timer-heartbeat", heartbeat_payload);
+                            let timer_snapshot = TimerSnapshot {
+                                state: snapshot_clone.clone(),
+                                remaining_ms: snapshot_clone.remaining_ms(),
+                            };
+                            companion_clone.broadcast_timer_snapshot(&timer_snapshot).await;
                         });
                     }
                 }
@@ -549,6 +578,12 @@ impl TimerController {
     async fn emit_state_changed(&self) -> Result<()> {
         let mut guard = self.state.lock().await;
         guard.sync_active_from_anchor();
+        let snapshot = TimerSnapshot {
+            remaining_ms: guard.remaining_ms(),
+            state: guard.clone(),
+        };
+        self.companion.broadcast_timer_snapshot(&snapshot).await;
+        self.companion.stop_if_not_running(&snapshot).await;
         emit_timer_state(&self.app_handle, guard.clone());
         Ok(())
     }
@@ -558,6 +593,8 @@ impl TimerController {
             session_id: session_info.id.clone(),
             session: session_info.clone(),
         };
+
+        self.companion.broadcast_session_completed(session_info).await;
 
         self.app_handle
             .emit("session-completed", payload)

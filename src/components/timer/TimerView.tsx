@@ -5,6 +5,7 @@ import { useEndTimerMutation } from "@/hooks/queries";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useSessionCompleted } from "@/hooks/useSessionCompleted";
 import { useLabels, useLabelById } from "@/hooks/useLabels";
+import { useCompanion } from "@/hooks/useCompanion";
 import { TimerContent } from "./TimerContent";
 import { PRESETS } from "./DurationPicker";
 import { BREAK_PRESETS } from "./BreakDurationPicker";
@@ -15,6 +16,7 @@ import { LabelTag } from "@/components/labels/LabelTag";
 import { LabelDropdown } from "@/components/labels/LabelDropdown";
 import { LabelModal } from "@/components/labels/LabelModal";
 import { isUserTyping, isMac } from "@/utils/keyboardUtils";
+import QRCode from "qrcode";
 import type { TimerMode } from "@/types/timer";
 import {
   DEFAULT_COUNTDOWN_DURATION_MS,
@@ -31,6 +33,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
   const endTimerMutation = useEndTimerMutation();
   const completedSession = useSessionCompleted();
   const { labels, lastUsedLabelId, setLastUsedLabelId } = useLabels();
+  const companion = useCompanion();
 
   const [selectedDuration, setSelectedDuration] = useState<number>(
     DEFAULT_COUNTDOWN_DURATION_MS
@@ -43,6 +46,8 @@ export function TimerView({ onNavigate }: TimerViewProps) {
     null
   );
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
+  const [isCompanionPanelOpen, setIsCompanionPanelOpen] = useState(false);
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>("");
 
   // Label state
   const [selectedLabelId, setSelectedLabelId] = useState<number | null>(
@@ -55,6 +60,25 @@ export function TimerView({ onNavigate }: TimerViewProps) {
   useEffect(() => {
     setSelectedLabelId(lastUsedLabelId);
   }, [lastUsedLabelId]);
+
+  useEffect(() => {
+    if (!companion.status.active || !companion.status.joinUrl) {
+      setQrCodeDataUrl("");
+      return;
+    }
+    QRCode.toDataURL(companion.status.joinUrl, {
+      width: 180,
+      margin: 1,
+      color: {
+        dark: "#000000",
+        light: "#ffffff",
+      },
+    })
+      .then(setQrCodeDataUrl)
+      .catch(() => {
+        setQrCodeDataUrl("");
+      });
+  }, [companion.status.active, companion.status.joinUrl]);
 
   const selectedLabel = useLabelById(selectedLabelId, labels);
 
@@ -499,6 +523,67 @@ export function TimerView({ onNavigate }: TimerViewProps) {
       {/* Start button in bottom right */}
       {state.status === "idle" && (
         <div className="fixed bottom-8 right-8 flex flex-col items-start gap-2 z-10">
+          <button
+            onClick={() => setIsCompanionPanelOpen((prev) => !prev)}
+            className="text-base font-light text-gray-600 flex items-center gap-2 group"
+          >
+            <KeyBox hovered={false}>P</KeyBox>
+            <span className="group-hover:text-black transition-colors duration-200 group-hover:transition-none">
+              phone version
+            </span>
+          </button>
+          {isCompanionPanelOpen && (
+            <div className="w-[260px] border border-black bg-white p-3 flex flex-col gap-2 shadow-sm">
+              {!companion.status.active ? (
+                <button
+                  onClick={companion.start}
+                  disabled={companion.loading}
+                  className="border border-black px-3 py-2 text-sm font-semibold hover:bg-black hover:text-white transition-all duration-200 disabled:opacity-40"
+                >
+                  {companion.loading ? "starting..." : "start phone sharing"}
+                </button>
+              ) : (
+                <>
+                  <div className="text-xs font-light text-gray-700">scan to join</div>
+                  {qrCodeDataUrl && (
+                    <img
+                      src={qrCodeDataUrl}
+                      alt="Companion join QR code"
+                      className="w-[180px] h-[180px] border border-gray-300 self-center"
+                    />
+                  )}
+                  <div className="text-xs font-light break-all">
+                    {companion.status.joinUrl}
+                  </div>
+                  <div className="text-sm font-semibold">
+                    PIN: {companion.status.joinPin ?? "------"}
+                  </div>
+                  <div className="text-xs font-light text-gray-700">
+                    devices connected: {companion.status.connectedClients}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={companion.rotatePin}
+                      disabled={companion.loading}
+                      className="flex-1 border border-black px-2 py-1 text-xs hover:bg-black hover:text-white transition-all duration-200 disabled:opacity-40"
+                    >
+                      rotate PIN
+                    </button>
+                    <button
+                      onClick={companion.stop}
+                      disabled={companion.loading}
+                      className="flex-1 border border-black px-2 py-1 text-xs hover:bg-black hover:text-white transition-all duration-200 disabled:opacity-40"
+                    >
+                      stop sharing
+                    </button>
+                  </div>
+                </>
+              )}
+              {companion.error && (
+                <div className="text-xs text-red-600">{companion.error}</div>
+              )}
+            </div>
+          )}
           <div
             className={`transition-opacity duration-300 ${showCommandControls ? "opacity-100" : "opacity-0"}`}
           >

@@ -7,7 +7,8 @@ pub enum SessionState {
     Thinking,       // No children, TCP data actively streaming
     Executing,      // Has active subprocess work (tree/cpu signals)
     Waiting,        // No children, TCP idle or no connection
-    Done,           // Process exited
+    #[allow(dead_code)] // Reserved for future exit detection
+    Done, // Process exited
 }
 
 #[derive(Debug, Clone)]
