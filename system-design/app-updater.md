@@ -1,80 +1,105 @@
-# LeFocus: App updates (Tauri updater)
+# LeFocus: Release & Update Instructions
 
-**Status:** Implemented  
 **Stack:** Tauri 2, `@tauri-apps/plugin-updater`, `@tauri-apps/plugin-process`
+**Releases:** https://github.com/steventanyang/lefocus/releases
 
 ---
 
-## Purpose
+## Release flow (step by step)
 
-Describe how shipped desktop builds discover, verify, and install newer versions over HTTPS, without relying on the Mac App Store. This is the **direct-download / GitHub Releases** path.
+### 1. Bump version
 
----
+- Update `version` in `src-tauri/tauri.conf.json`
+- Keep `package.json` version aligned if used for tagging
 
-## High-level flow
+### 2. Build
 
-1. **Build:** Release builds produce signed update artifacts (`createUpdaterArtifacts`) and embed a **public key** + **update endpoint URL(s)** in the app (`tauri.conf.json`).
-2. **Publish:** You upload binaries (e.g. `.app.tar.gz`) and a **`latest.json`** (name must match the URL you configure) that lists semver, per-platform `url` + `signature` (contents of the `.sig` file).
-3. **Runtime:** The app calls `check()` → optional `downloadAndInstall()` → `relaunch()`. The plugin verifies the bundle with the embedded pubkey before install.
-
-```mermaid
-sequenceDiagram
-  participant App as Installed app
-  participant Meta as HTTPS metadata (latest.json)
-  participant Bin as Bundle URL (e.g. GitHub asset)
-
-  App->>Meta: GET endpoint
-  Meta-->>App: version, platforms[].url, platforms[].signature
-  alt newer than current
-    App->>Bin: GET bundle
-    App->>App: verify signature (minisign / pubkey in app)
-    App->>App: install, then relaunch
-  end
+```bash
+export TAURI_SIGNING_PRIVATE_KEY="<your private key>"
+# export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="<password>" # if key has one
+npm run tauri build
 ```
 
----
+This produces in `src-tauri/target/release/bundle/`:
+- `macos/lefocus.app` — the app bundle
+- `dmg/lefocus_X.X.X_aarch64.dmg` — installer for new users
+- `macos/lefocus.app.tar.gz` — updater bundle (for existing users)
+- `macos/lefocus.app.tar.gz.sig` — signature file for the updater bundle
 
-## Components
+### 3. Sign, notarize & generate updater metadata
 
-| Piece | Role |
-|--------|------|
-| `tauri.conf.json` → `plugins.updater` | `pubkey`, `endpoints` (TLS in production). |
-| `bundle.createUpdaterArtifacts` | Emits updater bundles + `.sig` next to normal installers. |
-| `TAURI_SIGNING_PRIVATE_KEY` | Env at **build** time; signs artifacts. Never commit; backup safely. |
-| `latest.json` | Hosted static JSON (e.g. GitHub Release asset). Tauri validates structure + semver. |
-| Frontend | Settings → “check for updates”: `check()`, `downloadAndInstall()`, `relaunch()`. |
-| Capabilities | `updater:default`, `process:default` (`src-tauri/capabilities/desktop.json`). |
+```bash
+./scripts/manual_sign_notarize.sh
+```
 
----
+This script handles everything after build:
+- Fixes bundle structure (moves dylib to Frameworks)
+- Signs the app + dylib with Developer ID
+- Rebuilds and notarizes the DMG
+- **Generates `latest.json`** automatically from the `.app.tar.gz.sig` and version in `tauri.conf.json`
 
-## Security model
+At the end it prints the 3 files to upload.
 
-- HTTPS alone is **not** the trust boundary; the **signature** is.
-- The app embeds only the **public** key; updates must be signed with the matching **private** key or install fails.
-- Losing the private key means you cannot ship trusted updates to existing installs (users would need a fresh install with a new keypair—operationally painful).
+### 4. Upload GitHub Release
 
----
+Create a new release (e.g. `v0.2.0`) at https://github.com/steventanyang/lefocus/releases/new and upload the 3 files the script tells you to:
 
-## Operator checklist (each release)
+| Asset | Location after build | Purpose |
+|-------|---------------------|---------|
+| `lefocus_X.X.X_aarch64.dmg` | `src-tauri/target/release/bundle/dmg/` | Website download for new users |
+| `lefocus.app.tar.gz` | `src-tauri/target/release/bundle/macos/` | Updater bundle for existing users |
+| `latest.json` | `src-tauri/target/release/bundle/` | Metadata the updater plugin fetches |
 
-1. Bump app version in `src-tauri/tauri.conf.json` (and keep `package.json` aligned if you use it for tagging).
-2. Export `TAURI_SIGNING_PRIVATE_KEY` (and password if used); run `tauri build`.
-3. Collect bundles + `.sig` from `src-tauri/target/release/bundle/…`.
-4. Build **`latest.json`** per [Tauri static JSON](https://v2.tauri.app/plugin/updater/) (e.g. `darwin-aarch64`, `darwin-x86_64`, …): each entry needs `url` + full `signature` text from the matching `.sig`.
-5. Upload assets + `latest.json` to the URL configured in `endpoints` (common pattern: `…/releases/latest/download/latest.json` on GitHub).
+### 6. Existing users get the update
 
----
-
-## Code / config touchpoints
-
-- Plugins registered in `src-tauri/src/lib.rs` (`tauri_plugin_updater`, `tauri_plugin_process`).
-- UI: `src/components/profile/SettingsSettingsPage.tsx` (updates section).
-- Endpoint placeholder: replace `YOUR_GITHUB_USER` / `YOUR_REPO` in `tauri.conf.json` with the real release location.
+Users click "check for updates" in Settings (`src/components/profile/SettingsSettingsPage.tsx`). The app fetches `latest.json` from the endpoint in `tauri.conf.json`, compares versions, downloads the `.app.tar.gz`, verifies the signature, installs, and relaunches.
 
 ---
 
-## Non-goals / limits
+## Two distribution paths
 
-- **Auto-check on launch** is not required for correctness; can be added later (startup `check()` with quiet UX).
-- **Dev / `tauri dev`** is not the same as a signed production updater; validate with release builds.
-- **Store distribution** (Mac App Store, etc.) uses store updates instead of this pipeline.
+| Path | Who | What they download | Verified by |
+|------|-----|--------------------|-------------|
+| Website / GitHub release link | New users | `.dmg` | Apple notarization (Gatekeeper) |
+| In-app updater | Existing users | `.app.tar.gz` via `latest.json` | Tauri signature (minisign pubkey embedded in app) |
+
+---
+
+## Key files
+
+| File | What it does |
+|------|-------------|
+| `src-tauri/tauri.conf.json` → `plugins.updater` | `pubkey` + `endpoints` (where to fetch `latest.json`) |
+| `src-tauri/tauri.conf.json` → `bundle.createUpdaterArtifacts` | Must be `true` to emit `.app.tar.gz` + `.sig` |
+| `src-tauri/src/lib.rs` | Registers `tauri_plugin_updater` and `tauri_plugin_process` |
+| `src/components/profile/SettingsSettingsPage.tsx` | UI: `check()`, `downloadAndInstall()`, `relaunch()` |
+| `src-tauri/capabilities/desktop.json` | Grants `updater:default` and `process:default` permissions |
+| `scripts/manual_sign_notarize.sh` | Signs, notarizes, and staples the DMG |
+
+---
+
+## Security
+
+- The app embeds a **public key**; updates must be signed with the matching **private key** (`TAURI_SIGNING_PRIVATE_KEY`) or install is rejected.
+- **Never commit the private key.** Back it up securely. Losing it means existing installs can't receive updates (users would need a fresh install with a new keypair).
+- HTTPS is transport security; the **signature** is the actual trust boundary.
+
+---
+
+## Endpoint config
+
+The updater endpoint in `tauri.conf.json` should point to:
+
+```
+https://github.com/steventanyang/lefocus/releases/latest/download/latest.json
+```
+
+Using `/latest/download/` auto-resolves to whichever GitHub Release is tagged as "Latest", so you don't update the URL each release.
+
+---
+
+## Notes
+
+- `tauri dev` does not test the updater — must use release builds.
+- Auto-check on launch is not implemented; updates are manual via Settings.
+- Mac App Store distribution uses store updates, not this pipeline.
