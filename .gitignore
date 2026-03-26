@@ -31,3 +31,7 @@ src-tauri/plugins/macos-sensing/.swiftpm/
 
 .env*
 /target
+
+# Tauri updater signing — never commit the private key (pubkey is in tauri.conf.json)
+src-tauri/.tauri-signing.key
+src-tauri/.tauri-signing.key.pub

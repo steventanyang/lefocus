@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { useSpotifyPermission } from "@/hooks/usePermissions";
 import { useIslandVisible } from "@/hooks/useIslandVisible";
 
@@ -26,6 +29,9 @@ function ToggleSwitch({
 }
 
 export function SettingsSettingsPage() {
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null);
+  const [updateBusy, setUpdateBusy] = useState(false);
+
   const {
     spotifyAutomation,
     loading,
@@ -38,6 +44,25 @@ export function SettingsSettingsPage() {
     isLoading: isLoadingVisibility,
     updateVisibility,
   } = useIslandVisible();
+
+  async function handleCheckForUpdates() {
+    setUpdateMessage(null);
+    setUpdateBusy(true);
+    try {
+      const update = await check();
+      if (!update) {
+        setUpdateMessage("You're on the latest version.");
+        return;
+      }
+      await update.downloadAndInstall();
+      await relaunch();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setUpdateMessage(msg);
+    } finally {
+      setUpdateBusy(false);
+    }
+  }
 
   return (
     <div>
@@ -108,6 +133,36 @@ export function SettingsSettingsPage() {
               onChange={updateVisibility}
               disabled={isLoadingVisibility || isVisible === undefined}
             />
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-8">
+        <h2 className="text-base font-normal tracking-wide text-gray-800 mb-4">
+          updates
+        </h2>
+        <div className="flex flex-col gap-3 max-w-2xl">
+          <div className="border border-black p-4 flex items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-semibold mb-1">check for updates</h3>
+              <p className="text-xs font-light text-gray-600">
+                Downloads and installs the newest build from your release server,
+                then restarts the app
+              </p>
+              {updateMessage ? (
+                <p className="text-xs font-normal text-gray-800 mt-2">{updateMessage}</p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={handleCheckForUpdates}
+              disabled={updateBusy}
+              className={`bg-transparent border border-black text-black px-4 py-2 text-sm font-semibold cursor-pointer hover:bg-black hover:text-white hover:transition-none transition-all duration-200 whitespace-nowrap ${
+                updateBusy ? "bg-gray-100 text-gray-400 cursor-wait" : ""
+              }`}
+            >
+              {updateBusy ? "checking…" : "check"}
+            </button>
           </div>
         </div>
       </div>
