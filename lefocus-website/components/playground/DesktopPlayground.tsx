@@ -14,12 +14,13 @@ export function DesktopPlayground() {
   const windowRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x: 0, y: 0 });
 
+  /** Use layout box sizes (not getBoundingClientRect) so clamp matches `left`/`top` + absolute sizing. */
   const clamp = useCallback((nextX: number, nextY: number) => {
-    const c = containerRef.current?.getBoundingClientRect();
-    const w = windowRef.current?.getBoundingClientRect();
-    if (!c || !w || !w.width || !w.height) return { x: nextX, y: nextY };
-    const maxX = Math.max(0, c.width - w.width);
-    const maxY = Math.max(0, c.height - w.height);
+    const c = containerRef.current;
+    const w = windowRef.current;
+    if (!c || !w) return { x: nextX, y: nextY };
+    const maxX = Math.max(0, c.clientWidth - w.offsetWidth);
+    const maxY = Math.max(0, c.clientHeight - w.offsetHeight);
     return {
       x: Math.min(Math.max(0, nextX), maxX),
       y: Math.min(Math.max(0, nextY), maxY),
@@ -27,12 +28,12 @@ export function DesktopPlayground() {
   }, []);
 
   const centerWindow = useCallback(() => {
-    const c = containerRef.current?.getBoundingClientRect();
-    const w = windowRef.current?.getBoundingClientRect();
-    if (!c || !w || w.width < 1) return;
+    const c = containerRef.current;
+    const w = windowRef.current;
+    if (!c || !w || w.offsetWidth < 1) return;
     setPos({
-      x: Math.max(0, (c.width - w.width) / 2),
-      y: Math.max(0, (c.height - w.height) / 2),
+      x: Math.max(0, (c.clientWidth - w.offsetWidth) / 2),
+      y: Math.max(0, (c.clientHeight - w.offsetHeight) / 2),
     });
   }, []);
 
@@ -89,31 +90,30 @@ export function DesktopPlayground() {
 
   return (
     <section
-      className="w-full max-w-5xl rounded-sm border border-black bg-cover bg-center px-4 py-10 sm:px-8 sm:py-14"
+      className="mx-auto w-full max-w-5xl overflow-hidden rounded-sm bg-cover bg-center"
       style={{ backgroundImage: "url('/background.png')" }}
     >
       <div
         ref={containerRef}
-        className="relative min-h-[min(70vh,560px)] w-full"
+        className="relative min-h-[min(76vh,760px)] w-full"
       >
         <div
           ref={windowRef}
-          className="absolute w-full max-w-lg overflow-hidden border border-black bg-white shadow-[4px_4px_0_0_rgba(0,0,0,0.08)]"
+          className="absolute flex h-[480px] w-[560px] flex-col overflow-hidden rounded-2xl bg-white shadow-[4px_4px_0_0_rgba(0,0,0,0.08)]"
           style={{ left: pos.x, top: pos.y }}
         >
           <div
             role="presentation"
             onPointerDown={handleTitlePointerDown}
-            className="flex h-8 cursor-grab select-none items-center gap-2 border-b border-neutral-200 bg-neutral-50 px-3 active:cursor-grabbing"
+            className="flex h-8 shrink-0 cursor-grab select-none items-center gap-2 bg-white px-3 active:cursor-grabbing"
+            aria-label="Drag window"
           >
             <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" aria-hidden />
             <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" aria-hidden />
             <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" aria-hidden />
-            <span className="ml-2 text-[10px] font-medium tracking-tight text-neutral-500">
-              lefocus
-            </span>
           </div>
-          <div className="relative flex flex-col gap-8 px-4 pb-8 pt-6 sm:px-8">
+          {/* No padding here — absolute chrome in PlaygroundTimer uses full body under title bar */}
+          <div className="relative flex min-h-0 flex-1 flex-col">
             <PlaygroundTimer />
           </div>
         </div>

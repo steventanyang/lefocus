@@ -44,7 +44,7 @@ function GitHubMark({ className }: { className?: string }) {
 
 function LaunchVideo() {
   return (
-    <div className="w-full max-w-md border border-black">
+    <div className="w-full max-w-md border border-black md:hidden">
       <video
         src={launchVideoUrl}
         autoPlay
@@ -60,11 +60,8 @@ function LaunchVideo() {
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center bg-white max-md:justify-center max-md:gap-0 max-md:px-4 max-md:py-6 md:justify-center md:gap-10 md:px-8 md:py-16">
-      <h1 className="hidden text-4xl font-medium tracking-tight text-black md:block md:text-5xl">
-        lefocus
-      </h1>
-      <div className="my-6 hidden flex-wrap items-center justify-center gap-3 md:flex">
+    <main className="flex min-h-screen flex-col items-center bg-white max-md:justify-center max-md:gap-0 max-md:px-4 max-md:py-6 md:px-8 md:py-16">
+      <div className="my-6 hidden flex-wrap items-center justify-center gap-3 md:flex md:shrink-0">
         <a
           id="macos-download-btn"
           href={macosDmgUrl}
@@ -85,8 +82,10 @@ export default function Home() {
           <GitHubMark className="h-5 w-5" />
         </a>
       </div>
-      <div className="hidden w-full md:block">
+      <div className="hidden w-full min-h-0 flex-1 flex-col md:flex">
+        <div className="min-h-0 flex-1" aria-hidden />
         <DesktopPlayground />
+        <div className="min-h-0 flex-1" aria-hidden />
       </div>
       <LaunchVideo />
     </main>
