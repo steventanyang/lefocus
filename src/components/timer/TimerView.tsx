@@ -21,12 +21,15 @@ import {
   DEFAULT_BREAK_DURATION_MS,
   DEFAULT_STOPWATCH_DURATION_MS,
 } from "@/constants/timer";
+import { useFullscreen } from "@/hooks/useFullscreen";
 
 interface TimerViewProps {
   onNavigate: (view: "timer" | "activities" | "stats" | "profile") => void;
 }
 
 export function TimerView({ onNavigate }: TimerViewProps) {
+  const isFullscreen = useFullscreen();
+  const topChromeClass = isFullscreen ? "top-8" : "top-2";
   const { timerState, error, startTimer, cancelTimer } = useTimer();
   const endTimerMutation = useEndTimerMutation();
   const completedSession = useSessionCompleted();
@@ -334,7 +337,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
       {/* Label section in top right */}
       {state.status === "idle" && (
         <div
-          className={`fixed top-2 right-8 z-10 transition-opacity duration-300 ${
+          className={`fixed ${topChromeClass} right-8 z-10 transition-opacity duration-300 ${
             controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
           }`}
         >
@@ -383,7 +386,7 @@ export function TimerView({ onNavigate }: TimerViewProps) {
       {/* Timer mode buttons in top left */}
       {state.status === "idle" && (
         <div
-          className={`fixed top-2 left-8 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
+          className={`fixed ${topChromeClass} left-8 flex flex-col gap-2 z-10 transition-opacity duration-300 ${
             controlsVisible ? "opacity-100" : "opacity-0 pointer-events-none"
           }`}
         >

@@ -214,14 +214,21 @@ final class IslandWindowManager {
 
     // MARK: - Private
 
-    /// Extra width needed for agent session dots.
+    /// Extra width for agent dots and/or compact audio layout so content clears the hardware notch.
     private var agentDotsExtraWidth: CGFloat {
-        guard agentSessionCount > 0 else { return 0 }
-        let dotsZone = IslandView.compactDotsZoneWidth(for: agentSessionCount)
-        let artworkExtra: CGFloat = (agentSessionCount <= 2 && hasAudioContent)
-            ? AudioArtworkLayout.compactSize + 4.0
-            : 0.0
-        return dotsZone + artworkExtra
+        if agentSessionCount > 0 {
+            let dotsZone = IslandView.compactDotsZoneWidth(for: agentSessionCount)
+            let artworkExtra: CGFloat = (agentSessionCount <= 2 && hasAudioContent)
+                ? AudioArtworkLayout.compactSize + 4.0
+                : 0.0
+            return dotsZone + artworkExtra
+        }
+        // No agent dots: compact audio still needs the same horizontal slack as the 1-dot + audio
+        // layout; otherwise the island is too narrow and the notch overlaps waveform + artwork.
+        if hasAudioContent {
+            return IslandView.compactDotsZoneWidth(for: 1) + AudioArtworkLayout.compactSize + 4.0
+        }
+        return 0
     }
 
     private func currentIslandSize() -> NSSize {

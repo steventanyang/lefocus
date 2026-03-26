@@ -33,14 +33,94 @@ const describeAutomationStatus = (status: number, appName: string) => {
 };
 
 const SPOTIFY_PERMISSION_QUERY_KEY = ["spotify-permission"];
+const SCREEN_RECORDING_PERMISSION_QUERY_KEY = ["screen-recording-permission"];
+
+/** macOS AEDeterminePermissionToAutomateTarget can hang indefinitely on some systems; cap wait time. */
+const SPOTIFY_CHECK_TIMEOUT_MS = 8000;
+const SCREEN_RECORDING_CHECK_TIMEOUT_MS = 8000;
 
 async function fetchSpotifyPermission(): Promise<boolean> {
-  return invoke<boolean>("check_media_automation_permission", {
-    bundleId: "com.spotify.client",
-  }).catch((err) => {
-    console.warn("Spotify automation permission check failed:", err);
-    return false;
+  return new Promise((resolve) => {
+    const t = setTimeout(() => {
+      console.warn(
+        "Spotify automation permission check timed out; showing optional until you tap Allow or refocus the app."
+      );
+      resolve(false);
+    }, SPOTIFY_CHECK_TIMEOUT_MS);
+    invoke<boolean>("check_media_automation_permission", {
+      bundleId: "com.spotify.client",
+    })
+      .then((granted) => {
+        clearTimeout(t);
+        resolve(granted);
+      })
+      .catch((err) => {
+        clearTimeout(t);
+        console.warn("Spotify automation permission check failed:", err);
+        resolve(false);
+      });
   });
+}
+
+async function fetchScreenRecordingPermission(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const t = setTimeout(() => {
+      console.warn("Screen recording permission check timed out");
+      resolve(false);
+    }, SCREEN_RECORDING_CHECK_TIMEOUT_MS);
+    invoke<boolean>("check_screen_recording_permissions")
+      .then((granted) => {
+        clearTimeout(t);
+        resolve(granted);
+      })
+      .catch((err) => {
+        clearTimeout(t);
+        console.warn("Screen recording permission check failed:", err);
+        resolve(false);
+      });
+  });
+}
+
+/**
+ * Screen Recording status (macOS). Toggles must be changed in System Settings; we can only open the pane.
+ */
+export function useScreenRecordingPermission() {
+  const queryClient = useQueryClient();
+
+  const {
+    data: screenRecordingGranted,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery<boolean>({
+    queryKey: SCREEN_RECORDING_PERMISSION_QUERY_KEY,
+    queryFn: fetchScreenRecordingPermission,
+    retry: false,
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
+  });
+
+  const recheck = useCallback(() => {
+    queryClient.invalidateQueries({
+      queryKey: SCREEN_RECORDING_PERMISSION_QUERY_KEY,
+    });
+  }, [queryClient]);
+
+  const openScreenRecordingSettings = useCallback(async () => {
+    try {
+      await invoke("open_screen_recording_settings");
+    } catch (err) {
+      console.error("Failed to open Screen Recording settings:", err);
+      throw err;
+    }
+  }, []);
+
+  return {
+    screenRecordingGranted: screenRecordingGranted ?? false,
+    loading,
+    error: queryError instanceof Error ? queryError.message : null,
+    recheck,
+    openScreenRecordingSettings,
+  };
 }
 
 /**
@@ -61,7 +141,9 @@ export function useSpotifyPermission() {
     queryKey: SPOTIFY_PERMISSION_QUERY_KEY,
     queryFn: fetchSpotifyPermission,
     retry: false,
-    staleTime: Infinity, // Only check on mount and after explicit user action
+    // Re-check after a minute so returning from Spotify / System Settings can refresh "granted"
+    staleTime: 60_000,
+    refetchOnWindowFocus: true,
   });
 
   const checkPermissions = useCallback(() => {

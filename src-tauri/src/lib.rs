@@ -214,6 +214,34 @@ fn set_island_visible(
 }
 
 #[tauri::command]
+fn get_island_agent_tracking(state: State<AppState>) -> Result<bool, String> {
+    Ok(state.settings.island_agent_tracking_enabled())
+}
+
+#[tauri::command]
+fn set_island_agent_tracking(
+    enabled: bool,
+    state: State<AppState>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), String> {
+    state
+        .settings
+        .update_island_agent_tracking_enabled(enabled)
+        .map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "macos")]
+    if !enabled {
+        macos_bridge::island_update_agent_sessions(&[]);
+    }
+
+    app_handle
+        .emit("island-agent-tracking-updated", enabled)
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
 fn check_screen_recording_permissions() -> Result<bool, String> {
     #[cfg(target_os = "macos")]
     {
@@ -427,23 +455,34 @@ pub fn run() {
                         &initial_sound_settings.sound_id,
                     );
 
-                    // Set white title bar background (via Cocoa to avoid Tauri color-inversion bug)
+                    // Set white title bar background (via AppKit to avoid Tauri color-inversion bug)
                     if let Some(main_window) = app.get_webview_window("main") {
-                        use cocoa::appkit::{NSColor, NSWindow};
-                        use cocoa::base::{id, nil};
-                        let ns_window = main_window.ns_window().unwrap() as id;
+                        use objc2_app_kit::{NSColor, NSWindow};
+                        let ns_window_ptr = main_window.ns_window().unwrap() as *mut NSWindow;
                         unsafe {
-                            let bg_color = NSColor::colorWithRed_green_blue_alpha_(nil, 1.0, 1.0, 1.0, 1.0);
-                            ns_window.setBackgroundColor_(bg_color);
+                            if let Some(ns_window) = ns_window_ptr.as_ref() {
+                                let bg_color =
+                                    NSColor::colorWithRed_green_blue_alpha(1.0, 1.0, 1.0, 1.0);
+                                ns_window.setBackgroundColor(Some(&*bg_color));
+                            }
                         }
                     }
 
                     // Spawn background task to monitor agent terminal sessions
-                    tauri::async_runtime::spawn(async {
+                    let app_handle_for_agents = app.handle().clone();
+                    tauri::async_runtime::spawn(async move {
                         let mut monitor = agent_monitor::AgentMonitor::new();
                         loop {
                             let sessions = monitor.poll();
-                            macos_bridge::island_update_agent_sessions(&sessions);
+                            let enabled = app_handle_for_agents
+                                .try_state::<AppState>()
+                                .map(|s| s.settings.island_agent_tracking_enabled())
+                                .unwrap_or(true);
+                            if enabled {
+                                macos_bridge::island_update_agent_sessions(&sessions);
+                            } else {
+                                macos_bridge::island_update_agent_sessions(&[]);
+                            }
                             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                         }
                     });
@@ -482,6 +521,8 @@ pub fn run() {
             preview_island_chime,
             get_island_visible,
             set_island_visible,
+            get_island_agent_tracking,
+            set_island_agent_tracking,
         // Permission checking commands
         check_screen_recording_permissions,
         request_screen_recording_permission,

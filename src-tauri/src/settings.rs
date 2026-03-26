@@ -17,10 +17,17 @@ impl Default for IslandSoundSettings {
     }
 }
 
+fn default_agent_tracking_enabled() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct UserSettings {
     island_sound: IslandSoundSettings,
     island_visible: bool,
+    /// When false, agent terminal session dots are not shown on the Dynamic Island.
+    #[serde(default = "default_agent_tracking_enabled")]
+    island_agent_tracking_enabled: bool,
 }
 
 impl Default for UserSettings {
@@ -28,6 +35,7 @@ impl Default for UserSettings {
         Self {
             island_sound: IslandSoundSettings::default(),
             island_visible: true,
+            island_agent_tracking_enabled: true,
         }
     }
 }
@@ -74,6 +82,19 @@ impl SettingsStore {
         {
             let mut guard = self.data.write().unwrap();
             guard.island_visible = visible;
+            self.persist(&guard)?;
+        }
+        Ok(())
+    }
+
+    pub fn island_agent_tracking_enabled(&self) -> bool {
+        self.data.read().unwrap().island_agent_tracking_enabled
+    }
+
+    pub fn update_island_agent_tracking_enabled(&self, enabled: bool) -> Result<()> {
+        {
+            let mut guard = self.data.write().unwrap();
+            guard.island_agent_tracking_enabled = enabled;
             self.persist(&guard)?;
         }
         Ok(())
