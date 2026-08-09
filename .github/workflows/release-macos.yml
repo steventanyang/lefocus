@@ -84,6 +84,21 @@ jobs:
           chmod 600 "$api_key_path"
           echo "APPLE_API_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
 
+      - name: Validate Tauri updater signing key
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          key_check_file="$RUNNER_TEMP/lefocus-updater-key-check"
+          printf 'lefocus updater key check' > "$key_check_file"
+          if [[ -n "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" ]]; then
+            bun run tauri signer sign -k "$TAURI_SIGNING_PRIVATE_KEY" -p "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "$key_check_file"
+          else
+            bun run tauri signer sign -k "$TAURI_SIGNING_PRIVATE_KEY" "$key_check_file"
+          fi
+
       - name: Build app and updater artifacts
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}

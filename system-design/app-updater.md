@@ -29,7 +29,7 @@ Configure these repository Actions secrets before the first run:
 | `APPLE_API_KEY` | App Store Connect API key ID |
 | `APPLE_API_ISSUER` | App Store Connect API issuer ID |
 | `TAURI_SIGNING_PRIVATE_KEY` | Tauri updater private key contents |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Tauri updater key password; omit this secret if the key has no password |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Password for the Tauri updater key; required when the key is encrypted |
 
 The workflow deliberately creates a draft. Download and test the DMG, then publish
 the release manually. The in-app updater endpoint uses GitHub's latest published
