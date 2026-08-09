@@ -25,9 +25,6 @@ let package = Package(
             path: "Sources/MacOSSensing",
             exclude: [],
             sources: nil,
-            resources: [
-                .process("Resources/Sounds")
-            ],
             publicHeadersPath: nil,
             cSettings: [
                 .headerSearchPath("../CMacOSSensing/include")

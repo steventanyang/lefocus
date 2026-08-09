@@ -36,8 +36,7 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "resources/libMacOSSensing.dylib",
-      "resources/MacOSSensing_MacOSSensing.bundle"
+      "resources/libMacOSSensing.dylib"
     ]
   },
   "plugins": {
