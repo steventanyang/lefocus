@@ -38,26 +38,11 @@ struct WindowMetadataFFI {
     bounds_height: f64,
 }
 
-// DEPRECATED: OCR functionality disabled
-// #[repr(C)]
-// struct OCRResultFFI {
-//     text_ptr: *mut c_char,
-//     confidence: f64,
-//     word_count: u64,
-// }
-
 #[allow(dead_code)]
 extern "C" {
     fn macos_sensing_get_active_window_metadata() -> *mut WindowMetadataFFI;
-    // DEPRECATED: Screenshot/OCR FFI - functionality disabled
-    // fn macos_sensing_capture_screenshot(window_id: u32, out_length: *mut usize) -> *mut u8;
-    // fn macos_sensing_run_ocr(image_data: *const u8, image_length: usize) -> *mut OCRResultFFI;
-    fn macos_sensing_clear_cache();
 
     fn macos_sensing_free_window_metadata(ptr: *mut WindowMetadataFFI);
-    // DEPRECATED: Screenshot/OCR FFI - functionality disabled
-    // fn macos_sensing_free_screenshot_buffer(ptr: *mut u8);
-    // fn macos_sensing_free_ocr_result(ptr: *mut OCRResultFFI);
 
     fn macos_sensing_island_init();
     fn macos_sensing_island_start(start_uptime_ms: i64, target_ms: i64, mode: *const c_char);
@@ -73,12 +58,7 @@ extern "C" {
     fn macos_sensing_island_set_visible(visible: bool);
     fn macos_sensing_island_update_agent_sessions(sessions: *const AgentSessionFFI, count: usize);
 
-    // Permission checking
-    fn macos_sensing_check_screen_recording_permission() -> bool;
-    fn macos_sensing_request_screen_recording_permission() -> bool;
-    fn macos_sensing_check_accessibility_permission() -> bool;
-    fn macos_sensing_open_screen_recording_settings();
-    fn macos_sensing_open_accessibility_settings();
+    // Media automation permission
     fn macos_sensing_check_media_automation_permission(bundle_id: *const c_char) -> bool;
     fn macos_sensing_request_media_automation_permission(bundle_id: *const c_char) -> i32;
     fn macos_sensing_open_automation_settings();
@@ -110,14 +90,6 @@ pub struct WindowMetadata {
     pub bounds: WindowBounds,
 }
 
-// DEPRECATED: OCR functionality disabled
-// #[derive(Debug, Clone, Serialize, Deserialize)]
-// pub struct OCRResult {
-//     pub text: String,
-//     pub confidence: f64,
-//     pub word_count: u64,
-// }
-
 pub fn get_active_window_metadata() -> Result<WindowMetadata> {
     unsafe {
         let ptr = macos_sensing_get_active_window_metadata();
@@ -143,50 +115,6 @@ pub fn get_active_window_metadata() -> Result<WindowMetadata> {
 
         macos_sensing_free_window_metadata(ptr);
         Ok(metadata)
-    }
-}
-
-// DEPRECATED: Screenshot/OCR functions - functionality disabled
-// pub fn capture_screenshot(window_id: u32) -> Result<Vec<u8>> {
-//     unsafe {
-//         let mut length: usize = 0;
-//         let ptr = macos_sensing_capture_screenshot(window_id, &mut length as *mut usize);
-//
-//         if ptr.is_null() || length == 0 {
-//             bail!("Swift returned empty screenshot buffer");
-//         }
-//
-//         let slice = std::slice::from_raw_parts(ptr, length);
-//         let data = slice.to_vec();
-//         macos_sensing_free_screenshot_buffer(ptr);
-//
-//         Ok(data)
-//     }
-// }
-//
-// pub fn run_ocr(image_data: &[u8]) -> Result<OCRResult> {
-//     unsafe {
-//         let ptr = macos_sensing_run_ocr(image_data.as_ptr(), image_data.len());
-//         if ptr.is_null() {
-//             bail!("Swift returned null OCR result pointer");
-//         }
-//
-//         let ffi_data = &*ptr;
-//         let text = c_ptr_to_string(ffi_data.text_ptr).context("Failed to decode OCR text")?;
-//         let result = OCRResult {
-//             text,
-//             confidence: ffi_data.confidence,
-//             word_count: ffi_data.word_count,
-//         };
-//
-//         macos_sensing_free_ocr_result(ptr);
-//         Ok(result)
-//     }
-// }
-
-pub fn clear_cache() {
-    unsafe {
-        macos_sensing_clear_cache();
     }
 }
 
@@ -291,37 +219,6 @@ pub fn island_update_agent_sessions(sessions: &[AgentSession]) {
 
 #[cfg(not(target_os = "macos"))]
 pub fn island_update_agent_sessions(_sessions: &[AgentSession]) {}
-
-// Permission checking functions
-pub fn check_screen_recording_permission() -> bool {
-    unsafe {
-        macos_sensing_check_screen_recording_permission()
-    }
-}
-
-pub fn request_screen_recording_permission() -> bool {
-    unsafe {
-        macos_sensing_request_screen_recording_permission()
-    }
-}
-
-pub fn check_accessibility_permission() -> bool {
-    unsafe {
-        macos_sensing_check_accessibility_permission()
-    }
-}
-
-pub fn open_screen_recording_settings() {
-    unsafe {
-        macos_sensing_open_screen_recording_settings();
-    }
-}
-
-pub fn open_accessibility_settings() {
-    unsafe {
-        macos_sensing_open_accessibility_settings();
-    }
-}
 
 pub fn check_media_automation_permission(bundle_id: &str) -> bool {
     match CString::new(bundle_id) {

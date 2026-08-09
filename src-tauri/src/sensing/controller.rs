@@ -1,10 +1,8 @@
 use anyhow::{bail, Context, Result};
-use log::info;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::db::Database;
-use crate::macos_bridge;
 use crate::metrics::MetricsCollector;
 
 use super::icon_manager::IconManager;
@@ -33,11 +31,6 @@ impl SensingController {
         if self.handle.is_some() {
             bail!("sensing already active");
         }
-
-        // Clear the macOS sensing cache to prevent using stale window references
-        // from previous sessions (especially after interrupted sessions)
-        info!("Clearing macOS sensing cache before starting new session");
-        macos_bridge::clear_cache();
 
         // Reset metrics for new session
         metrics.reset().await;

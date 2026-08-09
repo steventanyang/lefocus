@@ -17,12 +17,8 @@ use labels::commands::{
     create_label, delete_label, get_labels, update_label, update_session_label,
 };
 use log::warn;
+use macos_bridge::{get_active_window_metadata, WindowMetadata};
 use metrics::{MetricsCollector, MetricsSnapshot};
-use macos_bridge::{
-    get_active_window_metadata, WindowMetadata,
-};
-// DEPRECATED: Screenshot/OCR imports removed - functionality disabled
-// use macos_bridge::{capture_screenshot, run_ocr, OCRResult};
 use settings::{IslandSoundSettings, SettingsStore};
 use std::{env, process::Command};
 
@@ -116,28 +112,6 @@ fn set_volume(volume: f32, state: State<AppState>) -> Result<String, String> {
 fn test_get_window() -> Result<WindowMetadata, String> {
     get_active_window_metadata().map_err(|e| e.to_string())
 }
-
-// DEPRECATED: Screenshot/OCR test commands - functionality disabled
-// #[tauri::command]
-// fn test_capture_screenshot(window_id: u32) -> Result<String, String> {
-//     let image_data = capture_screenshot(window_id).map_err(|e| e.to_string())?;
-//
-//     let output_path = std::path::Path::new("/tmp/lefocus_test_screenshot.png");
-//     std::fs::write(output_path, &image_data).map_err(|e| e.to_string())?;
-//
-//     Ok(format!(
-//         "Screenshot saved to {} ({} bytes)",
-//         output_path.display(),
-//         image_data.len()
-//     ))
-// }
-//
-// #[tauri::command]
-// fn test_run_ocr(image_path: String) -> Result<OCRResult, String> {
-//     let image_data = std::fs::read(&image_path).map_err(|e| e.to_string())?;
-//
-//     run_ocr(&image_data).map_err(|e| e.to_string())
-// }
 
 #[tauri::command]
 fn get_island_sound_settings(state: State<AppState>) -> Result<IslandSoundSettings, String> {
@@ -239,73 +213,6 @@ fn set_island_agent_tracking(
         .map_err(|e| e.to_string())?;
 
     Ok(())
-}
-
-#[tauri::command]
-fn check_screen_recording_permissions() -> Result<bool, String> {
-    #[cfg(target_os = "macos")]
-    {
-        Ok(macos_bridge::check_screen_recording_permission())
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        Ok(true) // On non-macOS systems, we don't need screen recording permissions
-    }
-}
-
-#[tauri::command]
-fn request_screen_recording_permission() -> Result<bool, String> {
-    #[cfg(target_os = "macos")]
-    {
-        Ok(macos_bridge::request_screen_recording_permission())
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        Ok(true)
-    }
-}
-
-#[tauri::command]
-fn check_accessibility_permissions() -> Result<bool, String> {
-    #[cfg(target_os = "macos")]
-    {
-        Ok(macos_bridge::check_accessibility_permission())
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        Ok(true) // On non-macOS systems, we don't need accessibility permissions
-    }
-}
-
-#[tauri::command]
-fn open_screen_recording_settings() -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        macos_bridge::open_screen_recording_settings();
-        Ok(())
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        Err("Screen recording settings are only available on macOS".into())
-    }
-}
-
-#[tauri::command]
-fn open_accessibility_settings() -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        macos_bridge::open_accessibility_settings();
-        Ok(())
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        Err("Accessibility settings are only available on macOS".into())
-    }
 }
 
 #[tauri::command]
@@ -499,7 +406,6 @@ pub fn run() {
             toggle_pause,
             set_volume,
             test_get_window,
-            // DEPRECATED: test_capture_screenshot, test_run_ocr - screenshot/OCR disabled
             get_timer_state,
             start_timer,
             end_timer,
@@ -523,17 +429,11 @@ pub fn run() {
             set_island_visible,
             get_island_agent_tracking,
             set_island_agent_tracking,
-        // Permission checking commands
-        check_screen_recording_permissions,
-        request_screen_recording_permission,
-        check_accessibility_permissions,
-        open_screen_recording_settings,
-        open_accessibility_settings,
-        check_media_automation_permission,
-        request_media_automation_permission,
-        open_automation_settings,
-        restart_app_instance,
-        get_metrics_snapshot,
+            check_media_automation_permission,
+            request_media_automation_permission,
+            open_automation_settings,
+            restart_app_instance,
+            get_metrics_snapshot,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

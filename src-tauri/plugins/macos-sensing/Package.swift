@@ -33,8 +33,6 @@ let package = Package(
             swiftSettings: nil,
             linkerSettings: [
                 .linkedFramework("Cocoa"),
-                .linkedFramework("ScreenCaptureKit"),
-                .linkedFramework("Vision"),
                 .linkedFramework("AVFoundation")
             ]
         )
