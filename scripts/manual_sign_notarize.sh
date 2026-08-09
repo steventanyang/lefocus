@@ -167,10 +167,19 @@ echo "You can follow it in another terminal with: tail -f $LOG_FILE"
 # Run notarytool WITHOUT --wait to avoid indefinite hanging
 # Submit and get the submission ID immediately
 echo "Submitting DMG (this may take a few minutes to upload)..."
+set +e
 SUBMISSION_OUTPUT=$(xcrun notarytool submit "$DMG_PATH" \
     --key "$AUTH_KEY" \
     --key-id "$KEY_ID" \
     --issuer "$ISSUER_ID" 2>&1 | tee -a "$LOG_FILE")
+SUBMISSION_STATUS=$?
+set -e
+
+if [ "$SUBMISSION_STATUS" -ne 0 ]; then
+    echo "ERROR: Apple notarization submission failed:" | tee -a "$LOG_FILE"
+    echo "$SUBMISSION_OUTPUT" | tee -a "$LOG_FILE"
+    exit "$SUBMISSION_STATUS"
+fi
 
 # Extract Submission ID from the output
 SUBMISSION_ID=$(echo "$SUBMISSION_OUTPUT" | grep -E "id: [a-f0-9-]+" | head -n 1 | awk '{print $2}')
