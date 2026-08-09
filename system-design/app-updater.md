@@ -7,6 +7,36 @@
 
 ## Release flow (step by step)
 
+### Automated GitHub Actions flow
+
+The workflow at `.github/workflows/release-macos.yml` builds an Apple Silicon release,
+signs and notarizes it, and creates a **draft** GitHub Release containing the DMG,
+updater archive, and `latest.json`.
+
+It can be started manually from GitHub's Actions tab or by pushing a tag matching
+`v*`. The tag must exactly match the version in `src-tauri/tauri.conf.json` (for
+example, version `1.2.0` requires tag `v1.2.0`). A manual run creates that version's
+tag when it creates the draft release.
+
+Configure these repository Actions secrets before the first run:
+
+| Secret | Value |
+|--------|-------|
+| `APPLE_CERTIFICATE_BASE64` | Base64-encoded Developer ID Application `.p12` certificate |
+| `APPLE_CERTIFICATE_PASSWORD` | Password used when exporting the `.p12` certificate |
+| `APPLE_SIGNING_IDENTITY` | Full Developer ID Application identity shown by `security find-identity -v -p codesigning` |
+| `APPLE_API_KEY_BASE64` | Base64-encoded App Store Connect API `.p8` key |
+| `APPLE_API_KEY` | App Store Connect API key ID |
+| `APPLE_API_ISSUER` | App Store Connect API issuer ID |
+| `TAURI_SIGNING_PRIVATE_KEY` | Tauri updater private key contents |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Tauri updater key password; omit this secret if the key has no password |
+
+The workflow deliberately creates a draft. Download and test the DMG, then publish
+the release manually. The in-app updater endpoint uses GitHub's latest published
+release, so draft releases are not offered to existing users.
+
+### Manual local flow
+
 ### 1. Bump version
 
 - Update `version` in `src-tauri/tauri.conf.json`
@@ -103,3 +133,21 @@ Using `/latest/download/` auto-resolves to whichever GitHub Release is tagged as
 - `tauri dev` does not test the updater — must use release builds.
 - Auto-check on launch is not implemented; updates are manual via Settings.
 - Mac App Store distribution uses store updates, not this pipeline.
+
+### Updater signing key in your shell (optional)
+
+`tauri build` and `scripts/manual_sign_notarize.sh` (Step 4) need **`TAURI_SIGNING_PRIVATE_KEY`** in the environment. Tauri does not load `.env` for this automatically.
+
+Store the minisign private key in a file only on your machine (for example `~/.tauri/lefocus.key`), **never commit it**, then add to `~/.zshrc`:
+
+```bash
+export TAURI_SIGNING_PRIVATE_KEY="$(cat ~/.tauri/lefocus.key)"
+```
+
+Reload the shell:
+
+```bash
+source ~/.zshrc
+```
+
+Or run the `export` once in the terminal before building in that session.
