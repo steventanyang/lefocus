@@ -44,25 +44,21 @@ public final class MacOSSensingPlugin {
             )
         }
 
-        if shouldRefreshCache() {
-            try await refreshWindowCache()
-        }
+        let bundleId = app.bundleIdentifier ?? ""
+        let ownerName = app.localizedName ?? bundleId
 
-        if let cachedWindow = cachedWindow(forBundleId: app.bundleIdentifier) {
-            return makeMetadata(from: cachedWindow, bundleId: app.bundleIdentifier)
-        }
-
-        try await refreshWindowCache()
-
-        guard let window = cachedWindow(forBundleId: app.bundleIdentifier) else {
-            throw NSError(
-                domain: "MacOSSensing",
-                code: 2,
-                userInfo: [NSLocalizedDescriptionKey: "No window found for active app"]
-            )
-        }
-
-        return makeMetadata(from: window, bundleId: app.bundleIdentifier)
+        // App-level tracking only needs the globally frontmost application.
+        // Keep neutral window values for the existing Rust/database contract.
+        return WindowMetadataFFI(
+            windowId: 0,
+            bundleIdPtr: bundleId.withCString { strdup($0) },
+            titlePtr: "".withCString { strdup($0) },
+            ownerNamePtr: ownerName.withCString { strdup($0) },
+            boundsX: 0,
+            boundsY: 0,
+            boundsWidth: 0,
+            boundsHeight: 0
+        )
     }
 
     private func shouldRefreshCache() -> Bool {
