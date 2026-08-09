@@ -110,10 +110,15 @@ echo "Creating $UPDATER_BUNDLE from signed $APP_PATH ..."
 # the Tauri updater fails with: failed to unpack ._lefocus.app into ...
 COPYFILE_DISABLE=1 tar -czf "$UPDATER_BUNDLE" -C "$(dirname "$APP_PATH")" "$(basename "$APP_PATH")"
 rm -f "$UPDATER_SIG"
-if [ -n "$TAURI_KEY_PASS" ]; then
-    (cd "$PROJECT_ROOT" && bun run tauri signer sign -k "$TAURI_KEY" -p "$TAURI_KEY_PASS" "$UPDATER_BUNDLE")
+if [ -f "$TAURI_KEY" ]; then
+    TAURI_KEY_ARGS=(-f "$TAURI_KEY")
 else
-    (cd "$PROJECT_ROOT" && bun run tauri signer sign -k "$TAURI_KEY" "$UPDATER_BUNDLE")
+    TAURI_KEY_ARGS=(-k "$TAURI_KEY")
+fi
+if [ -n "$TAURI_KEY_PASS" ]; then
+    (cd "$PROJECT_ROOT" && bun run tauri signer sign "${TAURI_KEY_ARGS[@]}" -p "$TAURI_KEY_PASS" "$UPDATER_BUNDLE")
+else
+    (cd "$PROJECT_ROOT" && bun run tauri signer sign "${TAURI_KEY_ARGS[@]}" "$UPDATER_BUNDLE")
 fi
 echo "Updater bundle signed: $UPDATER_SIG"
 
