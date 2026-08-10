@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { SegmentStats as Stats, AppDuration } from "@/types/segment";
+import { SegmentStats as Stats, AppDuration, Segment } from "@/types/segment";
 import { getAppColor } from "@/constants/appColors";
 import { AppleLogo, shouldShowAppleLogo } from "@/utils/appUtils";
 import { KeyBox } from "@/components/ui/KeyBox";
@@ -10,16 +10,18 @@ import { useScrollIntoView } from "@/hooks/useScrollIntoView";
 import { useSelectionState } from "@/hooks/useSelectionState";
 import { formatDuration, hexToRgba } from "@/utils/formatUtils";
 import { getDateRangeForWindow, TimeWindow, formatDateRange } from "@/utils/dateUtils";
+import { YearActivityHeatmap } from "./YearActivityHeatmap";
 
 interface StatsStatsProps {
   stats: Stats;
   showAllApps: boolean;
   onToggleShowAll: () => void;
-  viewMode: "list" | "treemap";
-  onToggleViewMode: () => void;
+  viewMode: "list" | "activity" | "treemap";
+  onViewModeChange: (mode: "list" | "activity" | "treemap") => void;
   timeWindowSelector?: React.ReactNode;
   timeWindow: TimeWindow;
   customDateRange?: { start: Date; end: Date } | null;
+  segments: Segment[];
 }
 
 export function StatsStats({
@@ -27,10 +29,11 @@ export function StatsStats({
   showAllApps,
   onToggleShowAll,
   viewMode,
-  onToggleViewMode,
+  onViewModeChange,
   timeWindowSelector,
   timeWindow,
   customDateRange,
+  segments,
 }: StatsStatsProps) {
   const [activeApp, setActiveApp] = useState<AppDuration | null>(null);
   
@@ -143,21 +146,23 @@ export function StatsStats({
         <div className="flex items-center justify-between mt-[1px]">
           <div className="flex items-center gap-4">
             <h3 className="text-base font-normal tracking-wide text-gray-800">
-              top applications
+              {viewMode === "activity" ? "focus activity" : "top applications"}
             </h3>
-            <button
-              onClick={onToggleShowAll}
-              className="text-base font-light text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-2"
-            >
-              <KeyBox selected={showAllApps} hovered={false}>{showAllApps ? "V" : "V"}</KeyBox>
-              <span>{showAllApps ? "view top apps" : "view all"}</span>
-            </button>
+            {viewMode !== "activity" && (
+              <button
+                onClick={onToggleShowAll}
+                className="text-base font-light text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-2"
+              >
+                <KeyBox selected={showAllApps} hovered={false}>V</KeyBox>
+                <span>{showAllApps ? "view top apps" : "view all"}</span>
+              </button>
+            )}
           </div>
 
           {/* View mode toggles on the right */}
           <div className="flex items-center gap-2">
             <button
-              onClick={onToggleViewMode}
+              onClick={() => onViewModeChange("list")}
               className="text-base font-light text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-2"
             >
               <KeyBox selected={viewMode === "list"} hovered={false}>L</KeyBox>
@@ -165,8 +170,17 @@ export function StatsStats({
                 list
               </span>
             </button>
+            {timeWindow === "year" && (
+              <button
+                onClick={() => onViewModeChange("activity")}
+                className="text-base font-light text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-2"
+              >
+                <KeyBox selected={viewMode === "activity"} hovered={false}>A</KeyBox>
+                <span>activity</span>
+              </button>
+            )}
             <button
-              onClick={onToggleViewMode}
+              onClick={() => onViewModeChange("treemap")}
               className="text-base font-light text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-2"
             >
               <KeyBox selected={viewMode === "treemap"} hovered={false}>T</KeyBox>
@@ -178,10 +192,12 @@ export function StatsStats({
         </div>
 
         {/* Add spacing here specifically between header and content */}
-        <div className="mt-8">
+        <div className={viewMode === "activity" ? "mt-4" : "mt-8"}>
 
         {/* Conditional rendering based on viewMode */}
-        {viewMode === "treemap" ? (
+        {viewMode === "activity" ? (
+          <YearActivityHeatmap segments={segments} year={startTime.getFullYear()} />
+        ) : viewMode === "treemap" ? (
           <div>
             <Treemap
               apps={stats.topApps}
@@ -268,4 +284,3 @@ export function StatsStats({
     </div>
   );
 }
-

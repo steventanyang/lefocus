@@ -24,10 +24,12 @@ interface StatsViewProps {
   onNavigate: (view: "timer" | "activities" | "stats") => void;
 }
 
+type StatsViewMode = "list" | "activity" | "treemap";
+
 export function StatsView({ onNavigate }: StatsViewProps) {
   const [timeWindow, setTimeWindow] = useState<TimeWindow>("day");
   const [showAllApps, setShowAllApps] = useState<boolean>(false);
-  const [viewMode, setViewMode] = useState<"list" | "treemap">("list");
+  const [viewMode, setViewMode] = useState<StatsViewMode>("list");
   const [selectedLabelId, setSelectedLabelId] = useState<number | null>(null);
   const [isLabelModalOpen, setIsLabelModalOpen] = useState<boolean>(false);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState<boolean>(false);
@@ -80,6 +82,17 @@ export function StatsView({ onNavigate }: StatsViewProps) {
         event.preventDefault();
         event.stopImmediatePropagation();
         setViewMode("treemap");
+        return;
+      }
+
+      if (
+        (event.key === "a" || event.key === "A") &&
+        !isModifierPressed &&
+        timeWindow === "year"
+      ) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setViewMode("activity");
         return;
       }
 
@@ -146,7 +159,13 @@ export function StatsView({ onNavigate }: StatsViewProps) {
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [showAllApps, isCustomModalOpen]);
+  }, [showAllApps, isCustomModalOpen, timeWindow]);
+
+  useEffect(() => {
+    if (timeWindow !== "year" && viewMode === "activity") {
+      setViewMode("list");
+    }
+  }, [timeWindow, viewMode]);
 
   // Filter segments by time window
   const filteredSegments = useMemo(() => {
@@ -322,9 +341,8 @@ export function StatsView({ onNavigate }: StatsViewProps) {
           <StatsSkeleton
             timeWindowButtons={timeWindowButtons}
             viewMode={viewMode}
-            onToggleViewMode={() =>
-              setViewMode((prev) => (prev === "list" ? "treemap" : "list"))
-            }
+            onViewModeChange={setViewMode}
+            timeWindow={timeWindow}
             showAllApps={showAllApps}
             onToggleShowAll={() => setShowAllApps(!showAllApps)}
           />
@@ -348,12 +366,11 @@ export function StatsView({ onNavigate }: StatsViewProps) {
             showAllApps={showAllApps}
             onToggleShowAll={() => setShowAllApps(!showAllApps)}
             viewMode={viewMode}
-            onToggleViewMode={() =>
-              setViewMode((prev) => (prev === "list" ? "treemap" : "list"))
-            }
+            onViewModeChange={setViewMode}
             timeWindowSelector={timeWindowButtons}
             timeWindow={timeWindow}
             customDateRange={customDateRange}
+            segments={filteredSegments}
           />
         </div>
       )}
@@ -370,8 +387,9 @@ export function StatsView({ onNavigate }: StatsViewProps) {
 
 interface StatsSkeletonProps {
   timeWindowButtons: ReactNode;
-  viewMode: "list" | "treemap";
-  onToggleViewMode: () => void;
+  viewMode: StatsViewMode;
+  onViewModeChange: (mode: StatsViewMode) => void;
+  timeWindow: TimeWindow;
   showAllApps: boolean;
   onToggleShowAll: () => void;
 }
@@ -383,7 +401,8 @@ const SkeletonBar = ({ className = "" }: { className?: string }) => (
 function StatsSkeleton({
   timeWindowButtons,
   viewMode,
-  onToggleViewMode,
+  onViewModeChange,
+  timeWindow,
   showAllApps,
   onToggleShowAll,
 }: StatsSkeletonProps) {
@@ -418,7 +437,7 @@ function StatsSkeleton({
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={onToggleViewMode}
+                onClick={() => onViewModeChange("list")}
                 className="flex items-center gap-2"
               >
                 <KeyBox selected={viewMode === "list"} hovered={false}>
@@ -428,8 +447,21 @@ function StatsSkeleton({
                   list
                 </span>
               </button>
+              {timeWindow === "year" && (
+                <button
+                  onClick={() => onViewModeChange("activity")}
+                  className="flex items-center gap-2"
+                >
+                  <KeyBox selected={viewMode === "activity"} hovered={false}>
+                    A
+                  </KeyBox>
+                  <span className="text-xs font-light text-gray-600 hover:text-gray-800 transition-colors">
+                    activity
+                  </span>
+                </button>
+              )}
               <button
-                onClick={onToggleViewMode}
+                onClick={() => onViewModeChange("treemap")}
                 className="flex items-center gap-2"
               >
                 <KeyBox selected={viewMode === "treemap"} hovered={false}>

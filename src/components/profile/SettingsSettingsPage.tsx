@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { check } from "@tauri-apps/plugin-updater";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { useSpotifyPermission } from "@/hooks/usePermissions";
 import { useIslandAgentTracking } from "@/hooks/useIslandAgentTracking";
@@ -32,6 +32,7 @@ function ToggleSwitch({
 export function SettingsSettingsPage() {
   const [updateMessage, setUpdateMessage] = useState<string | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
+  const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
 
   const {
     spotifyAutomation,
@@ -56,13 +57,18 @@ export function SettingsSettingsPage() {
     setUpdateMessage(null);
     setUpdateBusy(true);
     try {
+      if (availableUpdate) {
+        await availableUpdate.downloadAndInstall();
+        await relaunch();
+        return;
+      }
+
       const update = await check();
       if (!update) {
         setUpdateMessage("You're on the latest version.");
         return;
       }
-      await update.downloadAndInstall();
-      await relaunch();
+      setAvailableUpdate(update);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setUpdateMessage(msg);
@@ -96,18 +102,30 @@ export function SettingsSettingsPage() {
                 ) : null}
               </div>
               <p className="text-xs font-light text-gray-600">
-                Fetches the latest build, installs it, and restarts the app.
+                {availableUpdate
+                  ? "A new version is ready to download and install."
+                  : "Check for a new version before choosing whether to install it."}
               </p>
             </div>
             <button
               type="button"
               onClick={handleCheckForUpdates}
               disabled={updateBusy}
-              className={`shrink-0 bg-transparent border border-black text-black px-4 py-2 text-sm font-semibold cursor-pointer hover:bg-black hover:text-white hover:transition-none transition-all duration-200 whitespace-nowrap ${
-                updateBusy ? "bg-gray-100 text-gray-400 cursor-wait" : ""
+              className={`shrink-0 border border-black px-4 py-2 text-sm font-semibold cursor-pointer transition-all duration-200 whitespace-nowrap ${
+                updateBusy
+                  ? "bg-gray-100 text-gray-400 cursor-wait"
+                  : availableUpdate
+                    ? "bg-black text-white"
+                    : "bg-transparent text-black hover:bg-black hover:text-white hover:transition-none"
               }`}
             >
-              {updateBusy ? "checking…" : "check"}
+              {updateBusy
+                ? availableUpdate
+                  ? "updating…"
+                  : "checking…"
+                : availableUpdate
+                  ? `update to ${availableUpdate.version.startsWith("v") ? "" : "v"}${availableUpdate.version}`
+                  : "check"}
             </button>
           </div>
         </div>
