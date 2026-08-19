@@ -141,7 +141,7 @@ pub async fn get_app_details_in_time_range(
     end_time: String,
 ) -> Result<AppDetails, String> {
     let db = &state.db;
-    
+
     let start = chrono::DateTime::parse_from_rfc3339(&start_time)
         .map_err(|e| e.to_string())?
         .with_timezone(&chrono::Utc);
@@ -149,13 +149,12 @@ pub async fn get_app_details_in_time_range(
         .map_err(|e| e.to_string())?
         .with_timezone(&chrono::Utc);
 
-    let window_titles = db.get_window_titles_for_app_in_range(&bundle_id, start, end)
+    let window_titles = db
+        .get_window_titles_for_app_in_range(&bundle_id, start, end)
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok(AppDetails {
-        window_titles,
-    })
+    Ok(AppDetails { window_titles })
 }
 
 /// Legacy unpaginated session API. Stats uses bounded range queries.
@@ -210,10 +209,21 @@ pub async fn list_sessions(state: State<'_, AppState>) -> Result<Vec<SessionSumm
         app_colors.insert(bundle_id, color);
     }
 
-    // Share the same maps across all summaries (efficient - no duplication)
+    // Keep only icons used by each summary. Base64 images are large, and cloning
+    // the page-wide map into every row multiplies memory and IPC payload size.
     for summary in &mut summaries {
-        summary.app_icons = app_icons.clone();
-        summary.app_colors = app_colors.clone();
+        for app in &summary.top_apps {
+            if let Some(icon) = app_icons.get(&app.bundle_id) {
+                summary
+                    .app_icons
+                    .insert(app.bundle_id.clone(), icon.clone());
+            }
+            if let Some(color) = app_colors.get(&app.bundle_id) {
+                summary
+                    .app_colors
+                    .insert(app.bundle_id.clone(), color.clone());
+            }
+        }
     }
 
     Ok(summaries)
@@ -277,10 +287,20 @@ pub async fn list_sessions_paginated(
         app_colors.insert(bundle_id, color);
     }
 
-    // Share the same maps across all summaries (efficient - no duplication)
+    // Keep only icons used by each summary to avoid duplicating page-wide base64 data.
     for summary in &mut summaries {
-        summary.app_icons = app_icons.clone();
-        summary.app_colors = app_colors.clone();
+        for app in &summary.top_apps {
+            if let Some(icon) = app_icons.get(&app.bundle_id) {
+                summary
+                    .app_icons
+                    .insert(app.bundle_id.clone(), icon.clone());
+            }
+            if let Some(color) = app_colors.get(&app.bundle_id) {
+                summary
+                    .app_colors
+                    .insert(app.bundle_id.clone(), color.clone());
+            }
+        }
     }
 
     Ok(summaries)
@@ -288,5 +308,9 @@ pub async fn list_sessions_paginated(
 
 #[tauri::command]
 pub async fn delete_session(state: State<'_, AppState>, session_id: String) -> Result<(), String> {
-    state.db.delete_session(&session_id).await.map_err(|e| e.to_string())
+    state
+        .db
+        .delete_session(&session_id)
+        .await
+        .map_err(|e| e.to_string())
 }

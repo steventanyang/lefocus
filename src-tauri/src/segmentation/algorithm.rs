@@ -95,27 +95,29 @@ pub fn segment_session(
         .flat_map(|swr| swr.readings)
         .collect();
 
-    // Step 6: Compute aggregates and scores for each segment
+    // Step 6: Compute aggregates and scores in one ordered pass. Both inputs
+    // are chronological, so rescanning every reading for every segment is unnecessary.
+    let mut reading_index = 0;
     for segment in &mut final_segments {
-        // Find readings that belong to this segment (by time range)
-        let segment_readings: Vec<&ContextReading> = all_readings
-            .iter()
-            .filter(|r| r.timestamp >= segment.start_time && r.timestamp <= segment.end_time)
-            .collect();
-
-        let segment_readings_vec: Vec<ContextReading> =
-            segment_readings.iter().map(|r| (*r).clone()).collect();
+        while reading_index < all_readings.len()
+            && all_readings[reading_index].timestamp < segment.start_time
+        {
+            reading_index += 1;
+        }
+        let segment_start = reading_index;
+        while reading_index < all_readings.len()
+            && all_readings[reading_index].timestamp <= segment.end_time
+        {
+            reading_index += 1;
+        }
+        let segment_readings = &all_readings[segment_start..reading_index];
 
         // Update reading_count based on actual readings in this segment (accounts for merged segments)
         segment.reading_count = segment_readings.len() as i64;
 
         // Compute confidence scores
         let (confidence, duration_score, stability_score) =
-            crate::segmentation::scoring::compute_confidence(
-                segment,
-                &segment_readings_vec,
-                config,
-            );
+            crate::segmentation::scoring::compute_confidence(segment, segment_readings, config);
 
         segment.confidence = confidence;
         segment.duration_score = Some(duration_score);
@@ -196,20 +198,23 @@ pub fn group_readings(readings: Vec<ContextReading>) -> Vec<ReadingGroup> {
         match &mut current_group {
             Some(group) if group.bundle_id == reading.window_metadata.bundle_id => {
                 // Same bundle_id, extend current group
-                group.readings.push(reading.clone());
                 group.end_time = reading.timestamp;
+                group.readings.push(reading);
             }
             _ => {
                 // Different bundle_id or no current group, start new group
                 if let Some(group) = current_group.take() {
                     groups.push(group);
                 }
+                let bundle_id = reading.window_metadata.bundle_id.clone();
+                let app_name = reading.window_metadata.owner_name.clone();
+                let timestamp = reading.timestamp;
                 current_group = Some(ReadingGroup {
-                    bundle_id: reading.window_metadata.bundle_id.clone(),
-                    app_name: reading.window_metadata.owner_name.clone(),
-                    readings: vec![reading.clone()],
-                    start_time: reading.timestamp,
-                    end_time: reading.timestamp,
+                    bundle_id,
+                    app_name,
+                    readings: vec![reading],
+                    start_time: timestamp,
+                    end_time: timestamp,
                 });
             }
         }
