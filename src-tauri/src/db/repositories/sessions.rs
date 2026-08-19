@@ -1,11 +1,13 @@
-use anyhow::Result;
+use std::collections::HashMap;
+
+use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, OptionalExtension, Row};
 
 use crate::db::{
     connection::Database,
     helpers::{parse_datetime, parse_optional_datetime, parse_status, to_i64, to_u64},
-    models::{Session, SessionStatus},
+    models::{Session, SessionStatus, SessionSummary, TopApp},
 };
 
 fn row_to_session(row: &Row) -> Result<Session> {
@@ -126,22 +128,21 @@ impl Database {
         .await
     }
 
-    pub async fn get_incomplete_session(&self) -> Result<Option<Session>> {
+    pub async fn get_incomplete_sessions(&self) -> Result<Vec<Session>> {
         self.execute(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT id, started_at, stopped_at, status, target_ms, active_ms, label_id, created_at, updated_at
                  FROM sessions
                  WHERE status = 'Running'
-                 ORDER BY started_at DESC
-                 LIMIT 1",
+                 ORDER BY started_at ASC",
             )?;
 
             let mut rows = stmt.query([])?;
-            let session = match rows.next()? {
-                Some(row) => Some(row_to_session(&row)?),
-                None => None,
-            };
-            Ok(session)
+            let mut sessions = Vec::new();
+            while let Some(row) = rows.next()? {
+                sessions.push(row_to_session(row)?);
+            }
+            Ok(sessions)
         })
         .await
     }
@@ -220,6 +221,133 @@ impl Database {
         .await
     }
 
+    /// Load a page of activity summaries, including each session's top three
+    /// apps and icon metadata, in a single database task and SQL query.
+    pub async fn list_session_summaries(
+        &self,
+        limit: Option<usize>,
+        offset: usize,
+    ) -> Result<Vec<SessionSummary>> {
+        let limit = match limit {
+            Some(value) => i64::try_from(value).context("session page limit is too large")?,
+            None => -1,
+        };
+        let offset = i64::try_from(offset).context("session page offset is too large")?;
+
+        self.execute(move |conn| {
+            let mut stmt = conn.prepare(
+                "WITH page AS (
+                    SELECT id, started_at, stopped_at, status, target_ms, active_ms, label_id
+                    FROM sessions
+                    WHERE status IN ('Completed', 'Interrupted')
+                    ORDER BY started_at DESC, id DESC
+                    LIMIT ?1 OFFSET ?2
+                 ),
+                 app_totals AS (
+                    SELECT
+                        segments.session_id,
+                        segments.bundle_id,
+                        MAX(segments.app_name) AS app_name,
+                        SUM(segments.duration_secs) AS app_duration_secs
+                    FROM segments
+                    INNER JOIN page ON page.id = segments.session_id
+                    GROUP BY segments.session_id, segments.bundle_id
+                 ),
+                 ranked_apps AS (
+                    SELECT
+                        session_id,
+                        bundle_id,
+                        app_name,
+                        app_duration_secs,
+                        SUM(app_duration_secs) OVER (PARTITION BY session_id) AS total_duration_secs,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY session_id
+                            ORDER BY app_duration_secs DESC, bundle_id ASC
+                        ) AS app_rank
+                    FROM app_totals
+                 )
+                 SELECT
+                    page.id AS session_id,
+                    page.started_at,
+                    page.stopped_at,
+                    page.status,
+                    page.target_ms,
+                    page.active_ms,
+                    page.label_id,
+                    ranked_apps.bundle_id,
+                    ranked_apps.app_name,
+                    ranked_apps.app_duration_secs,
+                    ranked_apps.total_duration_secs,
+                    ranked_apps.app_rank,
+                    apps.icon_data_url,
+                    apps.icon_color
+                 FROM page
+                 LEFT JOIN ranked_apps
+                    ON ranked_apps.session_id = page.id AND ranked_apps.app_rank <= 3
+                 LEFT JOIN apps ON apps.bundle_id = ranked_apps.bundle_id
+                 ORDER BY page.started_at DESC, page.id DESC, ranked_apps.app_rank ASC",
+            )?;
+
+            let mut rows = stmt.query(params![limit, offset])?;
+            let mut summaries = Vec::<SessionSummary>::new();
+
+            while let Some(row) = rows.next()? {
+                let session_id: String = row.get("session_id")?;
+                if summaries.last().is_none_or(|summary| summary.id != session_id) {
+                    let started_at: String = row.get("started_at")?;
+                    let stopped_at: Option<String> = row.get("stopped_at")?;
+                    let status: String = row.get("status")?;
+                    let target_ms: i64 = row.get("target_ms")?;
+                    let active_ms: i64 = row.get("active_ms")?;
+
+                    summaries.push(SessionSummary {
+                        id: session_id.clone(),
+                        started_at: parse_datetime(&started_at, "started_at")?,
+                        stopped_at: parse_optional_datetime(stopped_at, "stopped_at")?,
+                        status: parse_status(&status)?,
+                        target_ms: to_u64(target_ms, "target_ms")?,
+                        active_ms: to_u64(active_ms, "active_ms")?,
+                        label_id: row.get("label_id")?,
+                        top_apps: Vec::new(),
+                        app_icons: HashMap::new(),
+                        app_colors: HashMap::new(),
+                    });
+                }
+
+                let Some(bundle_id) = row.get::<_, Option<String>>("bundle_id")? else {
+                    continue;
+                };
+                let duration_secs: i64 = row.get("app_duration_secs")?;
+                let total_duration_secs: i64 = row.get("total_duration_secs")?;
+                let percentage = if total_duration_secs > 0 {
+                    duration_secs as f64 * 100.0 / total_duration_secs as f64
+                } else {
+                    0.0
+                };
+
+                let summary = summaries
+                    .last_mut()
+                    .expect("a summary is inserted before its top-app row");
+                summary.top_apps.push(TopApp {
+                    bundle_id: bundle_id.clone(),
+                    app_name: row.get("app_name")?,
+                    duration_secs: u32::try_from(duration_secs)
+                        .context("top-app duration does not fit in u32")?,
+                    percentage,
+                });
+                summary
+                    .app_icons
+                    .insert(bundle_id.clone(), row.get("icon_data_url")?);
+                summary
+                    .app_colors
+                    .insert(bundle_id, row.get("icon_color")?);
+            }
+
+            Ok(summaries)
+        })
+        .await
+    }
+
     /// Update the label_id for a session
     pub async fn update_session_label(
         &self,
@@ -259,14 +387,22 @@ impl Database {
         .await
     }
 
-    /// Delete a session and all its related data (segments, interruptions)
-    /// 
-    /// Note: `context_readings` are automatically deleted via ON DELETE CASCADE
-    /// foreign key constraint (defined in schema_v4.sql). No manual deletion needed.
+    /// Delete a session and all its related data.
     pub async fn delete_session(&self, session_id: &str) -> Result<()> {
         let session_id = session_id.to_string();
         self.execute(move |conn| {
             let tx = conn.transaction()?;
+
+            // Keep these explicit as defense in depth even though the schema also
+            // defines ON DELETE CASCADE for both storage representations.
+            tx.execute(
+                "DELETE FROM session_reading_archives WHERE session_id = ?1",
+                params![session_id],
+            )?;
+            tx.execute(
+                "DELETE FROM activity_runs WHERE session_id = ?1",
+                params![session_id],
+            )?;
 
             // 1. Delete interruptions for segments belonging to this session
             tx.execute(
@@ -281,12 +417,9 @@ impl Database {
                 params![session_id],
             )?;
 
-            // 3. Delete the session itself
-            // Note: context_readings are automatically deleted via ON DELETE CASCADE
-            let rows_affected = tx.execute(
-                "DELETE FROM sessions WHERE id = ?1",
-                params![session_id],
-            )?;
+            // 3. Delete the session itself. Raw readings cascade from schema_v4.
+            let rows_affected =
+                tx.execute("DELETE FROM sessions WHERE id = ?1", params![session_id])?;
 
             if rows_affected == 0 {
                 // Don't fail if session is already gone, just commit

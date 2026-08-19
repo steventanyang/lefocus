@@ -1,16 +1,83 @@
 use std::collections::BTreeMap;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::{DateTime, Local, Utc};
 use rusqlite::params;
 
 use crate::db::{
     connection::Database,
     helpers::parse_datetime,
-    models::{DailyActivity, StatsApp, StatsRange},
+    models::{AppSessionUsage, DailyActivity, StatsApp, StatsRange},
 };
 
 impl Database {
+    pub async fn get_app_sessions_in_range(
+        &self,
+        bundle_id: &str,
+        start_time: DateTime<Utc>,
+        end_time: DateTime<Utc>,
+        label_id: Option<i64>,
+        limit: usize,
+        offset: usize,
+    ) -> Result<Vec<AppSessionUsage>> {
+        let bundle_id = bundle_id.to_string();
+        let limit = i64::try_from(limit).context("app session page limit is too large")?;
+        let offset = i64::try_from(offset).context("app session page offset is too large")?;
+        self.execute(move |conn| {
+            let mut statement = conn.prepare(
+                "WITH app_usage AS (
+                    SELECT segments.session_id,
+                           SUM(segments.duration_secs) AS app_duration_secs
+                    FROM segments INDEXED BY idx_segments_start_time
+                    INNER JOIN sessions ON sessions.id = segments.session_id
+                    WHERE segments.bundle_id = ?1
+                      AND segments.start_time >= ?2
+                      AND segments.start_time <= ?3
+                      AND sessions.status IN ('Completed', 'Interrupted')
+                      AND (?4 IS NULL OR sessions.label_id = ?4)
+                    GROUP BY segments.session_id
+                 )
+                 SELECT sessions.id,
+                        sessions.started_at,
+                        sessions.stopped_at,
+                        sessions.status,
+                        app_usage.app_duration_secs,
+                        COALESCE((
+                            SELECT SUM(all_segments.duration_secs)
+                            FROM segments AS all_segments
+                            WHERE all_segments.session_id = sessions.id
+                        ), 0) AS session_duration_secs
+                 FROM app_usage
+                 INNER JOIN sessions ON sessions.id = app_usage.session_id
+                 ORDER BY sessions.started_at DESC, sessions.id DESC
+                 LIMIT ?5 OFFSET ?6",
+            )?;
+            let rows = statement.query_map(
+                params![
+                    bundle_id,
+                    start_time.to_rfc3339(),
+                    end_time.to_rfc3339(),
+                    label_id,
+                    limit,
+                    offset,
+                ],
+                |row| {
+                    Ok(AppSessionUsage {
+                        session_id: row.get(0)?,
+                        started_at: row.get(1)?,
+                        stopped_at: row.get(2)?,
+                        status: row.get(3)?,
+                        app_duration_secs: row.get(4)?,
+                        session_duration_secs: row.get(5)?,
+                    })
+                },
+            )?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(Into::into)
+        })
+        .await
+    }
+
     /// Return the aggregate data needed by the stats list and treemap.
     pub async fn get_stats_in_range(
         &self,

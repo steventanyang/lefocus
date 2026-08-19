@@ -92,7 +92,7 @@ pub struct SessionSummary {
     pub label_id: Option<i64>,
     pub top_apps: Vec<TopApp>,
     /// Map of bundle_id -> icon_data_url (base64 PNG)
-    /// Deduplicates icons across all sessions returned in the list
+    /// Contains only icons referenced by this session's top apps.
     pub app_icons: HashMap<String, Option<String>>,
     /// Map of bundle_id -> icon_color (hex string like "#AABBCC")
     /// Dominant color extracted from app icons

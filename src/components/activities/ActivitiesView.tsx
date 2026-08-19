@@ -84,9 +84,6 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
   const selectedIndex =
     filteredSessions.length > 0 ? (selectedIndexState ?? 0) : null;
 
-  // Fetch segments for all sessions in parallel with automatic caching and deduplication
-  const { segmentsBySession } = useSegmentsForSessions(filteredSessions);
-
   // Wrapper to set selectedIndex and clear delete confirmation
   const handleSetSelectedIndex = useCallback(
     (index: number | null | ((prev: number | null) => number | null)) => {
@@ -159,6 +156,17 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
     overscan: 5, // Render 5 extra items outside viewport for smooth scrolling
     enabled: viewMode === "list" && filteredSessions.length > 0,
   });
+
+  // Only list cards render segment timelines. Fetch the visible rows plus
+  // virtualizer overscan instead of retaining details for the entire history.
+  const visibleListSessions =
+    viewMode === "list"
+      ? virtualizer
+          .getVirtualItems()
+          .map((item) => filteredSessions[item.index])
+          .filter((session): session is SessionSummary => session !== undefined)
+      : [];
+  const { segmentsBySession } = useSegmentsForSessions(visibleListSessions);
 
   // Restore scroll position when coming back from session
   // This is a valid use of useEffect: synchronizing with DOM (external system)

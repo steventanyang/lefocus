@@ -189,24 +189,41 @@ impl Database {
         &self,
         segment_id: &str,
     ) -> Result<Vec<(String, i64)>> {
-        const READING_INTERVAL_SECS: i64 = 5;
         let segment_id = segment_id.to_string();
         self.execute(move |conn| {
             let mut stmt = conn.prepare(
-                "SELECT window_title, COUNT(*) as reading_count
-                FROM context_readings
-                WHERE segment_id = ?1
-                AND window_title IS NOT NULL
-                AND window_title != ''
-                GROUP BY window_title
-                ORDER BY reading_count DESC",
+                "WITH target AS (
+                    SELECT session_id, start_time, end_time
+                    FROM segments WHERE id = ?1
+                 ), title_samples AS (
+                    SELECT activity_runs.window_title AS title,
+                           activity_runs.sample_count AS samples
+                    FROM activity_runs, target
+                    WHERE activity_runs.session_id = target.session_id
+                      AND activity_runs.start_time >= target.start_time
+                      AND activity_runs.start_time <= target.end_time
+                      AND activity_runs.window_title IS NOT NULL
+                      AND activity_runs.window_title != ''
+                    UNION ALL
+                    SELECT context_readings.window_title AS title, 1 AS samples
+                    FROM context_readings, target
+                    WHERE context_readings.segment_id = ?1
+                      AND context_readings.window_title IS NOT NULL
+                      AND context_readings.window_title != ''
+                      AND NOT EXISTS (
+                          SELECT 1 FROM activity_runs
+                          WHERE activity_runs.session_id = target.session_id
+                      )
+                 )
+                 SELECT title, SUM(samples) * 5 AS duration_secs
+                 FROM title_samples
+                 GROUP BY title
+                 ORDER BY duration_secs DESC",
             )?;
 
             let titles_iter = stmt.query_map(params![segment_id], |row| {
                 let title: String = row.get(0)?;
-                let count: i64 = row.get(1)?;
-                let duration_secs = count * READING_INTERVAL_SECS;
-                Ok((title, duration_secs))
+                Ok((title, row.get(1)?))
             })?;
 
             let mut titles = Vec::new();
@@ -219,45 +236,4 @@ impl Database {
         .await
     }
 
-    /// Get aggregated window titles for a specific app within a time range.
-    pub async fn get_window_titles_for_app_in_range(
-        &self,
-        bundle_id: &str,
-        start_time: DateTime<Utc>,
-        end_time: DateTime<Utc>,
-    ) -> Result<Vec<(String, i64)>> {
-        const READING_INTERVAL_SECS: i64 = 5;
-        let bundle_id = bundle_id.to_string();
-        self.execute(move |conn| {
-            let mut stmt = conn.prepare(
-                "SELECT window_title, COUNT(*) as reading_count
-                FROM context_readings
-                WHERE bundle_id = ?1
-                AND timestamp >= ?2
-                AND timestamp <= ?3
-                AND window_title IS NOT NULL
-                AND window_title != ''
-                GROUP BY window_title
-                ORDER BY reading_count DESC",
-            )?;
-
-            let titles_iter = stmt.query_map(
-                params![bundle_id, start_time.to_rfc3339(), end_time.to_rfc3339()],
-                |row| {
-                    let title: String = row.get(0)?;
-                    let count: i64 = row.get(1)?;
-                    let duration_secs = count * READING_INTERVAL_SECS;
-                    Ok((title, duration_secs))
-                },
-            )?;
-
-            let mut titles = Vec::new();
-            for title_result in titles_iter {
-                titles.push(title_result?);
-            }
-
-            Ok(titles)
-        })
-        .await
-    }
 }

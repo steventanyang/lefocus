@@ -18,6 +18,8 @@ public final class MediaMonitor {
     private var metadataTimer: Timer?
     private var metadataInterval: TimeInterval = 1.0
     private var isPolling = false
+    private var isSleeping = false
+    private var pollingGeneration: UInt64 = 0
     private var pollStartTime: Date?
     private static let maxPollDuration: TimeInterval = 10.0
     private var currentTrack: TrackInfo?
@@ -28,6 +30,8 @@ public final class MediaMonitor {
 
     public func startMonitoring() {
         guard metadataTimer == nil else { return }
+        isSleeping = false
+        pollingGeneration &+= 1
         metadataInterval = 1.0
         isPolling = false
         mediaRemoteProbe.startMonitoring()
@@ -37,6 +41,8 @@ public final class MediaMonitor {
     }
 
     public func stopMonitoring() {
+        isSleeping = true
+        pollingGeneration &+= 1
         metadataTimer?.invalidate()
         metadataTimer = nil
         metadataInterval = 1.0
@@ -92,19 +98,27 @@ public final class MediaMonitor {
 
     @objc private func handleSleep(_ notification: Notification) {
         NSLog("[MediaMonitor] System going to sleep")
+        isSleeping = true
+        pollingGeneration &+= 1
+        metadataTimer?.invalidate()
+        metadataTimer = nil
     }
 
     @objc private func handleWake(_ notification: Notification) {
         NSLog("[MediaMonitor] System woke up — resetting poll state and rescheduling timer")
+        isSleeping = false
+        pollingGeneration &+= 1
         isPolling = false
+        pollStartTime = nil
         metadataTimer?.invalidate()
         metadataTimer = nil
         metadataInterval = 1.0
         ensureMetadataTimer()
         // Delay refresh slightly to let apps recover
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self, !self.isSleeping else { return }
             NSLog("[MediaMonitor] Post-wake refresh triggered")
-            self?.refreshMetadata()
+            self.refreshMetadata()
         }
     }
 
@@ -126,6 +140,7 @@ public final class MediaMonitor {
     }
 
     private func refreshMetadata() {
+        guard !isSleeping else { return }
         if isPolling {
             // Check if the previous poll has been stuck too long
             if let start = pollStartTime, Date().timeIntervalSince(start) > Self.maxPollDuration {
@@ -139,10 +154,12 @@ public final class MediaMonitor {
         }
         isPolling = true
         pollStartTime = Date()
+        let generation = pollingGeneration
         pollingQueue.async { [weak self] in
             guard let self else { return }
             let snapshot = self.captureSnapshot()
             DispatchQueue.main.async {
+                guard !self.isSleeping, generation == self.pollingGeneration else { return }
                 self.apply(snapshot: snapshot)
                 let desiredInterval: TimeInterval = snapshot?.track.isPlaying == true ? 0.5 : 1.0
                 if abs(desiredInterval - self.metadataInterval) > 0.01 {
@@ -155,15 +172,6 @@ public final class MediaMonitor {
     }
 
     private func captureSnapshot() -> MediaSnapshot? {
-        let music = musicProbe.snapshot()
-        if let music, music.track.isPlaying {
-            return MediaSnapshot(
-                track: music.track,
-                bundleID: music.track.sourceBundleID,
-                artworkHint: music.hint
-            )
-        }
-
         // Browsers do not expose useful metadata through public macOS APIs.
         // MediaRemote supplies the system Now Playing session used by Control Center.
         let systemMedia = mediaRemoteProbe.snapshot()
@@ -174,6 +182,13 @@ public final class MediaMonitor {
                 artworkHint: nil
             )
         }
+
+        // AppleScript is a fallback for Music versions that do not publish a
+        // current Control Center session.
+        let isMusicRunning = NSWorkspace.shared.runningApplications.contains {
+            $0.bundleIdentifier == "com.apple.Music"
+        }
+        let music = isMusicRunning ? musicProbe.snapshot() : nil
 
         // Preserve paused Music when Control Center has no current session.
         if let music {
@@ -380,8 +395,8 @@ private struct MusicMetadataProbe: MediaAppProbe {
             return nil
         }
 
-        let position: TimeInterval? = components.count >= 6 ? Double(components[4]) : nil
-        let duration: TimeInterval? = components.count >= 6 ? Double(components[5]) : nil
+        let position: TimeInterval? = components.count >= 5 ? Double(components[3]) : nil
+        let duration: TimeInterval? = components.count >= 5 ? Double(components[4]) : nil
 
         let track = TrackInfo(
             title: components[0].isEmpty ? "Unknown" : components[0],
@@ -394,15 +409,7 @@ private struct MusicMetadataProbe: MediaAppProbe {
             canSeek: true
         )
 
-        let base64Artwork = components.count >= 4 ? components[3].trimmingCharacters(in: .whitespacesAndNewlines) : ""
-        let hint: ArtworkHint?
-        if !base64Artwork.isEmpty {
-            hint = .appleMusicBase64(base64Artwork)
-        } else {
-            hint = nil
-        }
-
-        return ProbeResult(track: track, hint: hint)
+        return ProbeResult(track: track, hint: nil)
     }
 
     private static let script = """
@@ -417,27 +424,9 @@ private struct MusicMetadataProbe: MediaAppProbe {
         set trackName to name of current track
         set trackArtist to artist of current track
         set trackState to player state as string
-        set artData to ""
-        set tempPath to ""
-        try
-            set tempPath to POSIX path of (path to temporary items folder) & "lefocus_music_art_" & (random number from 100000 to 999999)
-            set rawData to raw data of artwork 1 of current track
-            set fileRef to open for access tempPath with write permission
-            set eof fileRef to 0
-            write rawData to fileRef
-            close access fileRef
-            set artData to do shell script "/usr/bin/base64 -i " & quoted form of tempPath
-            do shell script "rm " & quoted form of tempPath
-        on error
-            if tempPath is not "" then
-                try
-                    do shell script "rm " & quoted form of tempPath
-                end try
-            end if
-        end try
         set pos to player position as string
         set dur to duration of current track as string
-        return trackName & separator & trackArtist & separator & trackState & separator & artData & separator & pos & separator & dur
+        return trackName & separator & trackArtist & separator & trackState & separator & pos & separator & dur
     end tell
     """
 }

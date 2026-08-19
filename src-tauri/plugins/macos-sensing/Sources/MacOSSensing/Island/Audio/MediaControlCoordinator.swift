@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import Foundation
 
 enum MediaCommand {
@@ -12,25 +13,37 @@ enum MediaCommand {
 final class MediaControlCoordinator {
     private let appleScriptController = AppleScriptMediaController()
     private let mediaKeyController = MediaKeyController()
+    private let controlQueue = DispatchQueue(
+        label: "MacOSSensing.MediaControlCoordinator",
+        qos: .userInitiated
+    )
 
     func togglePlayback(for bundleID: String?) {
-        if appleScriptController.perform(.toggle, bundleID: bundleID) { return }
-        mediaKeyController.playPause()
+        controlQueue.async { [appleScriptController, mediaKeyController] in
+            if appleScriptController.perform(.toggle, bundleID: bundleID) { return }
+            mediaKeyController.playPause()
+        }
     }
 
     func skipToNext(for bundleID: String?) {
-        if appleScriptController.perform(.next, bundleID: bundleID) { return }
-        mediaKeyController.nextTrack()
+        controlQueue.async { [appleScriptController, mediaKeyController] in
+            if appleScriptController.perform(.next, bundleID: bundleID) { return }
+            mediaKeyController.nextTrack()
+        }
     }
 
     func skipToPrevious(for bundleID: String?) {
-        if appleScriptController.perform(.previous, bundleID: bundleID) { return }
-        mediaKeyController.previousTrack()
+        controlQueue.async { [appleScriptController, mediaKeyController] in
+            if appleScriptController.perform(.previous, bundleID: bundleID) { return }
+            mediaKeyController.previousTrack()
+        }
     }
 
     func seek(to position: TimeInterval, bundleID: String?) {
-        _ = appleScriptController.seek(to: position, bundleID: bundleID)
-        // No media-key fallback for seeking; unsupported sources are ignored.
+        controlQueue.async { [appleScriptController] in
+            _ = appleScriptController.seek(to: position, bundleID: bundleID)
+            // No media-key fallback for seeking; unsupported sources are ignored.
+        }
     }
 }
 
@@ -134,44 +147,62 @@ enum AppleScriptRunner {
     /// 3s is generous for normal execution (~100ms) but prevents multi-second hangs
     /// when a media app is starting up or unresponsive.
     private static let defaultTimeout: TimeInterval = 3.0
+    private static let executionQueue = DispatchQueue(
+        label: "MacOSSensing.AppleScriptRunner",
+        qos: .userInitiated
+    )
 
     static func execute(_ source: String) -> Bool {
-        return runWithTimeout(timeout: defaultTimeout) {
-            guard let script = NSAppleScript(source: source) else {
-                return false
-            }
-            var error: NSDictionary?
-            script.executeAndReturnError(&error)
-            return error == nil
-        } ?? false
+        executionQueue.sync {
+            run(source, captureOutput: false, timeout: defaultTimeout) != nil
+        }
     }
 
     static func evaluateString(_ source: String) -> String? {
-        return runWithTimeout(timeout: defaultTimeout) {
-            guard let script = NSAppleScript(source: source) else {
-                return nil as String?
-            }
-            var error: NSDictionary?
-            let descriptor = script.executeAndReturnError(&error)
-            guard error == nil else { return nil }
-            return descriptor.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines)
-        } ?? nil
+        executionQueue.sync {
+            run(source, captureOutput: true, timeout: defaultTimeout)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
     }
 
-    /// Run a closure on a background queue with a timeout.
-    /// Returns nil if the timeout expires — the next poll cycle will retry.
-    private static func runWithTimeout<T>(timeout: TimeInterval, body: @escaping () -> T) -> T? {
-        let semaphore = DispatchSemaphore(value: 0)
-        var result: T?
-        DispatchQueue.global(qos: .userInitiated).async {
-            result = body()
-            semaphore.signal()
-        }
-        let waitResult = semaphore.wait(timeout: .now() + timeout)
-        if waitResult == .timedOut {
-            // NSLog("[MediaMonitor] AppleScript timed out after %.1fs", timeout)
+    /// Execute AppleScript out of process so a compiler/runtime fault cannot crash LeFocus.
+    /// The serial queue also guarantees a timed-out poll cannot overlap the next invocation.
+    private static func run(
+        _ source: String,
+        captureOutput: Bool,
+        timeout: TimeInterval
+    ) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+        process.arguments = ["-e", source]
+        process.standardError = FileHandle.nullDevice
+
+        let outputPipe = captureOutput ? Pipe() : nil
+        process.standardOutput = outputPipe ?? FileHandle.nullDevice
+
+        let terminated = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in terminated.signal() }
+
+        do {
+            try process.run()
+        } catch {
+            NSLog("[AppleScriptRunner] Failed to launch osascript: %@", error.localizedDescription)
             return nil
         }
-        return result
+
+        if terminated.wait(timeout: .now() + timeout) == .timedOut {
+            process.terminate()
+            if terminated.wait(timeout: .now() + 0.5) == .timedOut {
+                Darwin.kill(process.processIdentifier, SIGKILL)
+                _ = terminated.wait(timeout: .now() + 0.5)
+            }
+            NSLog("[AppleScriptRunner] osascript timed out after %.1fs", timeout)
+            return nil
+        }
+
+        guard process.terminationStatus == 0 else { return nil }
+        guard let outputPipe else { return "" }
+        let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        return String(data: data, encoding: .utf8)
     }
 }

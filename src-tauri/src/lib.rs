@@ -1,5 +1,5 @@
-mod audio;
 mod agent_monitor;
+mod audio;
 mod db;
 mod labels;
 mod macos_bridge;
@@ -7,11 +7,11 @@ mod metrics;
 mod segmentation;
 mod sensing;
 mod settings;
+mod storage_compaction;
 mod timer;
 mod utils;
 
 use audio::AudioEngineHandle;
-use chrono::Utc;
 use db::Database;
 use labels::commands::{
     create_label, delete_label, get_labels, update_label, update_session_label,
@@ -25,7 +25,7 @@ use std::{env, process::Command};
 use tauri::{Emitter, Manager, State};
 use timer::{
     commands::{
-        cancel_timer, delete_session, end_timer, get_app_details_in_time_range,
+        cancel_timer, delete_session, end_timer, get_app_sessions_in_time_range,
         get_daily_activity_in_time_range, get_interruptions_for_segment, get_segments_for_session,
         get_stats_in_time_range, get_timer_state, get_window_titles_for_segment, list_sessions,
         list_sessions_paginated, start_timer,
@@ -136,7 +136,10 @@ fn set_island_sound_settings(
 }
 
 #[tauri::command]
-fn preview_island_chime(sound_id: Option<String>, sound_id_camel: Option<String>) -> Result<(), String> {
+fn preview_island_chime(
+    sound_id: Option<String>,
+    sound_id_camel: Option<String>,
+) -> Result<(), String> {
     let sound_id = sound_id
         .or(sound_id_camel)
         .ok_or_else(|| "sound_id is required".to_string())?;
@@ -211,7 +214,8 @@ fn set_island_agent_tracking(
 
 #[tauri::command]
 fn restart_app_instance(app_handle: tauri::AppHandle) -> Result<(), String> {
-    let current_exe = env::current_exe().map_err(|e| format!("Failed to locate executable: {e}"))?;
+    let current_exe =
+        env::current_exe().map_err(|e| format!("Failed to locate executable: {e}"))?;
 
     Command::new(&current_exe)
         .spawn()
@@ -226,6 +230,18 @@ async fn get_metrics_snapshot(state: State<'_, AppState>) -> Result<MetricsSnaps
     Ok(state.metrics.get_snapshot().await)
 }
 
+/// Recovery tool for a verified archive. Normal UI queries use activity runs and
+/// do not need to expand raw readings.
+#[tauri::command]
+async fn restore_session_readings(
+    session_id: String,
+    state: State<'_, AppState>,
+) -> Result<usize, String> {
+    storage_compaction::restore_session_readings(&state.db, &session_id)
+        .await
+        .map_err(|error| error.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize logging (reads RUST_LOG env var)
@@ -238,7 +254,6 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let result = (|| -> anyhow::Result<()> {
                 let app_data_dir = app
@@ -254,14 +269,55 @@ pub fn run() {
                 {
                     let db_for_recovery = database.clone();
                     tauri::async_runtime::block_on(async move {
-                        if let Some(session) = db_for_recovery.get_incomplete_session().await? {
-                            let now = Utc::now();
+                        for session in db_for_recovery.get_incomplete_sessions().await? {
+                            // The last heartbeat is the last duration we durably observed;
+                            // charging sleep/crash downtime to the session would inflate it.
+                            let stopped_at = session.updated_at;
                             warn!(
-                                "Recovered incomplete session {}; marking as Interrupted",
+                                "Recovering incomplete session {}; marking as Interrupted",
                                 session.id
                             );
+
+                            let recovery_result = async {
+                                use crate::segmentation::{segment_session, SegmentationConfig};
+                                let readings = db_for_recovery
+                                    .get_context_readings_for_session(&session.id)
+                                    .await?;
+                                let (segments, interruptions) =
+                                    segment_session(readings, &SegmentationConfig::default())?;
+                                db_for_recovery
+                                    .insert_segments_and_interruptions(
+                                        &session.id,
+                                        &segments,
+                                        &interruptions,
+                                    )
+                                    .await?;
+                                let ranges = segments
+                                    .iter()
+                                    .map(|segment| {
+                                        (segment.id.clone(), segment.start_time, segment.end_time)
+                                    })
+                                    .collect::<Vec<_>>();
+                                db_for_recovery
+                                    .update_readings_with_segment_ids(&session.id, &ranges)
+                                    .await?;
+                                storage_compaction::generate_and_store_runs(
+                                    &db_for_recovery,
+                                    &session.id,
+                                )
+                                .await?;
+                                Ok::<(), anyhow::Error>(())
+                            }
+                            .await;
+                            if let Err(error) = recovery_result {
+                                log::error!(
+                                    "Failed to rebuild activity blocks for recovered session {}: {}",
+                                    session.id,
+                                    error
+                                );
+                            }
                             db_for_recovery
-                                .mark_session_interrupted(&session.id, now)
+                                .mark_session_interrupted(&session.id, stopped_at)
                                 .await?;
                         }
                         Ok::<(), anyhow::Error>(())
@@ -274,6 +330,8 @@ pub fn run() {
                     database.clone(),
                     metrics_collector.clone(),
                 );
+                let archive_db = database.clone();
+                let archive_timer = timer_controller.clone();
 
                 let settings_path = app_data_dir.join("settings.json");
                 let settings_store = SettingsStore::new(settings_path)?;
@@ -285,6 +343,62 @@ pub fn run() {
                     timer: timer_controller,
                     settings: settings_store,
                     metrics: metrics_collector,
+                });
+
+                // Archive only while idle. Each batch is bounded, and CPU-heavy
+                // compression is dispatched through spawn_blocking.
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                    loop {
+                        let mut continue_soon = false;
+                        if archive_timer.get_state().await.status == timer::TimerStatus::Idle {
+                            match archive_db.archive_candidates(10).await {
+                                Ok(candidates) => {
+                                    let full_batch = candidates.len() == 10;
+                                    let mut archived = 0_usize;
+                                    for session_id in candidates {
+                                        if archive_timer.get_state().await.status
+                                            != timer::TimerStatus::Idle
+                                        {
+                                            break;
+                                        }
+                                        match storage_compaction::archive_session(
+                                            &archive_db,
+                                            &session_id,
+                                        )
+                                        .await
+                                        {
+                                            Ok(()) => {
+                                                archived += 1;
+                                                log::info!(
+                                                    "Archived readings for session {session_id}"
+                                                )
+                                            }
+                                            Err(error) => log::error!(
+                                                "Skipping archive for session {session_id}: {error:#}"
+                                            ),
+                                        }
+                                        tokio::time::sleep(std::time::Duration::from_millis(250))
+                                            .await;
+                                    }
+                                    if let Err(error) = archive_db
+                                        .mark_legacy_vacuum_pending_if_complete()
+                                        .await
+                                    {
+                                        log::error!("Could not schedule database compaction: {error:#}");
+                                    }
+                                    continue_soon = full_batch && archived > 0;
+                                }
+                                Err(error) => log::error!("Reading archive job failed: {error:#}"),
+                            }
+                        }
+                        tokio::time::sleep(std::time::Duration::from_secs(if continue_soon {
+                            1
+                        } else {
+                            300
+                        }))
+                        .await;
+                    }
                 });
 
                 // Initialize the island window on macOS to show "00:00" when idle
@@ -317,12 +431,12 @@ pub fn run() {
                     tauri::async_runtime::spawn(async move {
                         let mut monitor = agent_monitor::AgentMonitor::new();
                         loop {
-                            let sessions = monitor.poll();
                             let enabled = app_handle_for_agents
                                 .try_state::<AppState>()
                                 .map(|s| s.settings.island_agent_tracking_enabled())
                                 .unwrap_or(true);
                             if enabled {
+                                let sessions = monitor.poll();
                                 macos_bridge::island_update_agent_sessions(&sessions);
                             } else {
                                 macos_bridge::island_update_agent_sessions(&[]);
@@ -352,7 +466,7 @@ pub fn run() {
             get_daily_activity_in_time_range,
             get_interruptions_for_segment,
             get_window_titles_for_segment,
-            get_app_details_in_time_range,
+            get_app_sessions_in_time_range,
             list_sessions,
             list_sessions_paginated,
             create_label,
@@ -370,6 +484,7 @@ pub fn run() {
             set_island_agent_tracking,
             restart_app_instance,
             get_metrics_snapshot,
+            restore_session_readings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

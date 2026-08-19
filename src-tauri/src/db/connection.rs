@@ -81,6 +81,18 @@ impl Database {
 
                 let init_result =
                     migrations::run_migrations(&mut conn).context("failed to run migrations");
+                let init_result = init_result.and_then(|()| {
+                    match migrations::run_pending_storage_vacuum(&mut conn, &path_for_thread) {
+                        Ok(true) => info!("Compacted archived legacy readings"),
+                        Ok(false) => {}
+                        Err(error) => {
+                            // Compaction is an optimization. Keep the pending flag
+                            // and allow startup to continue so it can retry later.
+                            error!("Deferred database compaction: {error:#}");
+                        }
+                    }
+                    Ok(())
+                });
                 if ready_tx.send(init_result).is_err() {
                     error!("DB initialization receiver dropped before ready signal");
                     return;

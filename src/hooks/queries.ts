@@ -14,7 +14,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary, SessionInfo } from "@/types/timer";
 import type { Segment, Interruption, WindowTitleWithDuration } from "@/types/segment";
 import type { Label, LabelInput } from "@/types/label";
-import type { DailyActivity, StatsRange } from "@/types/stats";
+import type { AppSessionUsage, DailyActivity, StatsRange } from "@/types/stats";
 
 // ============================================================================
 // QUERY HOOKS (Data Fetching)
@@ -197,43 +197,30 @@ export function useDailyActivity(
   });
 }
 
-interface AppDetailsResponse {
-  window_titles: Array<[string, number]>;
-}
-
-/**
- * Fetch aggregated details (window titles) for an app in a time range
- */
-export function useAppDetails(
+/** Fetch paginated sessions where an app appeared in the selected Stats range. */
+export function useAppSessionsInfinite(
   bundleId: string | null,
-  startTime: string | undefined, // ISO string
-  endTime: string | undefined    // ISO string
+  startTime: string | undefined,
+  endTime: string | undefined,
+  labelId: number | null
 ) {
-  return useQuery({
-    queryKey: ['appDetails', bundleId, startTime, endTime],
-    queryFn: async () => {
-      if (!bundleId || !startTime || !endTime) return null;
-
-      console.log(`[useAppDetails] Fetching details for app: ${bundleId} from ${startTime} to ${endTime}`);
-      const result = await invoke<AppDetailsResponse>("get_app_details_in_time_range", {
+  const pageSize = 30;
+  return useInfiniteQuery({
+    queryKey: ["appSessions", bundleId, startTime, endTime, labelId],
+    queryFn: ({ pageParam = 0 }) =>
+      invoke<AppSessionUsage[]>("get_app_sessions_in_time_range", {
         bundleId,
         startTime,
         endTime,
-      });
-      
-      // Map window titles to object format to match other hooks
-      const mappedWindowTitles = result.window_titles.map(([title, durationSecs]) => ({ 
-        title, 
-        durationSecs 
-      })) as WindowTitleWithDuration[];
-
-      console.log(`[useAppDetails] Fetched details for app: ${bundleId}`);
-      return {
-        windowTitles: mappedWindowTitles,
-      };
-    },
+        labelId,
+        limit: pageSize,
+        offset: pageParam,
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.length < pageSize ? undefined : pages.length * pageSize,
     enabled: !!bundleId && !!startTime && !!endTime,
-    staleTime: 60_000, // Cache for 1 minute
+    staleTime: 60_000,
   });
 }
 

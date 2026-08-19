@@ -25,3 +25,14 @@ pub struct DailyActivity {
     pub date: String,
     pub duration_secs: i64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSessionUsage {
+    pub session_id: String,
+    pub started_at: String,
+    pub stopped_at: Option<String>,
+    pub status: String,
+    pub app_duration_secs: i64,
+    pub session_duration_secs: i64,
+}

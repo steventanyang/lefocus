@@ -56,6 +56,8 @@ struct ArtworkResult {
 /// Fetches and caches album artwork from different media sources.
 final class AlbumArtCoordinator {
     static let shared = AlbumArtCoordinator()
+    private static let maxDiskBytes = 50 * 1024 * 1024
+    private static let maxDiskAge: TimeInterval = 60 * 24 * 60 * 60
 
     private typealias Completion = (NSImage?) -> Void
 
@@ -74,6 +76,9 @@ final class AlbumArtCoordinator {
         fetchQueue.qualityOfService = .utility
         fetchQueue.maxConcurrentOperationCount = 2
         diskDirectory = AlbumArtCoordinator.prepareDiskCacheDirectory(using: fileManager)
+        diskQueue.async { [weak self] in
+            self?.pruneDiskCache()
+        }
     }
 
     func requestArtwork(for request: ArtworkRequest, completion: @escaping (ArtworkResult) -> Void) {
@@ -193,6 +198,40 @@ final class AlbumArtCoordinator {
     private func cacheURL(for key: String) -> URL? {
         guard let diskDirectory else { return nil }
         return diskDirectory.appendingPathComponent(key).appendingPathExtension("png")
+    }
+
+    private func pruneDiskCache() {
+        guard let diskDirectory,
+              let urls = try? fileManager.contentsOfDirectory(
+                  at: diskDirectory,
+                  includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey],
+                  options: [.skipsHiddenFiles]
+              ) else { return }
+
+        let expiry = Date().addingTimeInterval(-Self.maxDiskAge)
+        var retained: [(url: URL, date: Date, bytes: Int)] = []
+
+        for url in urls {
+            guard let values = try? url.resourceValues(
+                forKeys: [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey]
+            ), values.isRegularFile == true else { continue }
+            let date = values.contentModificationDate ?? .distantPast
+            if date < expiry {
+                try? fileManager.removeItem(at: url)
+            } else {
+                retained.append((url, date, values.fileSize ?? 0))
+            }
+        }
+
+        var totalBytes = retained.reduce(0) { $0 + $1.bytes }
+        for entry in retained.sorted(by: { $0.date < $1.date }) where totalBytes > Self.maxDiskBytes {
+            do {
+                try fileManager.removeItem(at: entry.url)
+                totalBytes -= entry.bytes
+            } catch {
+                NSLog("AlbumArtCoordinator: Failed to evict cached artwork: %@", error.localizedDescription)
+            }
+        }
     }
 
     private static func prepareDiskCacheDirectory(using fileManager: FileManager) -> URL? {
