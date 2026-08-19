@@ -336,16 +336,6 @@ mod tests {
                 .await?,
             vec![("Historical title".into(), 10)]
         );
-        assert_eq!(
-            db.get_window_titles_for_app_in_range(
-                "com.test.a",
-                segments[0].start_time,
-                segments[0].end_time,
-            )
-            .await?,
-            vec![("Historical title".into(), 10)]
-        );
-
         assert_eq!(restore_session_readings(&db, "session").await?, 2);
         let restored = db.get_context_readings_for_session("session").await?;
         assert_eq!(restored.len(), 2);
@@ -422,6 +412,21 @@ mod tests {
             Some("icon-a")
         );
         assert!((summaries[0].top_apps[0].percentage - (40.0 / 75.0 * 100.0)).abs() < 0.001);
+
+        let app_sessions = db
+            .get_app_sessions_in_range(
+                "com.test.a",
+                Utc::now() - Duration::days(1),
+                Utc::now() + Duration::days(1),
+                None,
+                30,
+                0,
+            )
+            .await?;
+        assert_eq!(app_sessions.len(), 1);
+        assert_eq!(app_sessions[0].session_id, "summary-session");
+        assert_eq!(app_sessions[0].app_duration_secs, 40);
+        assert_eq!(app_sessions[0].session_duration_secs, 75);
 
         drop(db);
         remove_test_database(&path);

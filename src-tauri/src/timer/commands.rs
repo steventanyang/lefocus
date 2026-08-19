@@ -2,7 +2,9 @@ use tauri::State;
 
 use crate::{
     db::{
-        models::{DailyActivity, Interruption, Segment, SessionSummary, StatsRange},
+        models::{
+            AppSessionUsage, DailyActivity, Interruption, Segment, SessionSummary, StatsRange,
+        },
         SessionInfo,
     },
     timer::{TimerController, TimerMode, TimerSnapshot, TimerState},
@@ -128,33 +130,22 @@ pub async fn get_window_titles_for_segment(
         .map_err(|e| e.to_string())
 }
 
-#[derive(serde::Serialize)]
-pub struct AppDetails {
-    pub window_titles: Vec<(String, i64)>,
-}
-
 #[tauri::command]
-pub async fn get_app_details_in_time_range(
+pub async fn get_app_sessions_in_time_range(
     state: State<'_, AppState>,
     bundle_id: String,
     start_time: String,
     end_time: String,
-) -> Result<AppDetails, String> {
-    let db = &state.db;
-
-    let start = chrono::DateTime::parse_from_rfc3339(&start_time)
-        .map_err(|e| e.to_string())?
-        .with_timezone(&chrono::Utc);
-    let end = chrono::DateTime::parse_from_rfc3339(&end_time)
-        .map_err(|e| e.to_string())?
-        .with_timezone(&chrono::Utc);
-
-    let window_titles = db
-        .get_window_titles_for_app_in_range(&bundle_id, start, end)
+    label_id: Option<i64>,
+    limit: usize,
+    offset: usize,
+) -> Result<Vec<AppSessionUsage>, String> {
+    let (start, end) = parse_stats_range(&start_time, &end_time)?;
+    state
+        .db
+        .get_app_sessions_in_range(&bundle_id, start, end, label_id, limit, offset)
         .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(AppDetails { window_titles })
+        .map_err(|e| e.to_string())
 }
 
 /// Legacy unpaginated session API. Stats uses bounded range queries.

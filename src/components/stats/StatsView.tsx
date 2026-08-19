@@ -366,6 +366,7 @@ export function StatsView({ onNavigate }: StatsViewProps) {
             dailyActivity={dailyActivity}
             activityLoading={activityLoading}
             activityError={activityError}
+            selectedLabelId={selectedLabelId}
           />
         </div>
       )}

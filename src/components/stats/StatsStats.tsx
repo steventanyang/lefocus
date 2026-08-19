@@ -25,6 +25,7 @@ interface StatsStatsProps {
   dailyActivity: DailyActivity[];
   activityLoading: boolean;
   activityError: Error | null;
+  selectedLabelId: number | null;
 }
 
 export function StatsStats({
@@ -39,6 +40,7 @@ export function StatsStats({
   dailyActivity,
   activityLoading,
   activityError,
+  selectedLabelId,
 }: StatsStatsProps) {
   const [activeApp, setActiveApp] = useState<AppDuration | null>(null);
   
@@ -127,6 +129,7 @@ export function StatsStats({
           app={activeApp}
           startTime={startTime.toISOString()}
           endTime={endTime.toISOString()}
+          labelId={selectedLabelId}
           onClose={() => setActiveApp(null)}
         />
       )}
