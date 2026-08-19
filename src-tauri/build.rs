@@ -1,7 +1,23 @@
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+
+#[cfg(target_os = "macos")]
+fn copy_dir_all(source: &Path, destination: &Path) -> io::Result<()> {
+    fs::create_dir_all(destination)?;
+    for entry in fs::read_dir(source)? {
+        let entry = entry?;
+        let target = destination.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir_all(&entry.path(), &target)?;
+        } else {
+            fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
+}
 
 fn main() {
     println!("cargo:warning=[BUILD] Starting build process...");
@@ -79,7 +95,11 @@ fn compile_macos_sensing() {
 
     let build_output = swift_build_dir.join("release");
     let dylib_name = "libMacOSSensing.dylib";
+    let adapter_dylib_name = "libMediaRemoteAdapter.dylib";
+    let adapter_bundle_name = "MediaRemoteAdapter_MediaRemoteAdapter.bundle";
     let dylib_path = build_output.join(dylib_name);
+    let adapter_dylib_path = build_output.join(adapter_dylib_name);
+    let adapter_bundle_path = build_output.join(adapter_bundle_name);
 
     println!("cargo:warning=[RUST] Configuring Rust linker...");
     println!(
@@ -105,6 +125,8 @@ fn compile_macos_sensing() {
     println!("cargo:warning=[COPY] Copying dylib to resources...");
     let resources_dir = manifest_dir.join("resources");
     let target_resource = resources_dir.join(dylib_name);
+    let target_adapter_dylib = resources_dir.join(adapter_dylib_name);
+    let target_adapter_bundle = resources_dir.join(adapter_bundle_name);
     let _ = fs::create_dir_all(&resources_dir);
 
     println!("cargo:warning=[COPY]   Source: {}", dylib_path.display());
@@ -116,6 +138,10 @@ fn compile_macos_sensing() {
     // Best-effort copy; panic if missing source
     fs::copy(&dylib_path, &target_resource)
         .expect("Failed to copy libMacOSSensing.dylib into resources/");
+    fs::copy(&adapter_dylib_path, &target_adapter_dylib)
+        .expect("Failed to copy libMediaRemoteAdapter.dylib into resources/");
+    copy_dir_all(&adapter_bundle_path, &target_adapter_bundle)
+        .expect("Failed to copy MediaRemoteAdapter resource bundle into resources/");
 
     println!("cargo:warning=[COPY] ✅ Dylib copied successfully");
 
@@ -127,6 +153,10 @@ fn compile_macos_sensing() {
     println!(
         "cargo:rerun-if-changed={}",
         plugin_dir.join("Sources/CMacOSSensing").to_str().unwrap()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        plugin_dir.join("Vendor/mediaremote-adapter").to_str().unwrap()
     );
     println!(
         "cargo:rerun-if-changed={}",

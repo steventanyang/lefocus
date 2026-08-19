@@ -13,6 +13,7 @@ public final class MediaMonitor {
     private let controlCoordinator = MediaControlCoordinator()
     private let spotifyProbe = SpotifyMetadataProbe()
     private let musicProbe = MusicMetadataProbe()
+    private let mediaRemoteProbe = MediaRemoteAdapterProbe()
     private let pollingQueue = DispatchQueue(label: "MacOSSensing.MediaMonitor.polling", qos: .userInitiated)
     private let albumArtCoordinator = AlbumArtCoordinator.shared
 
@@ -33,6 +34,7 @@ public final class MediaMonitor {
         guard metadataTimer == nil else { return }
         metadataInterval = 1.0
         isPolling = false
+        mediaRemoteProbe.startMonitoring()
         registerSleepWakeObservers()
         ensureMetadataTimer()
         refreshMetadata()
@@ -43,6 +45,7 @@ public final class MediaMonitor {
         metadataTimer = nil
         metadataInterval = 1.0
         isPolling = false
+        mediaRemoteProbe.stopMonitoring()
         currentTrack = nil
         activeBundleID = nil
         pendingArtworkTimestamp = nil
@@ -50,18 +53,34 @@ public final class MediaMonitor {
     }
 
     public func togglePlayback() {
+        if activeBundleID == MediaRemoteAdapterProbe.sourceIdentifier {
+            mediaRemoteProbe.togglePlayback()
+            return
+        }
         controlCoordinator.togglePlayback(for: activeBundleID)
     }
 
     public func skipToNext() {
+        if activeBundleID == MediaRemoteAdapterProbe.sourceIdentifier {
+            mediaRemoteProbe.skipToNext()
+            return
+        }
         controlCoordinator.skipToNext(for: activeBundleID)
     }
 
     public func skipToPrevious() {
+        if activeBundleID == MediaRemoteAdapterProbe.sourceIdentifier {
+            mediaRemoteProbe.skipToPrevious()
+            return
+        }
         controlCoordinator.skipToPrevious(for: activeBundleID)
     }
 
     public func seek(to position: TimeInterval, bundleID: String?) {
+        if bundleID == MediaRemoteAdapterProbe.sourceIdentifier {
+            mediaRemoteProbe.seek(to: position)
+            return
+        }
         controlCoordinator.seek(to: position, bundleID: bundleID)
     }
 
@@ -159,7 +178,7 @@ public final class MediaMonitor {
         }
 
         let spotify = spotifyProbe.snapshot()
-        if let spotify {
+        if let spotify, spotify.track.isPlaying {
             return MediaSnapshot(
                 track: spotify.track,
                 bundleID: spotify.track.sourceBundleID,
@@ -168,6 +187,34 @@ public final class MediaMonitor {
         }
 
         let music = musicProbe.snapshot()
+        if let music, music.track.isPlaying {
+            return MediaSnapshot(
+                track: music.track,
+                bundleID: music.track.sourceBundleID,
+                artworkHint: music.hint
+            )
+        }
+
+        // Browsers do not expose useful metadata through public macOS APIs.
+        // MediaRemote supplies the system Now Playing session used by Control Center.
+        let systemMedia = mediaRemoteProbe.snapshot()
+        if let systemMedia {
+            return MediaSnapshot(
+                track: systemMedia.track,
+                bundleID: systemMedia.track.sourceBundleID,
+                artworkHint: nil
+            )
+        }
+
+        // Preserve paused scripted sources when Control Center has no current session.
+        if let spotify {
+            return MediaSnapshot(
+                track: spotify.track,
+                bundleID: spotify.track.sourceBundleID,
+                artworkHint: spotify.hint
+            )
+        }
+
         if let music {
             return MediaSnapshot(
                 track: music.track,
@@ -194,8 +241,10 @@ public final class MediaMonitor {
 
         guard let snapshot else {
             if currentTrack != nil {
-                // NSLog("[MediaMonitor] Track disappeared — was: %@ by %@",
-                //       currentTrack?.title ?? "?", currentTrack?.artist ?? "?")
+                NSLog("[MediaMonitor] track disappeared — was: %@ by %@ source=%@",
+                      currentTrack?.title ?? "?",
+                      currentTrack?.artist ?? "?",
+                      currentTrack?.sourceBundleID ?? "unknown")
                 currentTrack = nil
                 onTrackChange?(nil)
             }
@@ -236,6 +285,11 @@ public final class MediaMonitor {
             currentTrack = track
             onTrackChange?(track)
             if trackChanged {
+                NSLog("[MediaMonitor] selected: %@ by %@ source=%@ playing=%@",
+                      track.title,
+                      track.artist,
+                      track.sourceBundleID ?? "unknown",
+                      track.isPlaying ? "true" : "false")
                 pendingArtworkTimestamp = nil
             }
         }
