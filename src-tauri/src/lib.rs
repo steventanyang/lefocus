@@ -25,13 +25,13 @@ use std::{env, process::Command};
 use tauri::{Emitter, Manager, State};
 use timer::{
     commands::{
-        cancel_timer, end_timer, get_interruptions_for_segment, get_segments_for_session,
-        get_timer_state, get_window_titles_for_segment, list_sessions, list_sessions_paginated,
-        start_timer, get_app_details_in_time_range, delete_session,
+        cancel_timer, delete_session, end_timer, get_app_details_in_time_range,
+        get_daily_activity_in_time_range, get_interruptions_for_segment, get_segments_for_session,
+        get_stats_in_time_range, get_timer_state, get_window_titles_for_segment, list_sessions,
+        list_sessions_paginated, start_timer,
     },
     TimerController,
 };
-
 
 pub(crate) struct AppState {
     audio: AudioEngineHandle,
@@ -411,6 +411,8 @@ pub fn run() {
             end_timer,
             cancel_timer,
             get_segments_for_session,
+            get_stats_in_time_range,
+            get_daily_activity_in_time_range,
             get_interruptions_for_segment,
             get_window_titles_for_segment,
             get_app_details_in_time_range,

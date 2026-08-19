@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
-import { SegmentStats as Stats, AppDuration, Segment } from "@/types/segment";
+import { SegmentStats as Stats, AppDuration } from "@/types/segment";
+import type { DailyActivity } from "@/types/stats";
 import { getAppColor } from "@/constants/appColors";
 import { AppleLogo, shouldShowAppleLogo } from "@/utils/appUtils";
 import { KeyBox } from "@/components/ui/KeyBox";
@@ -21,7 +22,9 @@ interface StatsStatsProps {
   timeWindowSelector?: React.ReactNode;
   timeWindow: TimeWindow;
   customDateRange?: { start: Date; end: Date } | null;
-  segments: Segment[];
+  dailyActivity: DailyActivity[];
+  activityLoading: boolean;
+  activityError: Error | null;
 }
 
 export function StatsStats({
@@ -33,7 +36,9 @@ export function StatsStats({
   timeWindowSelector,
   timeWindow,
   customDateRange,
-  segments,
+  dailyActivity,
+  activityLoading,
+  activityError,
 }: StatsStatsProps) {
   const [activeApp, setActiveApp] = useState<AppDuration | null>(null);
   
@@ -196,7 +201,17 @@ export function StatsStats({
 
         {/* Conditional rendering based on viewMode */}
         {viewMode === "activity" ? (
-          <YearActivityHeatmap segments={segments} year={startTime.getFullYear()} />
+          activityLoading ? (
+            <div className="py-8 text-center text-base font-light text-gray-500">
+              loading activity...
+            </div>
+          ) : activityError ? (
+            <div className="py-8 text-center text-base font-light text-gray-500">
+              unable to load activity
+            </div>
+          ) : (
+            <YearActivityHeatmap activity={dailyActivity} year={startTime.getFullYear()} />
+          )
         ) : viewMode === "treemap" ? (
           <div>
             <Treemap

@@ -1,11 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import type { ReactNode } from "react";
 import {
-  useSessionsList,
-  useSegmentsForSessions,
+  useDailyActivity,
   useLabelsQuery,
+  useStatsRange,
 } from "@/hooks/queries";
-import { calculateSegmentStats } from "@/hooks/useSegments";
 import { StatsStats } from "@/components/stats/StatsStats";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import { KeyBox } from "@/components/ui/KeyBox";
@@ -16,9 +15,7 @@ import { CustomDateRangeModal } from "@/components/stats/CustomDateRangeModal";
 import {
   TimeWindow,
   getDateRangeForWindow,
-  isDateInRange,
 } from "@/utils/dateUtils";
-import type { Segment } from "@/types/segment";
 
 interface StatsViewProps {
   onNavigate: (view: "timer" | "activities" | "stats") => void;
@@ -38,13 +35,6 @@ export function StatsView({ onNavigate }: StatsViewProps) {
     end: Date;
   } | null>(null);
 
-  // Fetch all sessions
-  const {
-    data: sessions = [],
-    isLoading: sessionsLoading,
-    error: sessionsError,
-  } = useSessionsList();
-
   // Fetch labels for the modal
   const { data: labels = [] } = useLabelsQuery();
 
@@ -54,15 +44,28 @@ export function StatsView({ onNavigate }: StatsViewProps) {
     [labels, selectedLabelId]
   );
 
-  // Filter sessions by selected label
-  const filteredSessions = useMemo(() => {
-    if (selectedLabelId === null) return sessions;
-    return sessions.filter((session) => session.labelId === selectedLabelId);
-  }, [sessions, selectedLabelId]);
+  const dateRange = useMemo(() => {
+    if (timeWindow === "custom" && customDateRange) {
+      return customDateRange;
+    }
+    return getDateRangeForWindow(timeWindow);
+  }, [timeWindow, customDateRange]);
 
-  // Fetch segments for filtered sessions
-  const { segmentsBySession, isLoading: segmentsLoading } =
-    useSegmentsForSessions(filteredSessions);
+  const startTime = dateRange.start.toISOString();
+  const endTime = dateRange.end.toISOString();
+
+  const {
+    data: rangeStats,
+    isLoading: statsLoading,
+    error: statsError,
+  } = useStatsRange(startTime, endTime, selectedLabelId);
+
+  const activityEnabled = timeWindow === "year" && viewMode === "activity";
+  const {
+    data: dailyActivity = [],
+    isLoading: activityLoading,
+    error: activityError,
+  } = useDailyActivity(startTime, endTime, selectedLabelId, activityEnabled);
 
   // Handle keyboard shortcuts for time window selection (d/w/m), view mode (t), show all toggle (v), and label filter (l)
   useEffect(() => {
@@ -167,34 +170,24 @@ export function StatsView({ onNavigate }: StatsViewProps) {
     }
   }, [timeWindow, viewMode]);
 
-  // Filter segments by time window
-  const filteredSegments = useMemo(() => {
-    let dateRange;
-    if (timeWindow === "custom" && customDateRange) {
-      dateRange = customDateRange;
-    } else {
-      dateRange = getDateRangeForWindow(timeWindow);
-    }
-
-    const allSegments: Segment[] = [];
-
-    // Collect all segments from all sessions
-    Object.values(segmentsBySession).forEach((segments) => {
-      allSegments.push(...segments);
-    });
-
-    // Filter segments that fall within the date range
-    return allSegments.filter((segment) =>
-      isDateInRange(segment.startTime, dateRange)
-    );
-  }, [segmentsBySession, timeWindow, customDateRange]);
-
-  // Calculate stats from filtered segments (show 5 by default, or all if showAllApps is true)
   const stats = useMemo(() => {
-    return calculateSegmentStats(filteredSegments, showAllApps ? undefined : 5);
-  }, [filteredSegments, showAllApps]);
+    const totalDurationSecs = rangeStats?.totalDurationSecs ?? 0;
+    const apps = rangeStats?.apps ?? [];
+    const visibleApps = showAllApps ? apps : apps.slice(0, 5);
 
-  const isLoading = sessionsLoading || segmentsLoading;
+    return {
+      totalDurationSecs,
+      segmentCount: rangeStats?.segmentCount ?? 0,
+      interruptionCount: 0,
+      topApps: visibleApps.map((app) => ({
+        ...app,
+        percentage:
+          totalDurationSecs > 0
+            ? (app.durationSecs / totalDurationSecs) * 100
+            : 0,
+      })),
+    };
+  }, [rangeStats, showAllApps]);
 
   // Handle custom date modal actions
   const handleCustomDateSubmit = (range: { start: Date; end: Date }) => {
@@ -336,7 +329,7 @@ export function StatsView({ onNavigate }: StatsViewProps) {
       </div>
 
       {/* Loading state */}
-      {isLoading && !sessionsError && (
+      {statsLoading && !statsError && (
         <div className="mt-0.5">
           <StatsSkeleton
             timeWindowButtons={timeWindowButtons}
@@ -350,16 +343,16 @@ export function StatsView({ onNavigate }: StatsViewProps) {
       )}
 
       {/* Error state */}
-      {sessionsError && (
+      {statsError && (
         <div className="text-xs font-normal text-center p-4 border border-black bg-transparent max-w-full mt-0.5">
-          {sessionsError instanceof Error
-            ? sessionsError.message
+          {statsError instanceof Error
+            ? statsError.message
             : "failed to load stats"}
         </div>
       )}
 
       {/* Stats display */}
-      {!isLoading && !sessionsError && (
+      {!statsLoading && !statsError && (
         <div className="bg-white mt-0.5">
           <StatsStats
             stats={stats}
@@ -370,7 +363,9 @@ export function StatsView({ onNavigate }: StatsViewProps) {
             timeWindowSelector={timeWindowButtons}
             timeWindow={timeWindow}
             customDateRange={customDateRange}
-            segments={filteredSegments}
+            dailyActivity={dailyActivity}
+            activityLoading={activityLoading}
+            activityError={activityError}
           />
         </div>
       )}

@@ -19,7 +19,7 @@ import type { TimerMode } from "@/types/timer";
 import {
   DEFAULT_COUNTDOWN_DURATION_MS,
   DEFAULT_BREAK_DURATION_MS,
-  DEFAULT_STOPWATCH_DURATION_MS,
+  MAX_TIMER_DURATION_MS,
 } from "@/constants/timer";
 import { useFullscreen } from "@/hooks/useFullscreen";
 
@@ -61,14 +61,9 @@ export function TimerView({ onNavigate }: TimerViewProps) {
 
   const selectedLabel = useLabelById(selectedLabelId, labels);
 
-  // Handle mode switching: reset duration based on mode
+  // Each mode keeps its selected duration when the user switches away and back.
   const handleModeChange = (mode: TimerMode) => {
     setSelectedMode(mode);
-    if (mode === "stopwatch") {
-      setSelectedDuration(DEFAULT_STOPWATCH_DURATION_MS);
-    } else if (mode === "countdown") {
-      setSelectedDuration(DEFAULT_COUNTDOWN_DURATION_MS);
-    }
   };
 
   // Calculate state-dependent values (handle null case)
@@ -169,25 +164,19 @@ export function TimerView({ onNavigate }: TimerViewProps) {
         event.stopPropagation();
       }
       const fiveMinutesMs = 5 * 60 * 1000;
-      // Maximum duration for countdown/break: 3 hours (3:00:00)
-      const maxDurationMs = 3 * 60 * 60 * 1000; // 10800000ms = 3 hours
       const adjustment = direction === "up" ? fiveMinutesMs : -fiveMinutesMs;
 
       if (selectedMode === "break") {
-        let newDuration = (selectedBreakDuration || 0) + adjustment;
-        if (newDuration < 0) {
-          newDuration = 0;
-        } else if (newDuration > maxDurationMs) {
-          newDuration = 0; // Wrap to 00:00 when exceeding 3 hours
-        }
+        const newDuration = Math.min(
+          MAX_TIMER_DURATION_MS,
+          Math.max(0, (selectedBreakDuration || 0) + adjustment)
+        );
         setSelectedBreakDuration(newDuration);
       } else if (selectedMode === "countdown") {
-        let newDuration = (selectedDuration || 0) + adjustment;
-        if (newDuration < 0) {
-          newDuration = 0;
-        } else if (newDuration > maxDurationMs) {
-          newDuration = 0; // Wrap to 00:00 when exceeding 3 hours
-        }
+        const newDuration = Math.min(
+          MAX_TIMER_DURATION_MS,
+          Math.max(0, (selectedDuration || 0) + adjustment)
+        );
         setSelectedDuration(newDuration);
       }
       // Stopwatch mode doesn't use adjustTime - it starts at 0 and can run up to 99:59:59

@@ -41,24 +41,25 @@ export function TimerContent({
   controlsVisible = true,
   isLabelDropdownOpen = false,
 }: TimerContentProps) {
+  const selectedInitialMs =
+    selectedMode === "break"
+      ? selectedBreakDuration
+      : selectedMode === "stopwatch"
+        ? 0
+        : selectedDuration;
+
   return (
     <>
       {/* Clock and duration buttons grouped together to avoid parent gap-12 */}
       <div className="flex flex-col items-center w-full">
         <div className="flex items-center justify-center w-full mt-[30px]">
           <TimerDisplay
-            remainingMs={remainingMs}
+            remainingMs={isIdle ? selectedInitialMs : remainingMs}
             isRunning={isRunning}
-            mode={mode}
-            isEditable={isIdle}
+            mode={isIdle ? selectedMode : mode}
+            isEditable={isIdle && selectedMode !== "stopwatch"}
             onTimeChange={onTimeChange}
-            initialMs={
-              selectedMode === "break"
-                ? selectedBreakDuration
-                : selectedMode === "stopwatch"
-                  ? 0
-                  : selectedDuration
-            }
+            initialMs={selectedInitialMs}
             isLabelDropdownOpen={isLabelDropdownOpen}
           />
         </div>

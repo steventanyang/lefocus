@@ -1,9 +1,9 @@
 import { useMemo } from "react";
-import type { Segment } from "@/types/segment";
+import type { DailyActivity } from "@/types/stats";
 import { formatDuration } from "@/utils/formatUtils";
 
 interface YearActivityHeatmapProps {
-  segments: Segment[];
+  activity: DailyActivity[];
   year: number;
 }
 
@@ -62,18 +62,15 @@ function formatCompactDuration(seconds: number): string {
 }
 
 export function YearActivityHeatmap({
-  segments,
+  activity,
   year,
 }: YearActivityHeatmapProps) {
   const { periods, thresholds, summary } = useMemo(() => {
     const totals = new Map<string, number>();
 
-    for (const segment of segments) {
-      const date = new Date(segment.startTime);
-      if (Number.isNaN(date.getTime()) || date.getFullYear() !== year) continue;
-
-      const key = dateKey(date);
-      totals.set(key, (totals.get(key) ?? 0) + segment.durationSecs);
+    for (const day of activity) {
+      if (!day.date.startsWith(`${year}-`)) continue;
+      totals.set(day.date, day.durationSecs);
     }
 
     const buildPeriod = (startMonth: number, endMonth: number): ActivityPeriod => {
@@ -167,7 +164,7 @@ export function YearActivityHeatmap({
             : 0,
       },
     };
-  }, [segments, year]);
+  }, [activity, year]);
 
   return (
     <section className="flex flex-row-reverse items-start gap-6" aria-label={`${year} focus activity`}>
