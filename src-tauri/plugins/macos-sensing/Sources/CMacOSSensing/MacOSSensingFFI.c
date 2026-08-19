@@ -19,10 +19,6 @@ extern void macos_sensing_swift_audio_toggle_playback(void);
 extern void macos_sensing_swift_audio_next_track(void);
 extern void macos_sensing_swift_audio_previous_track(void);
 
-extern bool macos_sensing_swift_check_media_automation_permission(const char *bundle_id);
-extern int32_t macos_sensing_swift_request_media_automation_permission(const char *bundle_id);
-extern void macos_sensing_swift_open_automation_settings(void);
-
 CMacOSSensing_WindowMetadataFFI *macos_sensing_get_active_window_metadata(void) {
     return macos_sensing_swift_get_window();
 }
@@ -81,18 +77,6 @@ void macos_sensing_audio_next_track(void) {
 
 void macos_sensing_audio_previous_track(void) {
     macos_sensing_swift_audio_previous_track();
-}
-
-bool macos_sensing_check_media_automation_permission(const char *bundle_id) {
-    return macos_sensing_swift_check_media_automation_permission(bundle_id);
-}
-
-int32_t macos_sensing_request_media_automation_permission(const char *bundle_id) {
-    return macos_sensing_swift_request_media_automation_permission(bundle_id);
-}
-
-void macos_sensing_open_automation_settings(void) {
-    macos_sensing_swift_open_automation_settings();
 }
 
 // Timer control callbacks

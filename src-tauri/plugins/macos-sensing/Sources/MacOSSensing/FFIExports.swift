@@ -1,7 +1,6 @@
 
 import Foundation
 import Cocoa
-import Carbon
 
 @_cdecl("macos_sensing_swift_get_window")
 public func macos_sensing_swift_get_window() -> UnsafeMutablePointer<WindowMetadataFFI>? {
@@ -164,62 +163,4 @@ public func macos_sensing_swift_audio_previous_track() {
     DispatchQueue.main.async {
         MediaMonitor.shared.skipToPrevious()
     }
-}
-
-// MARK: - Media automation permissions
-
-private enum AutomationPermission {
-    static func determineStatus(for bundleID: String, askIfNeeded: Bool) -> OSStatus {
-        guard !bundleID.isEmpty, let data = bundleID.data(using: .utf8) else {
-            return OSStatus(paramErr)
-        }
-
-        var target = AEAddressDesc()
-        let status = data.withUnsafeBytes { bytes -> OSStatus in
-            guard let base = bytes.baseAddress else {
-                return OSStatus(errAECoercionFail)
-            }
-            return OSStatus(
-                AECreateDesc(DescType(typeApplicationBundleID), base, data.count, &target)
-            )
-        }
-
-        guard status == noErr else {
-            return status
-        }
-
-        defer {
-            AEDisposeDesc(&target)
-        }
-
-        return AEDeterminePermissionToAutomateTarget(
-            &target,
-            AEEventClass(typeWildCard),
-            AEEventID(typeWildCard),
-            askIfNeeded ? true : false
-        )
-    }
-
-    static func hasPermission(for bundleID: String) -> Bool {
-        determineStatus(for: bundleID, askIfNeeded: false) == noErr
-    }
-}
-
-@_cdecl("macos_sensing_swift_check_media_automation_permission")
-public func macos_sensing_swift_check_media_automation_permission(_ bundlePtr: UnsafePointer<CChar>) -> Bool {
-    let bundleID = String(cString: bundlePtr)
-    return AutomationPermission.hasPermission(for: bundleID)
-}
-
-@_cdecl("macos_sensing_swift_request_media_automation_permission")
-public func macos_sensing_swift_request_media_automation_permission(_ bundlePtr: UnsafePointer<CChar>) -> Int32 {
-    let bundleID = String(cString: bundlePtr)
-    let status = AutomationPermission.determineStatus(for: bundleID, askIfNeeded: true)
-    return Int32(status)
-}
-
-@_cdecl("macos_sensing_swift_open_automation_settings")
-public func macos_sensing_swift_open_automation_settings() {
-    let automationURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!
-    NSWorkspace.shared.open(automationURL)
 }

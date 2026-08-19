@@ -48,12 +48,6 @@ pub enum SoundType {
     Rain,
 }
 
-#[derive(serde::Serialize)]
-struct AutomationPermissionRequestResult {
-    granted: bool,
-    status: i32,
-}
-
 #[tauri::command]
 fn start_audio(
     sound_type: SoundType,
@@ -216,63 +210,6 @@ fn set_island_agent_tracking(
 }
 
 #[tauri::command]
-async fn check_media_automation_permission(bundle_id: String) -> Result<bool, String> {
-    #[cfg(target_os = "macos")]
-    {
-        tokio::task::spawn_blocking(move || {
-            macos_bridge::check_media_automation_permission(&bundle_id)
-        })
-        .await
-        .map_err(|e| e.to_string())
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = bundle_id;
-        Ok(true)
-    }
-}
-
-#[tauri::command]
-async fn request_media_automation_permission(bundle_id: String) -> Result<AutomationPermissionRequestResult, String> {
-    #[cfg(target_os = "macos")]
-    {
-        tokio::task::spawn_blocking(move || {
-            let status = macos_bridge::request_media_automation_permission_status(&bundle_id);
-            AutomationPermissionRequestResult {
-                granted: status == 0,
-                status,
-            }
-        })
-        .await
-        .map_err(|e| e.to_string())
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = bundle_id;
-        Ok(AutomationPermissionRequestResult {
-            granted: true,
-            status: 0,
-        })
-    }
-}
-
-#[tauri::command]
-fn open_automation_settings() -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        macos_bridge::open_automation_settings();
-        Ok(())
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        Err("Automation settings are only available on macOS".into())
-    }
-}
-
-#[tauri::command]
 fn restart_app_instance(app_handle: tauri::AppHandle) -> Result<(), String> {
     let current_exe = env::current_exe().map_err(|e| format!("Failed to locate executable: {e}"))?;
 
@@ -431,9 +368,6 @@ pub fn run() {
             set_island_visible,
             get_island_agent_tracking,
             set_island_agent_tracking,
-            check_media_automation_permission,
-            request_media_automation_permission,
-            open_automation_settings,
             restart_app_instance,
             get_metrics_snapshot,
         ])

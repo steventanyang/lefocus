@@ -18,6 +18,8 @@ impl Default for IslandSoundSettings {
 }
 
 fn default_agent_tracking_enabled() -> bool {
+    // Preserve the pre-existing behavior when loading an older settings file
+    // that predates this field. Fresh installs use UserSettings::default below.
     true
 }
 
@@ -35,7 +37,7 @@ impl Default for UserSettings {
         Self {
             island_sound: IslandSoundSettings::default(),
             island_visible: true,
-            island_agent_tracking_enabled: true,
+            island_agent_tracking_enabled: false,
         }
     }
 }
@@ -104,6 +106,29 @@ impl SettingsStore {
         let serialized = serde_json::to_string_pretty(data)?;
         fs::write(&self.path, serialized)
             .with_context(|| format!("Failed to write settings to {}", self.path.display()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_users_start_with_agent_tracking_disabled() {
+        assert!(!UserSettings::default().island_agent_tracking_enabled);
+    }
+
+    #[test]
+    fn older_settings_without_agent_tracking_preserve_the_old_default() {
+        let settings: UserSettings = serde_json::from_str(
+            r#"{
+                "island_sound": { "enabled": true, "sound_id": "island_default" },
+                "island_visible": true
+            }"#,
+        )
+        .unwrap();
+
+        assert!(settings.island_agent_tracking_enabled);
     }
 }
 

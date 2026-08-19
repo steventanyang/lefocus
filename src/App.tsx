@@ -132,8 +132,6 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Note: Spotify automation permission is requested lazily when Spotify is detected (in Swift MediaMonitor)
-
   // Timer view should be centered, other views should be scrollable from top
   const isTimerView = currentView === "timer";
 

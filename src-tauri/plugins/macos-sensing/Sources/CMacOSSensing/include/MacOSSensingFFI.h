@@ -44,11 +44,6 @@ void macos_sensing_audio_toggle_playback(void);
 void macos_sensing_audio_next_track(void);
 void macos_sensing_audio_previous_track(void);
 
-// Media automation permission
-bool macos_sensing_check_media_automation_permission(const char *bundle_id);
-int32_t macos_sensing_request_media_automation_permission(const char *bundle_id);
-void macos_sensing_open_automation_settings(void);
-
 // Timer control callback types
 typedef void (*TimerEndCallback)(void);
 typedef void (*TimerCancelCallback)(void);
