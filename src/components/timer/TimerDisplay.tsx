@@ -103,7 +103,7 @@ export function TimerDisplay({
         onKeyDown={handleKeyDown}
         onClick={() => displayRef.current?.focus()}
         onBlur={handleBlur}
-        className="text-[5rem] font-semibold leading-none text-center tracking-tight tabular-nums cursor-text outline-none focus:outline-none text-black min-h-[5rem]"
+        className="text-[5rem] font-medium leading-none text-center tracking-tight tabular-nums cursor-text outline-none focus:outline-none text-black min-h-[5rem]"
       >
         <TimerDisplayRenderer timeStr={timeStr} isEditing={isEditing} />
       </div>
@@ -112,7 +112,7 @@ export function TimerDisplay({
 
   return (
     <div
-      className="text-[5rem] font-semibold leading-none text-center tracking-tight tabular-nums text-black min-h-[5rem]"
+      className="text-[5rem] font-medium leading-none text-center tracking-tight tabular-nums text-black min-h-[5rem]"
       aria-label={formatTime(displayMs)}
     >
       <TimerDisplayRenderer timeStr={formatTime(displayMs)} />
