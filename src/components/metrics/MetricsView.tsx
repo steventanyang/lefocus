@@ -103,8 +103,8 @@ function SessionStatsCard({ stats }: { stats: ReturnType<typeof useMetrics>["sta
             <div className="text-xl font-mono font-semibold text-gray-900">{stats.captureCount}</div>
           </div>
           <div>
-            <div className="text-xs text-gray-500 mb-1">OCR</div>
-            <div className="text-xl font-mono font-semibold text-gray-900">{stats.ocrCount}/{stats.ocrCount + stats.ocrSkipCount}</div>
+            <div className="text-xs text-gray-500 mb-1">Avg time</div>
+            <div className="text-xl font-mono font-semibold text-gray-900">{stats.averageCaptureMs.toFixed(0)}ms</div>
           </div>
         </div>
       ) : (
@@ -125,9 +125,6 @@ function CaptureBreakdown({ capture }: { capture: CaptureMetrics | null }) {
 
   const stages = [
     { label: "Metadata", ms: capture.metadata_ms, color: "#5F7A8A" },
-    { label: "Screenshot", ms: capture.screenshot_ms, color: "#6B8E7A" },
-    { label: "pHash", ms: capture.phash_ms, color: "#B59E6B" },
-    { label: "OCR", ms: capture.ocr_ms ?? 0, color: "#6B5B8A", skipped: capture.ocr_skipped_reason },
     { label: "DB Write", ms: capture.db_write_ms, color: "#B57A6B" },
   ];
 
@@ -150,10 +147,6 @@ function CaptureBreakdown({ capture }: { capture: CaptureMetrics | null }) {
             <div className="text-lg font-mono font-semibold text-gray-900">{capture.memory_mb.toFixed(0)}MB</div>
             <div className="text-xs text-gray-500">Memory</div>
           </div>
-          <div>
-            <div className="text-lg font-mono font-semibold text-gray-900">{(capture.screenshot_bytes / 1024).toFixed(0)}KB</div>
-            <div className="text-xs text-gray-500">Screenshot size</div>
-          </div>
         </div>
         <div className="text-xs text-gray-400">
           {new Date(capture.timestamp).toLocaleTimeString()}
@@ -172,11 +165,7 @@ function CaptureBreakdown({ capture }: { capture: CaptureMetrics | null }) {
               />
             </div>
             <span className="text-sm font-mono text-gray-700 w-14 text-right">
-              {stage.skipped ? (
-                <span className="text-gray-400">-</span>
-              ) : (
-                `${stage.ms}ms`
-              )}
+              {stage.ms}ms
             </span>
           </div>
         ))}

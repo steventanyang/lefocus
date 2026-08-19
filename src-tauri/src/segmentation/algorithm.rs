@@ -42,7 +42,7 @@ pub fn segment_session(
     Vec<crate::db::models::Interruption>,
 )> {
     use crate::db::models::Segment;
-    use crate::segmentation::{merge::sandwich_merge, scoring::compute_unique_phash_count};
+    use crate::segmentation::merge::sandwich_merge;
 
     // Edge case: empty readings
     if readings.is_empty() {
@@ -103,17 +103,14 @@ pub fn segment_session(
             .filter(|r| r.timestamp >= segment.start_time && r.timestamp <= segment.end_time)
             .collect();
 
-        // Compute unique_phash_count
         let segment_readings_vec: Vec<ContextReading> =
             segment_readings.iter().map(|r| (*r).clone()).collect();
-        let unique_phash_count = compute_unique_phash_count(&segment_readings_vec);
-        segment.unique_phash_count = Some(unique_phash_count);
 
         // Update reading_count based on actual readings in this segment (accounts for merged segments)
         segment.reading_count = segment_readings.len() as i64;
 
         // Compute confidence scores
-        let (confidence, duration_score, stability_score, visual_score, ocr_score) =
+        let (confidence, duration_score, stability_score) =
             crate::segmentation::scoring::compute_confidence(
                 segment,
                 &segment_readings_vec,
@@ -123,8 +120,9 @@ pub fn segment_session(
         segment.confidence = confidence;
         segment.duration_score = Some(duration_score);
         segment.stability_score = Some(stability_score);
-        segment.visual_clarity_score = Some(visual_score);
-        segment.ocr_quality_score = Some(ocr_score);
+        segment.visual_clarity_score = None;
+        segment.ocr_quality_score = None;
+        segment.unique_phash_count = None;
     }
 
     Ok((final_segments, interruptions))
@@ -140,7 +138,6 @@ fn create_single_segment_for_session(
     Vec<crate::db::models::Interruption>,
 ) {
     use crate::db::models::Segment;
-    use crate::segmentation::scoring::compute_unique_phash_count;
     use uuid::Uuid;
 
     if readings.is_empty() {
@@ -152,8 +149,6 @@ fn create_single_segment_for_session(
     // Duration includes the capture interval after the last reading
     const CAPTURE_INTERVAL_SECS: i64 = 5;
     let duration_secs = (last.timestamp - first.timestamp).num_seconds() + CAPTURE_INTERVAL_SECS;
-    let unique_phash_count = compute_unique_phash_count(&readings);
-
     let window_title = most_common_window_title(&readings);
 
     let mut segment = Segment {
@@ -171,21 +166,19 @@ fn create_single_segment_for_session(
         visual_clarity_score: None,
         ocr_quality_score: None,
         reading_count: readings.len() as i64,
-        unique_phash_count: Some(unique_phash_count),
+        unique_phash_count: None,
         segment_summary: None,
         icon_data_url: None, // Populated later by database query
         icon_color: None,    // Populated later by database query
     };
 
     // Compute scores
-    let (confidence, duration_score, stability_score, visual_score, ocr_score) =
+    let (confidence, duration_score, stability_score) =
         crate::segmentation::scoring::compute_confidence(&segment, &readings, config);
 
     segment.confidence = confidence;
     segment.duration_score = Some(duration_score);
     segment.stability_score = Some(stability_score);
-    segment.visual_clarity_score = Some(visual_score);
-    segment.ocr_quality_score = Some(ocr_score);
 
     (vec![segment], Vec::new())
 }
@@ -261,7 +254,7 @@ fn create_initial_segments_with_readings(groups: Vec<ReadingGroup>) -> Vec<Segme
                     visual_clarity_score: None,
                     ocr_quality_score: None,
                     reading_count: group.reading_count() as i64,
-                    unique_phash_count: None, // Will be computed later
+                    unique_phash_count: None,
                     segment_summary: None,
                     icon_data_url: None, // Populated later by database query
                     icon_color: None,    // Populated later by database query
@@ -283,6 +276,9 @@ fn most_common_window_title(readings: &[ContextReading]) -> Option<String> {
     let mut title_counts: HashMap<&str, usize> = HashMap::new();
     for reading in readings {
         let title = reading.window_metadata.title.as_str();
+        if title.is_empty() {
+            continue;
+        }
         *title_counts.entry(title).or_insert(0) += 1;
     }
 

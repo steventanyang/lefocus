@@ -83,10 +83,13 @@ pub struct WindowBounds {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WindowMetadata {
+    /// Legacy window-level field. NSWorkspace app tracking returns `0`.
     pub window_id: u32,
     pub bundle_id: String,
+    /// Legacy window-level field. NSWorkspace app tracking returns an empty string.
     pub title: String,
     pub owner_name: String,
+    /// Legacy window-level field. NSWorkspace app tracking returns zeroed bounds.
     pub bounds: WindowBounds,
 }
 
