@@ -1,5 +1,4 @@
 import AppKit
-import Carbon
 import Foundation
 import MediaPlayer
 
@@ -11,8 +10,8 @@ public final class MediaMonitor {
 
     private let nowPlayingCenter = MPNowPlayingInfoCenter.default()
     private let controlCoordinator = MediaControlCoordinator()
-    private let spotifyProbe = SpotifyMetadataProbe()
     private let musicProbe = MusicMetadataProbe()
+    private let mediaRemoteProbe = MediaRemoteAdapterProbe()
     private let pollingQueue = DispatchQueue(label: "MacOSSensing.MediaMonitor.polling", qos: .userInitiated)
     private let albumArtCoordinator = AlbumArtCoordinator.shared
 
@@ -23,8 +22,6 @@ public final class MediaMonitor {
     private static let maxPollDuration: TimeInterval = 10.0
     private var currentTrack: TrackInfo?
     private var pendingArtworkTimestamp: Date?
-    private var hasRequestedSpotifyPermission = false
-
     public private(set) var activeBundleID: String?
 
     private init() {}
@@ -33,6 +30,7 @@ public final class MediaMonitor {
         guard metadataTimer == nil else { return }
         metadataInterval = 1.0
         isPolling = false
+        mediaRemoteProbe.startMonitoring()
         registerSleepWakeObservers()
         ensureMetadataTimer()
         refreshMetadata()
@@ -43,6 +41,7 @@ public final class MediaMonitor {
         metadataTimer = nil
         metadataInterval = 1.0
         isPolling = false
+        mediaRemoteProbe.stopMonitoring()
         currentTrack = nil
         activeBundleID = nil
         pendingArtworkTimestamp = nil
@@ -50,18 +49,34 @@ public final class MediaMonitor {
     }
 
     public func togglePlayback() {
+        if activeBundleID == MediaRemoteAdapterProbe.sourceIdentifier {
+            mediaRemoteProbe.togglePlayback()
+            return
+        }
         controlCoordinator.togglePlayback(for: activeBundleID)
     }
 
     public func skipToNext() {
+        if activeBundleID == MediaRemoteAdapterProbe.sourceIdentifier {
+            mediaRemoteProbe.skipToNext()
+            return
+        }
         controlCoordinator.skipToNext(for: activeBundleID)
     }
 
     public func skipToPrevious() {
+        if activeBundleID == MediaRemoteAdapterProbe.sourceIdentifier {
+            mediaRemoteProbe.skipToPrevious()
+            return
+        }
         controlCoordinator.skipToPrevious(for: activeBundleID)
     }
 
     public func seek(to position: TimeInterval, bundleID: String?) {
+        if bundleID == MediaRemoteAdapterProbe.sourceIdentifier {
+            mediaRemoteProbe.seek(to: position)
+            return
+        }
         controlCoordinator.seek(to: position, bundleID: bundleID)
     }
 
@@ -140,34 +155,27 @@ public final class MediaMonitor {
     }
 
     private func captureSnapshot() -> MediaSnapshot? {
-        // Check if Spotify is running and request automation permission lazily (off polling queue)
-        if !hasRequestedSpotifyPermission {
-            hasRequestedSpotifyPermission = true
-            DispatchQueue.global(qos: .utility).async { [weak self] in
-                guard let self else { return }
-                // NSWorkspace.shared.runningApplications should be accessed carefully
-                let running = DispatchQueue.main.sync {
-                    NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier == "com.spotify.client" }
-                }
-                if running {
-                    self.requestSpotifyAutomationPermissionIfNeeded()
-                } else {
-                    // Reset flag so we check again next poll
-                    self.hasRequestedSpotifyPermission = false
-                }
-            }
-        }
-
-        let spotify = spotifyProbe.snapshot()
-        if let spotify {
+        let music = musicProbe.snapshot()
+        if let music, music.track.isPlaying {
             return MediaSnapshot(
-                track: spotify.track,
-                bundleID: spotify.track.sourceBundleID,
-                artworkHint: spotify.hint
+                track: music.track,
+                bundleID: music.track.sourceBundleID,
+                artworkHint: music.hint
             )
         }
 
-        let music = musicProbe.snapshot()
+        // Browsers do not expose useful metadata through public macOS APIs.
+        // MediaRemote supplies the system Now Playing session used by Control Center.
+        let systemMedia = mediaRemoteProbe.snapshot()
+        if let systemMedia {
+            return MediaSnapshot(
+                track: systemMedia.track,
+                bundleID: systemMedia.track.sourceBundleID,
+                artworkHint: nil
+            )
+        }
+
+        // Preserve paused Music when Control Center has no current session.
         if let music {
             return MediaSnapshot(
                 track: music.track,
@@ -182,10 +190,6 @@ public final class MediaMonitor {
             return MediaSnapshot(track: nowPlaying, bundleID: nowPlaying.sourceBundleID, artworkHint: nil)
         }
 
-        // NSLog("[MediaMonitor] All probes nil — Spotify: %@, Music: %@, NowPlaying: %@",
-        //       spotify == nil ? "nil" : "ok",
-        //       music == nil ? "nil" : "ok",
-        //       nowPlaying == nil ? "nil" : "ok")
         return nil
     }
 
@@ -194,8 +198,10 @@ public final class MediaMonitor {
 
         guard let snapshot else {
             if currentTrack != nil {
-                // NSLog("[MediaMonitor] Track disappeared — was: %@ by %@",
-                //       currentTrack?.title ?? "?", currentTrack?.artist ?? "?")
+                NSLog("[MediaMonitor] track disappeared — was: %@ by %@ source=%@",
+                      currentTrack?.title ?? "?",
+                      currentTrack?.artist ?? "?",
+                      currentTrack?.sourceBundleID ?? "unknown")
                 currentTrack = nil
                 onTrackChange?(nil)
             }
@@ -236,6 +242,11 @@ public final class MediaMonitor {
             currentTrack = track
             onTrackChange?(track)
             if trackChanged {
+                NSLog("[MediaMonitor] selected: %@ by %@ source=%@ playing=%@",
+                      track.title,
+                      track.artist,
+                      track.sourceBundleID ?? "unknown",
+                      track.isPlaying ? "true" : "false")
                 pendingArtworkTimestamp = nil
             }
         }
@@ -336,42 +347,6 @@ public final class MediaMonitor {
         )
     }
     
-    // MARK: - Lazy Spotify Permission
-    
-    private func requestSpotifyAutomationPermissionIfNeeded() {
-        let bundleID = "com.spotify.client"
-        
-        // Check if we already have permission
-        guard let data = bundleID.data(using: .utf8) else { return }
-        
-        var target = AEAddressDesc()
-        let createStatus = data.withUnsafeBytes { bytes -> OSStatus in
-            guard let base = bytes.baseAddress else { return OSStatus(errAECoercionFail) }
-            return OSStatus(AECreateDesc(DescType(typeApplicationBundleID), base, data.count, &target))
-        }
-        
-        guard createStatus == noErr else { return }
-        defer { AEDisposeDesc(&target) }
-        
-        // Check without prompting first
-        let checkStatus = AEDeterminePermissionToAutomateTarget(
-            &target,
-            AEEventClass(typeWildCard),
-            AEEventID(typeWildCard),
-            false
-        )
-        
-        // If not yet determined or needs consent, prompt the user
-        if checkStatus == OSStatus(errAEEventWouldRequireUserConsent) || checkStatus == OSStatus(errAEEventNotPermitted) {
-            // Request permission (this will show the macOS dialog)
-            _ = AEDeterminePermissionToAutomateTarget(
-                &target,
-                AEEventClass(typeWildCard),
-                AEEventID(typeWildCard),
-                true
-            )
-        }
-    }
 }
 
 // MARK: - Snapshot + probes
@@ -389,69 +364,6 @@ private protocol MediaAppProbe {
 private struct ProbeResult {
     let track: TrackInfo
     let hint: ArtworkHint?
-}
-
-private struct SpotifyMetadataProbe: MediaAppProbe {
-    private static let separator = "||LEFOCUS_SPOTIFY||"
-
-    func snapshot() -> ProbeResult? {
-        guard let response = AppleScriptRunner.evaluateString(Self.script) else { return nil }
-        guard !response.isEmpty else { return nil }
-        let components = response.components(separatedBy: Self.separator)
-        guard components.count >= 3 else { return nil }
-
-        let isPlaying = components[2].lowercased() == "playing"
-        guard components[0].isEmpty == false || components[1].isEmpty == false else {
-            return nil
-        }
-
-        let position: TimeInterval? = components.count >= 6 ? Double(components[4]) : nil
-        let durationMs: TimeInterval? = components.count >= 6 ? Double(components[5]) : nil
-        let duration = durationMs.map { $0 / 1000.0 }
-
-        let track = TrackInfo(
-            title: components[0].isEmpty ? "Unknown" : components[0],
-            artist: components[1].isEmpty ? "Unknown" : components[1],
-            artwork: nil,
-            isPlaying: isPlaying,
-            sourceBundleID: "com.spotify.client",
-            position: position,
-            duration: duration,
-            canSeek: true
-        )
-
-        let urlString = components.count >= 4 ? components[3].trimmingCharacters(in: .whitespacesAndNewlines) : ""
-        let hint: ArtworkHint?
-        if !urlString.isEmpty, let url = URL(string: urlString) {
-            hint = .spotify(url: url)
-        } else {
-            hint = nil
-        }
-
-        return ProbeResult(track: track, hint: hint)
-    }
-
-    private static let script = """
-    set separator to "\(SpotifyMetadataProbe.separator)"
-    if application "Spotify" is not running then
-        return ""
-    end if
-    tell application "Spotify"
-        if player state is stopped then
-            return ""
-        end if
-        set trackName to name of current track
-        set trackArtist to artist of current track
-        set trackState to player state as string
-        set artUrl to ""
-        try
-            set artUrl to artwork url of current track
-        end try
-        set pos to player position as string
-        set dur to duration of current track as string
-        return trackName & separator & trackArtist & separator & trackState & separator & artUrl & separator & pos & separator & dur
-    end tell
-    """
 }
 
 private struct MusicMetadataProbe: MediaAppProbe {

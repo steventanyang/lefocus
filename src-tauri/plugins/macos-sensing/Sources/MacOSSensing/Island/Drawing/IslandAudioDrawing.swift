@@ -563,9 +563,9 @@ extension IslandView {
                     drawCompactWaveformOnRight()
                 }
             } else {
-                // No dots — original layout: waveform left, artwork right
-                drawCompactWaveform(startX: 26.0, centerY: notchCenterY)
-                drawCompactArtworkOnRight()
+                // No dots: keep the media layout balanced around the notch.
+                drawCompactArtworkOnLeft()
+                drawCompactWaveformOnRight()
             }
         case .timerActive:
             drawTimerText()
@@ -581,22 +581,11 @@ extension IslandView {
     func drawCompactArtworkOnLeft() {
         guard let track = trackInfo else { return }
         let size = AudioArtworkLayout.compactSize
-        // Position artwork after the dots zone so they sit side by side
-        let artworkX = compactDotsZoneWidth + 2.0
+        // Position artwork after agent dots, or at the standard outer margin
+        // when the agent area is absent.
+        let artworkX = agentSessions.isEmpty ? 22.0 : compactDotsZoneWidth + 2.0
         let rect = NSRect(
             x: artworkX,
-            y: notchCenterY - size / 2.0,
-            width: size,
-            height: size
-        )
-        drawArtworkImage(track.artwork, in: rect, cornerRadius: 3.0, emphasize: false)
-    }
-
-    func drawCompactArtworkOnRight() {
-        guard let track = trackInfo else { return }
-        let size = AudioArtworkLayout.compactSize
-        let rect = NSRect(
-            x: bounds.maxX - size - 22.0,
             y: notchCenterY - size / 2.0,
             width: size,
             height: size

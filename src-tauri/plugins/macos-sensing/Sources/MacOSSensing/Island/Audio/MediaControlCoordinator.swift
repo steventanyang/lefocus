@@ -53,12 +53,6 @@ private final class AppleScriptMediaController {
 
     private func script(for command: MediaCommand, bundleID: String) -> String? {
         switch (bundleID, command) {
-        case ("com.spotify.client", .toggle):
-            return #"tell application "Spotify" to playpause"#
-        case ("com.spotify.client", .next):
-            return #"tell application "Spotify" to next track"#
-        case ("com.spotify.client", .previous):
-            return #"tell application "Spotify" to previous track"#
         case ("com.apple.Music", .toggle):
             return #"tell application "Music" to playpause"#
         case ("com.apple.Music", .next):
@@ -74,12 +68,6 @@ private final class AppleScriptMediaController {
         let clamped = max(0, position)
         let formatted = String(format: "%.3f", clamped)
         switch bundleID {
-        case "com.spotify.client":
-            return """
-            tell application "Spotify"
-                set player position to \(formatted)
-            end tell
-            """
         case "com.apple.Music":
             return """
             tell application "Music"
@@ -144,7 +132,7 @@ private final class MediaKeyController {
 enum AppleScriptRunner {
     /// Default timeout for AppleScript execution (seconds).
     /// 3s is generous for normal execution (~100ms) but prevents multi-second hangs
-    /// when apps like Spotify are starting up or unresponsive.
+    /// when a media app is starting up or unresponsive.
     private static let defaultTimeout: TimeInterval = 3.0
 
     static func execute(_ source: String) -> Bool {

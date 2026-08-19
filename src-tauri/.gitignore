@@ -8,3 +8,5 @@
 
 /resources/libMacOSSensing.dylib
 /resources/MacOSSensing_MacOSSensing.bundle
+/resources/libMediaRemoteAdapter.dylib
+/resources/MediaRemoteAdapter_MediaRemoteAdapter.bundle

@@ -13,9 +13,11 @@ echo "Detected app version: $APP_VERSION"
 DMG_PATH="$PROJECT_ROOT/src-tauri/target/release/bundle/dmg/lefocus_${APP_VERSION}_aarch64.dmg"
 # Original location where Tauri puts the sidecar/resource
 RESOURCE_DYLIB_PATH="$APP_PATH/Contents/Resources/resources/libMacOSSensing.dylib"
+ADAPTER_RESOURCE_DYLIB_PATH="$APP_PATH/Contents/Resources/resources/libMediaRemoteAdapter.dylib"
 # New standard location we will move it to
 FRAMEWORKS_DIR="$APP_PATH/Contents/Frameworks"
 FINAL_DYLIB_PATH="$FRAMEWORKS_DIR/libMacOSSensing.dylib"
+FINAL_ADAPTER_DYLIB_PATH="$FRAMEWORKS_DIR/libMediaRemoteAdapter.dylib"
 AUTH_KEY="${APPLE_API_KEY_PATH:-$PROJECT_ROOT/AuthKey_AD89R6TC2D.p8}"
 
 # Identity Info
@@ -37,6 +39,16 @@ echo "----------------------------------------------------------------"
 # 1. Create Frameworks directory
 mkdir -p "$FRAMEWORKS_DIR"
 
+if [ -f "$ADAPTER_RESOURCE_DYLIB_PATH" ]; then
+    echo "Moving MediaRemote adapter dylib from Resources to Frameworks..."
+    mv "$ADAPTER_RESOURCE_DYLIB_PATH" "$FINAL_ADAPTER_DYLIB_PATH"
+elif [ -f "$FINAL_ADAPTER_DYLIB_PATH" ]; then
+    echo "Found MediaRemote adapter dylib already in Frameworks."
+else
+    echo "Error: Could not find libMediaRemoteAdapter.dylib in Resources or Frameworks."
+    exit 1
+fi
+
 # 2. Move the dylib if it exists in Resources
 if [ -f "$RESOURCE_DYLIB_PATH" ]; then
     echo "Moving dylib from Resources to Frameworks..."
@@ -56,10 +68,16 @@ fi
 # This ensures the dylib knows it can be loaded via @rpath
 echo "Fixing dylib install name..."
 install_name_tool -id "@rpath/libMacOSSensing.dylib" "$FINAL_DYLIB_PATH"
+install_name_tool -id "@rpath/libMediaRemoteAdapter.dylib" "$FINAL_ADAPTER_DYLIB_PATH"
 
 echo "----------------------------------------------------------------"
 echo "Step 1: Sign nested binaries (from inside out)"
 echo "----------------------------------------------------------------"
+echo "Signing adapter dylib: $FINAL_ADAPTER_DYLIB_PATH"
+codesign --force --options runtime --timestamp \
+    --sign "$SIGN_IDENTITY" \
+    "$FINAL_ADAPTER_DYLIB_PATH"
+
 if [ -f "$FINAL_DYLIB_PATH" ]; then
     echo "Signing dylib: $FINAL_DYLIB_PATH"
     codesign --force --options runtime --timestamp \

@@ -58,11 +58,6 @@ extern "C" {
     fn macos_sensing_island_set_visible(visible: bool);
     fn macos_sensing_island_update_agent_sessions(sessions: *const AgentSessionFFI, count: usize);
 
-    // Media automation permission
-    fn macos_sensing_check_media_automation_permission(bundle_id: *const c_char) -> bool;
-    fn macos_sensing_request_media_automation_permission(bundle_id: *const c_char) -> i32;
-    fn macos_sensing_open_automation_settings();
-
     fn macos_sensing_set_timer_end_callback(callback: extern "C" fn());
     fn macos_sensing_set_timer_cancel_callback(callback: extern "C" fn());
     fn macos_sensing_set_focus_app_callback(callback: extern "C" fn());
@@ -222,38 +217,6 @@ pub fn island_update_agent_sessions(sessions: &[AgentSession]) {
 
 #[cfg(not(target_os = "macos"))]
 pub fn island_update_agent_sessions(_sessions: &[AgentSession]) {}
-
-pub fn check_media_automation_permission(bundle_id: &str) -> bool {
-    match CString::new(bundle_id) {
-        Ok(c_bundle) => unsafe {
-            macos_sensing_check_media_automation_permission(c_bundle.as_ptr())
-        },
-        Err(err) => {
-            log::error!("Failed to build CString for bundle_id {}: {}", bundle_id, err);
-            false
-        }
-    }
-}
-
-pub fn request_media_automation_permission_status(bundle_id: &str) -> i32 {
-    match CString::new(bundle_id) {
-        Ok(c_bundle) => unsafe { macos_sensing_request_media_automation_permission(c_bundle.as_ptr()) },
-        Err(err) => {
-            log::error!(
-                "Failed to build CString for bundle_id {} when requesting automation permission: {}",
-                bundle_id,
-                err
-            );
-            -1
-        }
-    }
-}
-
-pub fn open_automation_settings() {
-    unsafe {
-        macos_sensing_open_automation_settings();
-    }
-}
 
 // NOTE: These functions are currently unused as media playback is controlled directly
 // through the Island UI in Swift. In the future, we can expose these as Tauri commands

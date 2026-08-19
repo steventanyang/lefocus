@@ -35,9 +35,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": [
-      "resources/libMacOSSensing.dylib"
-    ]
+    "resources": {
+      "resources/libMacOSSensing.dylib": "resources/libMacOSSensing.dylib",
+      "resources/libMediaRemoteAdapter.dylib": "resources/libMediaRemoteAdapter.dylib",
+      "resources/MediaRemoteAdapter_MediaRemoteAdapter.bundle": "MediaRemoteAdapter_MediaRemoteAdapter.bundle"
+    }
   },
   "plugins": {
     "updater": {

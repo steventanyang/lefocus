@@ -177,14 +177,9 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
     }
   }, [selectedSession]);
 
-  // Scroll detection for infinite loading
+  // Scroll detection for infinite loading in both list and block views
   useEffect(() => {
-    if (
-      viewMode !== "list" ||
-      !virtualizer ||
-      !hasNextPage ||
-      isFetchingNextPage
-    ) {
+    if (!hasNextPage || isFetchingNextPage) {
       return;
     }
 
@@ -194,21 +189,35 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
     }
 
     const checkScrollPosition = () => {
-      const virtualItems = virtualizer.getVirtualItems();
-      if (virtualItems.length === 0) {
+      if (viewMode === "list") {
+        const virtualItems = virtualizer.getVirtualItems();
+        if (virtualItems.length === 0) {
+          return;
+        }
+
+        // Get the last visible item index
+        const lastVisibleIndex = virtualItems[virtualItems.length - 1]?.index;
+        if (lastVisibleIndex === undefined) {
+          return;
+        }
+
+        // Trigger fetch when within 5 items of the end
+        const threshold = 5;
+        if (lastVisibleIndex >= filteredSessions.length - threshold) {
+          void fetchNextPage();
+        }
         return;
       }
 
-      // Get the last visible item index
-      const lastVisibleIndex = virtualItems[virtualItems.length - 1]?.index;
-      if (lastVisibleIndex === undefined) {
-        return;
-      }
+      // The block grid isn't virtualized, so use the remaining scroll distance.
+      // A generous threshold keeps loading seamless while scrolling through cards.
+      const remainingScrollDistance =
+        scrollElement.scrollHeight -
+        scrollElement.scrollTop -
+        scrollElement.clientHeight;
 
-      // Trigger fetch when within 5 items of the end
-      const threshold = 5;
-      if (lastVisibleIndex >= filteredSessions.length - threshold) {
-        fetchNextPage();
+      if (remainingScrollDistance <= 400) {
+        void fetchNextPage();
       }
     };
 
@@ -529,56 +538,46 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
       {filteredSessions.length > 0 && (
         <>
           {viewMode === "list" ? (
-            <>
-              <div
-                ref={listContainerRef}
-                className="flex flex-col"
-                style={{
-                  height: `${virtualizer.getTotalSize()}px`,
-                  position: "relative",
-                }}
-              >
-                {virtualizer.getVirtualItems().map((virtualItem) => {
-                  const session = filteredSessions[virtualItem.index];
-                  return (
-                    <div
-                      key={session.id}
-                      data-index={virtualItem.index}
-                      ref={virtualizer.measureElement}
-                      style={{
-                        position: "absolute",
-                        top: 0,
-                        left: 0,
-                        width: "100%",
-                        transform: `translateY(${virtualItem.start}px)`,
-                      }}
-                    >
-                      <div className="mb-4">
-                        <SessionCard
-                          ref={(el) => {
-                            cardRefs.current[virtualItem.index] = el;
-                          }}
-                          session={session}
-                          segments={segmentsBySession[session.id]}
-                          labels={labels}
-                          onClick={handleSessionClick}
-                          isSelected={selectedIndex === virtualItem.index}
-                          isDeleteConfirm={
-                            deleteConfirmSessionId === session.id
-                          }
-                        />
-                      </div>
+            <div
+              ref={listContainerRef}
+              className="flex flex-col"
+              style={{
+                height: `${virtualizer.getTotalSize()}px`,
+                position: "relative",
+              }}
+            >
+              {virtualizer.getVirtualItems().map((virtualItem) => {
+                const session = filteredSessions[virtualItem.index];
+                return (
+                  <div
+                    key={session.id}
+                    data-index={virtualItem.index}
+                    ref={virtualizer.measureElement}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      width: "100%",
+                      transform: `translateY(${virtualItem.start}px)`,
+                    }}
+                  >
+                    <div className="mb-4">
+                      <SessionCard
+                        ref={(el) => {
+                          cardRefs.current[virtualItem.index] = el;
+                        }}
+                        session={session}
+                        segments={segmentsBySession[session.id]}
+                        labels={labels}
+                        onClick={handleSessionClick}
+                        isSelected={selectedIndex === virtualItem.index}
+                        isDeleteConfirm={deleteConfirmSessionId === session.id}
+                      />
                     </div>
-                  );
-                })}
-              </div>
-              {/* Loading indicator for next page */}
-              {isFetchingNextPage && (
-                <div className="text-base font-light text-center p-4">
-                  loading more sessions...
-                </div>
-              )}
-            </>
+                  </div>
+                );
+              })}
+            </div>
           ) : (
             <BlockView
               sessions={filteredSessions}
@@ -588,6 +587,12 @@ export function ActivitiesView({ onNavigate }: ActivitiesViewProps) {
               cardRefs={cardRefs}
               deleteConfirmSessionId={deleteConfirmSessionId}
             />
+          )}
+          {/* Loading indicator for the next page in either view */}
+          {isFetchingNextPage && (
+            <div className="text-base font-light text-center p-4">
+              loading more sessions...
+            </div>
           )}
         </>
       )}

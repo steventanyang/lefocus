@@ -438,7 +438,7 @@ function StatsSkeleton({
                 <KeyBox selected={viewMode === "list"} hovered={false}>
                   L
                 </KeyBox>
-                <span className="text-xs font-light text-gray-600 hover:text-gray-800 transition-colors">
+                <span className="w-16 text-left text-xs font-light text-gray-600 hover:text-gray-800 transition-colors">
                   list
                 </span>
               </button>
@@ -450,7 +450,7 @@ function StatsSkeleton({
                   <KeyBox selected={viewMode === "activity"} hovered={false}>
                     A
                   </KeyBox>
-                  <span className="text-xs font-light text-gray-600 hover:text-gray-800 transition-colors">
+                  <span className="w-16 text-left text-xs font-light text-gray-600 hover:text-gray-800 transition-colors">
                     activity
                   </span>
                 </button>
@@ -462,7 +462,7 @@ function StatsSkeleton({
                 <KeyBox selected={viewMode === "treemap"} hovered={false}>
                   T
                 </KeyBox>
-                <span className="text-xs font-light text-gray-600 hover:text-gray-800 transition-colors">
+                <span className="w-16 text-left text-xs font-light text-gray-600 hover:text-gray-800 transition-colors">
                   treemap
                 </span>
               </button>

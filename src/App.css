@@ -8,6 +8,16 @@
 
 /* Ensure base background is white */
 @layer base {
+  /* Keep scrolling functional while hiding native scrollbars app-wide. */
+  * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  *::-webkit-scrollbar {
+    display: none;
+  }
+
   html {
     font-family:
       "IBM Plex Sans",

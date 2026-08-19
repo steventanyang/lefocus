@@ -3,13 +3,10 @@ import CryptoKit
 import Foundation
 
 enum ArtworkHint: Hashable {
-    case spotify(url: URL)
     case appleMusicBase64(String)
 
     var cacheComponent: String {
         switch self {
-        case let .spotify(url):
-            return "spotify-\(ArtworkHint.hashedComponent(for: url.absoluteString))"
         case let .appleMusicBase64(base64):
             return "music-\(ArtworkHint.hashedComponent(for: base64))"
         }
@@ -146,8 +143,6 @@ final class AlbumArtCoordinator {
     private func performFetch(for request: ArtworkRequest) -> NSImage? {
         let rawImage: NSImage?
         switch request.hint {
-        case let .spotify(url):
-            rawImage = loadImage(from: url)
         case let .appleMusicBase64(base64):
             guard let data = Data(base64Encoded: base64, options: [.ignoreUnknownCharacters]) else {
                 rawImage = nil
@@ -158,26 +153,6 @@ final class AlbumArtCoordinator {
 
         guard let rawImage else { return nil }
         return resized(image: rawImage, targetSize: CGSize(width: 96, height: 96))
-    }
-
-    private func loadImage(from url: URL) -> NSImage? {
-        var request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 3.0)
-        request.setValue("Mozilla/5.0 (LeFocusIsland)", forHTTPHeaderField: "User-Agent")
-
-        let semaphore = DispatchSemaphore(value: 0)
-        var resultData: Data?
-
-        let task = URLSession.shared.dataTask(with: request) { data, _, _ in
-            resultData = data
-            semaphore.signal()
-        }
-        task.resume()
-        if semaphore.wait(timeout: .now() + 5.0) == .timedOut {
-            task.cancel()
-        }
-
-        guard let data = resultData else { return nil }
-        return NSImage(data: data)
     }
 
     private func resized(image: NSImage, targetSize: CGSize) -> NSImage? {

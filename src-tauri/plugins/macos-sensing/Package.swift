@@ -13,6 +13,9 @@ let package = Package(
             targets: ["MacOSSensing"]
         )
     ],
+    dependencies: [
+        .package(path: "Vendor/mediaremote-adapter")
+    ],
     targets: [
         .target(
             name: "CMacOSSensing",
@@ -21,7 +24,10 @@ let package = Package(
         ),
         .target(
             name: "MacOSSensing",
-            dependencies: ["CMacOSSensing"],
+            dependencies: [
+                "CMacOSSensing",
+                .product(name: "MediaRemoteAdapter", package: "mediaremote-adapter")
+            ],
             path: "Sources/MacOSSensing",
             exclude: [],
             sources: nil,

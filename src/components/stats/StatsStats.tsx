@@ -168,28 +168,28 @@ export function StatsStats({
           <div className="flex items-center gap-2">
             <button
               onClick={() => onViewModeChange("list")}
-              className="text-base font-light text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-2"
+              className="group text-base font-light text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-2"
             >
               <KeyBox selected={viewMode === "list"} hovered={false}>L</KeyBox>
-              <span>
+              <span className="w-16 text-left">
                 list
               </span>
             </button>
             {timeWindow === "year" && (
               <button
                 onClick={() => onViewModeChange("activity")}
-                className="text-base font-light text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-2"
+                className="group text-base font-light text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-2"
               >
                 <KeyBox selected={viewMode === "activity"} hovered={false}>A</KeyBox>
-                <span>activity</span>
+                <span className="w-16 text-left">activity</span>
               </button>
             )}
             <button
               onClick={() => onViewModeChange("treemap")}
-              className="text-base font-light text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-2"
+              className="group text-base font-light text-gray-600 hover:text-gray-800 transition-colors flex items-center gap-2"
             >
               <KeyBox selected={viewMode === "treemap"} hovered={false}>T</KeyBox>
-              <span>
+              <span className="w-16 text-left">
                 treemap
               </span>
             </button>
