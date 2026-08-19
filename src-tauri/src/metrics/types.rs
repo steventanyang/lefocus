@@ -5,11 +5,6 @@ use serde::{Deserialize, Serialize};
 pub struct CaptureMetrics {
     pub timestamp: DateTime<Utc>,
     pub metadata_ms: u64,
-    pub screenshot_ms: u64,
-    pub screenshot_bytes: usize,
-    pub phash_ms: u64,
-    pub ocr_ms: Option<u64>,
-    pub ocr_skipped_reason: Option<String>,
     pub db_write_ms: u64,
     pub total_ms: u64,
     pub cpu_percent: f32,
@@ -27,8 +22,6 @@ pub struct MetricsSnapshot {
     pub system: SystemMetrics,
     pub recent_captures: Vec<CaptureMetrics>,
     pub capture_count: u64,
-    pub ocr_count: u64,
-    pub ocr_skip_count: u64,
 }
 
 impl Default for MetricsSnapshot {
@@ -40,8 +33,6 @@ impl Default for MetricsSnapshot {
             },
             recent_captures: Vec::new(),
             capture_count: 0,
-            ocr_count: 0,
-            ocr_skip_count: 0,
         }
     }
 }

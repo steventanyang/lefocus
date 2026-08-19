@@ -2,13 +2,8 @@
 
 // Swift entry points (defined in FFIExports.swift)
 extern CMacOSSensing_WindowMetadataFFI *macos_sensing_swift_get_window(void);
-extern uint8_t *macos_sensing_swift_capture_screenshot(uint32_t window_id, size_t *out_len);
-extern CMacOSSensing_OCRResultFFI *macos_sensing_swift_run_ocr(const uint8_t *image_data, size_t image_len);
-extern void macos_sensing_swift_clear_cache(void);
 
 extern void macos_sensing_swift_free_window_metadata(CMacOSSensing_WindowMetadataFFI *ptr);
-extern void macos_sensing_swift_free_screenshot_buffer(uint8_t *ptr);
-extern void macos_sensing_swift_free_ocr_result(CMacOSSensing_OCRResultFFI *ptr);
 
 extern void macos_sensing_swift_island_update_agent_sessions(const CMacOSSensing_AgentSessionFFI *sessions, size_t count);
 extern void macos_sensing_swift_island_init(void);
@@ -24,11 +19,6 @@ extern void macos_sensing_swift_audio_toggle_playback(void);
 extern void macos_sensing_swift_audio_next_track(void);
 extern void macos_sensing_swift_audio_previous_track(void);
 
-extern bool macos_sensing_swift_check_screen_recording_permission(void);
-extern bool macos_sensing_swift_request_screen_recording_permission(void);
-extern bool macos_sensing_swift_check_accessibility_permission(void);
-extern void macos_sensing_swift_open_screen_recording_settings(void);
-extern void macos_sensing_swift_open_accessibility_settings(void);
 extern bool macos_sensing_swift_check_media_automation_permission(const char *bundle_id);
 extern int32_t macos_sensing_swift_request_media_automation_permission(const char *bundle_id);
 extern void macos_sensing_swift_open_automation_settings(void);
@@ -37,28 +27,8 @@ CMacOSSensing_WindowMetadataFFI *macos_sensing_get_active_window_metadata(void) 
     return macos_sensing_swift_get_window();
 }
 
-uint8_t *macos_sensing_capture_screenshot(uint32_t window_id, size_t *out_len) {
-    return macos_sensing_swift_capture_screenshot(window_id, out_len);
-}
-
-CMacOSSensing_OCRResultFFI *macos_sensing_run_ocr(const uint8_t *image_data, size_t image_len) {
-    return macos_sensing_swift_run_ocr(image_data, image_len);
-}
-
-void macos_sensing_clear_cache(void) {
-    macos_sensing_swift_clear_cache();
-}
-
 void macos_sensing_free_window_metadata(CMacOSSensing_WindowMetadataFFI *ptr) {
     macos_sensing_swift_free_window_metadata(ptr);
-}
-
-void macos_sensing_free_screenshot_buffer(uint8_t *ptr) {
-    macos_sensing_swift_free_screenshot_buffer(ptr);
-}
-
-void macos_sensing_free_ocr_result(CMacOSSensing_OCRResultFFI *ptr) {
-    macos_sensing_swift_free_ocr_result(ptr);
 }
 
 void macos_sensing_island_update_agent_sessions(const CMacOSSensing_AgentSessionFFI *sessions, size_t count) {
@@ -111,26 +81,6 @@ void macos_sensing_audio_next_track(void) {
 
 void macos_sensing_audio_previous_track(void) {
     macos_sensing_swift_audio_previous_track();
-}
-
-bool macos_sensing_check_screen_recording_permission(void) {
-    return macos_sensing_swift_check_screen_recording_permission();
-}
-
-bool macos_sensing_request_screen_recording_permission(void) {
-    return macos_sensing_swift_request_screen_recording_permission();
-}
-
-bool macos_sensing_check_accessibility_permission(void) {
-    return macos_sensing_swift_check_accessibility_permission();
-}
-
-void macos_sensing_open_screen_recording_settings(void) {
-    macos_sensing_swift_open_screen_recording_settings();
-}
-
-void macos_sensing_open_accessibility_settings(void) {
-    macos_sensing_swift_open_accessibility_settings();
 }
 
 bool macos_sensing_check_media_automation_permission(const char *bundle_id) {

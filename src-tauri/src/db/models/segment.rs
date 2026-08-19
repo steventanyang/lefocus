@@ -20,13 +20,17 @@ pub struct Segment {
     pub duration_secs: i64,
     pub bundle_id: String,
     pub app_name: Option<String>,
+    /// Populated for historical window-level readings; new app-level readings leave this empty.
     pub window_title: Option<String>,
     pub confidence: f64,
     pub duration_score: Option<f64>,
     pub stability_score: Option<f64>,
+    /// Legacy pHash-derived score retained for historical database compatibility.
     pub visual_clarity_score: Option<f64>,
+    /// Legacy OCR-derived score retained for historical database compatibility.
     pub ocr_quality_score: Option<f64>,
     pub reading_count: i64,
+    /// Legacy pHash aggregate retained for historical database compatibility.
     pub unique_phash_count: Option<i64>,
     pub segment_summary: Option<String>,
     /// App icon data URL from apps table (populated by JOIN)

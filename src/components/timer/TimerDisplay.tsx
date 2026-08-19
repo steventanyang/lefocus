@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSmoothCountdown } from "@/hooks/useSmoothCountdown";
 import { useTimerKeyboard } from "@/hooks/useTimerKeyboard";
+import { MAX_TIMER_DURATION_MS } from "@/constants/timer";
 import { TimerDisplayRenderer } from "./TimerDisplayRenderer";
-import { msToMMSS, mmssToMs, formatTime, formatEditableTime } from "@/utils/timeUtils";
+import { clockDigitsToMs, formatTime, msToClockDigits } from "@/utils/timeUtils";
 import type { TimerMode } from "@/types/timer";
 
 interface TimerDisplayProps {
@@ -21,94 +22,100 @@ export function TimerDisplay({
   mode,
   isEditable = false,
   onTimeChange,
-  initialMs,
+  initialMs = 0,
   isLabelDropdownOpen = false,
 }: TimerDisplayProps) {
   const displayMs = useSmoothCountdown(remainingMs, isRunning, mode === "stopwatch");
-  // Initialize editableValue from initialMs if provided and editable
-  const [editableValue, setEditableValue] = useState<number>(() => {
-    if (isEditable && initialMs !== undefined) {
-      return msToMMSS(initialMs);
-    }
-    return 0;
-  });
+  const [editableDigits, setEditableDigits] = useState(() => msToClockDigits(initialMs));
+  const [isEditing, setIsEditing] = useState(false);
   const displayRef = useRef<HTMLDivElement>(null);
+  const editableDigitsRef = useRef(editableDigits);
   const lastSentMsRef = useRef<number | null>(null);
-  // Initialize to undefined so first effect run detects initialMs as a change
-  const lastExternalInitialMsRef = useRef<number | undefined>(undefined);
+  const lastExternalInitialMsRef = useRef<number | undefined>(initialMs);
+  const currentMsRef = useRef(initialMs);
+  const isEditingRef = useRef(false);
+  const editBaselineMsRef = useRef(initialMs);
 
-  const { handleKeyDown } = useTimerKeyboard({
+  const { handleKeyDown, finishEditing } = useTimerKeyboard({
     isEditable,
-    editableValue,
-    setEditableValue,
+    setEditableDigits,
+    editableDigitsRef,
     onTimeChange,
     displayRef,
     lastSentMsRef,
+    currentMsRef,
+    isEditingRef,
+    editBaselineMsRef,
+    maxDurationMs: MAX_TIMER_DURATION_MS,
     isLabelDropdownOpen,
+    onEditingChange: setIsEditing,
   });
 
-  // Sync editableValue with external initialMs changes
-  // This synchronizes with external system (parent component state)
-  // Only sync when it's a real external change (not our own update via onTimeChange)
+  // Parent updates caused by typing should preserve the user's raw digit buffer.
+  // Presets, arrow shortcuts, and mode changes replace it with a canonical value.
   useEffect(() => {
-    if (isEditable && initialMs !== undefined) {
-      // Check if this is a real external change (not our own update)
-      const isExternalChange = 
-        lastExternalInitialMsRef.current !== initialMs &&
-        (lastSentMsRef.current === null || Math.abs(lastSentMsRef.current - initialMs) >= 100);
-      
-      if (isExternalChange) {
-        // This is an external change (e.g., preset button clicked), sync it
-        setEditableValue(msToMMSS(initialMs));
-        lastSentMsRef.current = null; // Reset after syncing external change
-      }
-      lastExternalInitialMsRef.current = initialMs;
-    } else if (!isEditable) {
-      // Reset ref when not editable
+    if (!isEditable) {
       lastExternalInitialMsRef.current = undefined;
+      isEditingRef.current = false;
+      setIsEditing(false);
+      return;
     }
-  }, [isEditable, initialMs]);
 
+    const wasSentByEditor = lastSentMsRef.current === initialMs;
+    const changedExternally =
+      lastExternalInitialMsRef.current !== initialMs && !wasSentByEditor;
 
-  const handleClick = () => {
-    if (isEditable && displayRef.current) {
-      displayRef.current.focus();
+    currentMsRef.current = initialMs;
+    if (changedExternally) {
+      const nextDigits = msToClockDigits(initialMs);
+      editableDigitsRef.current = nextDigits;
+      setEditableDigits(nextDigits);
+      editBaselineMsRef.current = initialMs;
+      isEditingRef.current = false;
+      setIsEditing(false);
     }
-  };
+
+    lastExternalInitialMsRef.current = initialMs;
+    if (wasSentByEditor) lastSentMsRef.current = null;
+  }, [editBaselineMsRef, initialMs, isEditable, isEditingRef]);
 
   const handleBlur = () => {
-    // When editing is complete, update the parent with the final value
-    if (onTimeChange && isEditable) {
-      const msValue = mmssToMs(editableValue);
-      lastSentMsRef.current = msValue;
-      onTimeChange(msValue);
-    }
+    const canonicalDigits = msToClockDigits(currentMsRef.current);
+    editableDigitsRef.current = canonicalDigits;
+    setEditableDigits(canonicalDigits);
+    finishEditing();
   };
 
   if (isEditable) {
-    const timeStr = formatEditableTime(editableValue);
+    const editableMs = clockDigitsToMs(editableDigits);
+    const timeStr = formatTime(editableMs);
+
     return (
       <div
         ref={displayRef}
+        role="spinbutton"
         tabIndex={0}
+        aria-label="Timer duration"
+        aria-valuemin={0}
+        aria-valuemax={MAX_TIMER_DURATION_MS / 1000}
+        aria-valuenow={Math.floor(editableMs / 1000)}
+        aria-valuetext={timeStr}
         onKeyDown={handleKeyDown}
-        onClick={handleClick}
+        onClick={() => displayRef.current?.focus()}
         onBlur={handleBlur}
         className="text-[5rem] font-semibold leading-none text-center tracking-tight tabular-nums cursor-text outline-none focus:outline-none text-black min-h-[5rem]"
       >
-        <TimerDisplayRenderer timeStr={timeStr} editableValueForColon={editableValue} />
+        <TimerDisplayRenderer timeStr={timeStr} isEditing={isEditing} />
       </div>
     );
   }
 
-  const timeStr = formatTime(displayMs);
-  // When running, hide leading zeros:
-  // - Hide "00:" when < 1 minute (show only seconds)
-  // - Hide leading zero in minutes when >= 1 minute (e.g., "2:46" instead of "02:46")
-  const hideLeadingZeros = isRunning;
   return (
-    <div className="text-[5rem] font-semibold leading-none text-center tracking-tight tabular-nums text-black min-h-[5rem]">
-      <TimerDisplayRenderer timeStr={timeStr} hideLeadingZerosWhenRunning={hideLeadingZeros} />
+    <div
+      className="text-[5rem] font-semibold leading-none text-center tracking-tight tabular-nums text-black min-h-[5rem]"
+      aria-label={formatTime(displayMs)}
+    >
+      <TimerDisplayRenderer timeStr={formatTime(displayMs)} />
     </div>
   );
 }

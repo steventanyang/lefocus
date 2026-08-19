@@ -16,9 +16,13 @@ pub struct ContextReading {
     pub session_id: String,
     pub timestamp: DateTime<Utc>,
     pub window_metadata: WindowMetadata,
+    /// Legacy screenshot-derived value. New metadata-only readings store `None`.
     pub phash: Option<String>,
+    /// Legacy OCR value retained so historical databases remain readable.
     pub ocr_text: Option<String>,
+    /// Legacy OCR value retained so historical databases remain readable.
     pub ocr_confidence: Option<f64>,
+    /// Legacy OCR value retained so historical databases remain readable.
     pub ocr_word_count: Option<u64>,
     /// Segment ID that this reading belongs to (set after segmentation)
     pub segment_id: Option<String>,

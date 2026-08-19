@@ -62,11 +62,17 @@ extension IslandView {
         return NSBezierPath(cgPath: cgPath)
     }
 
-    /// Matches `formatTime` in `src/utils/timeUtils.ts`: total minutes : seconds (minutes may exceed 59).
+    /// Matches `formatTime` in `src/utils/timeUtils.ts`: MM:SS below one hour, then H:MM:SS.
     func formatTime(ms: Int64) -> String {
         let totalSeconds = max(Int64(0), ms / 1000)
-        let minutes = totalSeconds / 60
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
         let seconds = totalSeconds % 60
+
+        if hours > 0 {
+            return String(format: "%lld:%02lld:%02lld", hours, minutes, seconds)
+        }
+
         return String(format: "%02lld:%02lld", minutes, seconds)
     }
 

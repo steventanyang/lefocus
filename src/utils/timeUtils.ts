@@ -1,45 +1,42 @@
-/**
- * Convert milliseconds to 4-digit MMSS format
- * Example: 1500000ms (25 minutes) -> 2500
- */
-export function msToMMSS(ms: number): number {
+/** Convert a duration to the compact digits used by direct timer entry. */
+export function msToClockDigits(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  return minutes * 100 + seconds;
+
+  if (hours > 0) {
+    return `${hours}${String(minutes).padStart(2, "0")}${String(seconds).padStart(2, "0")}`;
+  }
+
+  return `${minutes}${String(seconds).padStart(2, "0")}`;
 }
 
 /**
- * Convert 4-digit MMSS format to milliseconds
- * During input, we allow seconds > 59 to keep the display stable
- * Example: 2500 (25:00) -> 1500000ms
- * Example: 90 (00:90) -> 90000ms (not normalized to 01:30)
+ * Interpret up to six right-aligned digits as HHMMSS and normalize carries.
+ * Examples: "25" -> 25s, "2500" -> 25m, "9000" -> 1h30m.
  */
-export function mmssToMs(mmss: number): number {
-  const minutes = Math.floor(mmss / 100);
-  const seconds = mmss % 100;
-  // Don't normalize seconds > 59 during input - keep raw value
-  // This allows "90" to display as "00:90" instead of "01:30"
-  return (minutes * 60 + seconds) * 1000;
+export function clockDigitsToMs(digits: string): number {
+  const normalizedDigits = digits.replace(/\D/g, "").slice(-6);
+  if (normalizedDigits.length === 0) return 0;
+
+  const padded = normalizedDigits.padStart(6, "0");
+  const hours = Number(padded.slice(0, 2));
+  const minutes = Number(padded.slice(2, 4));
+  const seconds = Number(padded.slice(4, 6));
+  return (hours * 3600 + minutes * 60 + seconds) * 1000;
 }
 
-/**
- * Format milliseconds as MM:SS with total minutes (may exceed 59).
- * Examples: 1500000ms -> "25:00", 3600000ms -> "60:00", 4196000ms -> "69:56"
- */
+/** Format a duration as MM:SS, adding an hour group when needed. */
 export function formatTime(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-}
 
-/**
- * Format 4-digit MMSS number as MM:SS (total minutes may exceed 59).
- * Example: 2500 -> "25:00", 6000 -> "60:00"
- */
-export function formatEditableTime(mmss: number): string {
-  const minutes = Math.floor(mmss / 100);
-  const seconds = mmss % 100;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }

@@ -1,11 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import type { ReactNode } from "react";
 import {
-  useSessionsList,
-  useSegmentsForSessions,
+  useDailyActivity,
   useLabelsQuery,
+  useStatsRange,
 } from "@/hooks/queries";
-import { calculateSegmentStats } from "@/hooks/useSegments";
 import { StatsStats } from "@/components/stats/StatsStats";
 import { KeyboardShortcut } from "@/components/ui/KeyboardShortcut";
 import { KeyBox } from "@/components/ui/KeyBox";
@@ -16,18 +15,18 @@ import { CustomDateRangeModal } from "@/components/stats/CustomDateRangeModal";
 import {
   TimeWindow,
   getDateRangeForWindow,
-  isDateInRange,
 } from "@/utils/dateUtils";
-import type { Segment } from "@/types/segment";
 
 interface StatsViewProps {
   onNavigate: (view: "timer" | "activities" | "stats") => void;
 }
 
+type StatsViewMode = "list" | "activity" | "treemap";
+
 export function StatsView({ onNavigate }: StatsViewProps) {
   const [timeWindow, setTimeWindow] = useState<TimeWindow>("day");
   const [showAllApps, setShowAllApps] = useState<boolean>(false);
-  const [viewMode, setViewMode] = useState<"list" | "treemap">("list");
+  const [viewMode, setViewMode] = useState<StatsViewMode>("list");
   const [selectedLabelId, setSelectedLabelId] = useState<number | null>(null);
   const [isLabelModalOpen, setIsLabelModalOpen] = useState<boolean>(false);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState<boolean>(false);
@@ -35,13 +34,6 @@ export function StatsView({ onNavigate }: StatsViewProps) {
     start: Date;
     end: Date;
   } | null>(null);
-
-  // Fetch all sessions
-  const {
-    data: sessions = [],
-    isLoading: sessionsLoading,
-    error: sessionsError,
-  } = useSessionsList();
 
   // Fetch labels for the modal
   const { data: labels = [] } = useLabelsQuery();
@@ -52,15 +44,28 @@ export function StatsView({ onNavigate }: StatsViewProps) {
     [labels, selectedLabelId]
   );
 
-  // Filter sessions by selected label
-  const filteredSessions = useMemo(() => {
-    if (selectedLabelId === null) return sessions;
-    return sessions.filter((session) => session.labelId === selectedLabelId);
-  }, [sessions, selectedLabelId]);
+  const dateRange = useMemo(() => {
+    if (timeWindow === "custom" && customDateRange) {
+      return customDateRange;
+    }
+    return getDateRangeForWindow(timeWindow);
+  }, [timeWindow, customDateRange]);
 
-  // Fetch segments for filtered sessions
-  const { segmentsBySession, isLoading: segmentsLoading } =
-    useSegmentsForSessions(filteredSessions);
+  const startTime = dateRange.start.toISOString();
+  const endTime = dateRange.end.toISOString();
+
+  const {
+    data: rangeStats,
+    isLoading: statsLoading,
+    error: statsError,
+  } = useStatsRange(startTime, endTime, selectedLabelId);
+
+  const activityEnabled = timeWindow === "year" && viewMode === "activity";
+  const {
+    data: dailyActivity = [],
+    isLoading: activityLoading,
+    error: activityError,
+  } = useDailyActivity(startTime, endTime, selectedLabelId, activityEnabled);
 
   // Handle keyboard shortcuts for time window selection (d/w/m), view mode (t), show all toggle (v), and label filter (l)
   useEffect(() => {
@@ -80,6 +85,17 @@ export function StatsView({ onNavigate }: StatsViewProps) {
         event.preventDefault();
         event.stopImmediatePropagation();
         setViewMode("treemap");
+        return;
+      }
+
+      if (
+        (event.key === "a" || event.key === "A") &&
+        !isModifierPressed &&
+        timeWindow === "year"
+      ) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setViewMode("activity");
         return;
       }
 
@@ -146,36 +162,32 @@ export function StatsView({ onNavigate }: StatsViewProps) {
     return () => {
       window.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [showAllApps, isCustomModalOpen]);
+  }, [showAllApps, isCustomModalOpen, timeWindow]);
 
-  // Filter segments by time window
-  const filteredSegments = useMemo(() => {
-    let dateRange;
-    if (timeWindow === "custom" && customDateRange) {
-      dateRange = customDateRange;
-    } else {
-      dateRange = getDateRangeForWindow(timeWindow);
+  useEffect(() => {
+    if (timeWindow !== "year" && viewMode === "activity") {
+      setViewMode("list");
     }
+  }, [timeWindow, viewMode]);
 
-    const allSegments: Segment[] = [];
-
-    // Collect all segments from all sessions
-    Object.values(segmentsBySession).forEach((segments) => {
-      allSegments.push(...segments);
-    });
-
-    // Filter segments that fall within the date range
-    return allSegments.filter((segment) =>
-      isDateInRange(segment.startTime, dateRange)
-    );
-  }, [segmentsBySession, timeWindow, customDateRange]);
-
-  // Calculate stats from filtered segments (show 5 by default, or all if showAllApps is true)
   const stats = useMemo(() => {
-    return calculateSegmentStats(filteredSegments, showAllApps ? undefined : 5);
-  }, [filteredSegments, showAllApps]);
+    const totalDurationSecs = rangeStats?.totalDurationSecs ?? 0;
+    const apps = rangeStats?.apps ?? [];
+    const visibleApps = showAllApps ? apps : apps.slice(0, 5);
 
-  const isLoading = sessionsLoading || segmentsLoading;
+    return {
+      totalDurationSecs,
+      segmentCount: rangeStats?.segmentCount ?? 0,
+      interruptionCount: 0,
+      topApps: visibleApps.map((app) => ({
+        ...app,
+        percentage:
+          totalDurationSecs > 0
+            ? (app.durationSecs / totalDurationSecs) * 100
+            : 0,
+      })),
+    };
+  }, [rangeStats, showAllApps]);
 
   // Handle custom date modal actions
   const handleCustomDateSubmit = (range: { start: Date; end: Date }) => {
@@ -317,14 +329,13 @@ export function StatsView({ onNavigate }: StatsViewProps) {
       </div>
 
       {/* Loading state */}
-      {isLoading && !sessionsError && (
+      {statsLoading && !statsError && (
         <div className="mt-0.5">
           <StatsSkeleton
             timeWindowButtons={timeWindowButtons}
             viewMode={viewMode}
-            onToggleViewMode={() =>
-              setViewMode((prev) => (prev === "list" ? "treemap" : "list"))
-            }
+            onViewModeChange={setViewMode}
+            timeWindow={timeWindow}
             showAllApps={showAllApps}
             onToggleShowAll={() => setShowAllApps(!showAllApps)}
           />
@@ -332,28 +343,29 @@ export function StatsView({ onNavigate }: StatsViewProps) {
       )}
 
       {/* Error state */}
-      {sessionsError && (
+      {statsError && (
         <div className="text-xs font-normal text-center p-4 border border-black bg-transparent max-w-full mt-0.5">
-          {sessionsError instanceof Error
-            ? sessionsError.message
+          {statsError instanceof Error
+            ? statsError.message
             : "failed to load stats"}
         </div>
       )}
 
       {/* Stats display */}
-      {!isLoading && !sessionsError && (
+      {!statsLoading && !statsError && (
         <div className="bg-white mt-0.5">
           <StatsStats
             stats={stats}
             showAllApps={showAllApps}
             onToggleShowAll={() => setShowAllApps(!showAllApps)}
             viewMode={viewMode}
-            onToggleViewMode={() =>
-              setViewMode((prev) => (prev === "list" ? "treemap" : "list"))
-            }
+            onViewModeChange={setViewMode}
             timeWindowSelector={timeWindowButtons}
             timeWindow={timeWindow}
             customDateRange={customDateRange}
+            dailyActivity={dailyActivity}
+            activityLoading={activityLoading}
+            activityError={activityError}
           />
         </div>
       )}
@@ -370,8 +382,9 @@ export function StatsView({ onNavigate }: StatsViewProps) {
 
 interface StatsSkeletonProps {
   timeWindowButtons: ReactNode;
-  viewMode: "list" | "treemap";
-  onToggleViewMode: () => void;
+  viewMode: StatsViewMode;
+  onViewModeChange: (mode: StatsViewMode) => void;
+  timeWindow: TimeWindow;
   showAllApps: boolean;
   onToggleShowAll: () => void;
 }
@@ -383,7 +396,8 @@ const SkeletonBar = ({ className = "" }: { className?: string }) => (
 function StatsSkeleton({
   timeWindowButtons,
   viewMode,
-  onToggleViewMode,
+  onViewModeChange,
+  timeWindow,
   showAllApps,
   onToggleShowAll,
 }: StatsSkeletonProps) {
@@ -418,7 +432,7 @@ function StatsSkeleton({
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={onToggleViewMode}
+                onClick={() => onViewModeChange("list")}
                 className="flex items-center gap-2"
               >
                 <KeyBox selected={viewMode === "list"} hovered={false}>
@@ -428,8 +442,21 @@ function StatsSkeleton({
                   list
                 </span>
               </button>
+              {timeWindow === "year" && (
+                <button
+                  onClick={() => onViewModeChange("activity")}
+                  className="flex items-center gap-2"
+                >
+                  <KeyBox selected={viewMode === "activity"} hovered={false}>
+                    A
+                  </KeyBox>
+                  <span className="text-xs font-light text-gray-600 hover:text-gray-800 transition-colors">
+                    activity
+                  </span>
+                </button>
+              )}
               <button
-                onClick={onToggleViewMode}
+                onClick={() => onViewModeChange("treemap")}
                 className="flex items-center gap-2"
               >
                 <KeyBox selected={viewMode === "treemap"} hovered={false}>

@@ -8,13 +8,16 @@ export interface Segment {
   durationSecs: number;
   bundleId: string;
   appName: string | null;
+  // Historical window-level value; new app-level segments leave this empty.
   windowTitle: string | null;
   confidence: number;
   durationScore: number | null;
   stabilityScore: number | null;
+  // Legacy screenshot/OCR scores retained when reading historical sessions.
   visualClarityScore: number | null;
   ocrQualityScore: number | null;
   readingCount: number;
+  // Legacy screenshot-derived aggregate retained for historical sessions.
   uniquePhashCount: number | null;
   segmentSummary: string | null;
   iconDataUrl?: string | null; // App icon from apps table (base64 PNG data URL)

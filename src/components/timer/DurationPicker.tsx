@@ -9,7 +9,7 @@ interface DurationPickerProps {
 export const PRESETS = [
   { label: "25 m", ms: TIMER_PRESETS_MS.POMODORO },
   { label: "45 m", ms: TIMER_PRESETS_MS.FOCUS_45 },
-  { label: "90 m", ms: 90 * 60 * 1000 },
+  { label: "60 m", ms: TIMER_PRESETS_MS.FOCUS_60 },
 ];
 
 export function DurationPicker({ onSelect, selectedDuration }: DurationPickerProps) {

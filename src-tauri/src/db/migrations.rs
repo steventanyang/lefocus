@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
 use rusqlite::{Connection, Transaction};
 
-const CURRENT_SCHEMA_VERSION: i32 = 11;
+const CURRENT_SCHEMA_VERSION: i32 = 12;
 
 pub fn run_migrations(conn: &mut Connection) -> Result<()> {
     let mut version: i32 = conn
@@ -93,6 +93,11 @@ fn apply_migration(tx: &Transaction<'_>, version: i32) -> Result<()> {
         11 => {
             tx.execute_batch(include_str!("schemas/schema_v11.sql"))
                 .context("failed to execute schema_v11.sql")?;
+            Ok(())
+        }
+        12 => {
+            tx.execute_batch(include_str!("schemas/schema_v12.sql"))
+                .context("failed to execute schema_v12.sql")?;
             Ok(())
         }
         _ => bail!("unknown migration target version: {version}"),

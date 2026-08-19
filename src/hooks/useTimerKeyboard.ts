@@ -1,153 +1,156 @@
 import { useEffect, useRef, useCallback } from "react";
 import { isUserTyping } from "@/utils/keyboardUtils";
-import { mmssToMs } from "@/utils/timeUtils";
+import { clockDigitsToMs, msToClockDigits } from "@/utils/timeUtils";
 
 interface UseTimerKeyboardOptions {
   isEditable: boolean;
-  editableValue: number;
-  setEditableValue: (updater: (prev: number) => number) => void;
+  setEditableDigits: React.Dispatch<React.SetStateAction<string>>;
+  editableDigitsRef: React.MutableRefObject<string>;
   onTimeChange?: (ms: number) => void;
   displayRef: React.RefObject<HTMLDivElement | null>;
   lastSentMsRef: React.MutableRefObject<number | null>;
+  currentMsRef: React.MutableRefObject<number>;
+  isEditingRef: React.MutableRefObject<boolean>;
+  editBaselineMsRef: React.MutableRefObject<number>;
+  maxDurationMs: number;
   isLabelDropdownOpen?: boolean;
+  onEditingChange?: (isEditing: boolean) => void;
 }
 
-/**
- * Custom hook for handling keyboard input in editable timer display
- * Supports both global (unfocused) and local (focused) keyboard input
- */
+/** Handle focused and global direct-entry shortcuts for the editable clock. */
 export function useTimerKeyboard({
   isEditable,
-  editableValue: _editableValue,
-  setEditableValue,
+  setEditableDigits,
+  editableDigitsRef,
   onTimeChange,
   displayRef,
   lastSentMsRef,
+  currentMsRef,
+  isEditingRef,
+  editBaselineMsRef,
+  maxDurationMs,
   isLabelDropdownOpen = false,
+  onEditingChange,
 }: UseTimerKeyboardOptions) {
-  const isProcessingKeyRef = useRef<boolean>(false);
+  const isProcessingKeyRef = useRef(false);
 
-  // Handle keyboard input for timer editing
+  const emitTime = useCallback(
+    (ms: number) => {
+      currentMsRef.current = ms;
+      lastSentMsRef.current = ms;
+      onTimeChange?.(ms);
+    },
+    [currentMsRef, lastSentMsRef, onTimeChange]
+  );
+
+  const beginEditing = useCallback(() => {
+    if (isEditingRef.current) return;
+    editBaselineMsRef.current = currentMsRef.current;
+    isEditingRef.current = true;
+    onEditingChange?.(true);
+  }, [currentMsRef, editBaselineMsRef, isEditingRef, onEditingChange]);
+
+  const finishEditing = useCallback(() => {
+    isEditingRef.current = false;
+    onEditingChange?.(false);
+  }, [isEditingRef, onEditingChange]);
+
   const handleKeyInput = useCallback(
     (key: string, preventDefault: () => void, stopImmediate?: () => void) => {
-      if (!isEditable || isLabelDropdownOpen) return false;
-
-      // Prevent double-processing
-      if (isProcessingKeyRef.current) return false;
-      isProcessingKeyRef.current = true;
-
-      // Stop immediate propagation if available (prevents other listeners)
-      if (stopImmediate) {
-        stopImmediate();
+      if (!isEditable || isLabelDropdownOpen || isProcessingKeyRef.current) {
+        return false;
       }
 
-      // Reset flag after processing
+      const isDigit = key >= "0" && key <= "9";
+      const isEditingKey = isDigit || key === "Backspace" || key === "Escape";
+      if (!isEditingKey) return false;
+
+      isProcessingKeyRef.current = true;
+      stopImmediate?.();
       requestAnimationFrame(() => {
         isProcessingKeyRef.current = false;
       });
 
-      // Handle number keys (0-9)
-      if (key >= "0" && key <= "9") {
+      if (isDigit) {
         preventDefault();
-        const digit = parseInt(key, 10);
-        setEditableValue((prevValue) => {
-          const newValue = (prevValue * 10 + digit) % 10000;
-          // Update parent state immediately so duration picker syncs in real-time
-          if (onTimeChange) {
-            const msValue = mmssToMs(newValue);
-            lastSentMsRef.current = msValue;
-            onTimeChange(msValue);
-          }
-          return newValue;
-        });
+        const wasEditing = isEditingRef.current;
+        beginEditing();
+        const candidate = `${wasEditing ? editableDigitsRef.current : ""}${key}`.slice(-6);
+        const candidateMs = clockDigitsToMs(candidate);
+        if (candidateMs <= maxDurationMs) {
+          editableDigitsRef.current = candidate;
+          setEditableDigits(candidate);
+          emitTime(candidateMs);
+        }
         return true;
       }
 
-      // Handle backspace
       if (key === "Backspace") {
         preventDefault();
-        setEditableValue((prevValue) => {
-          const newValue = Math.floor(prevValue / 10);
-          // Update parent state immediately so duration picker syncs in real-time
-          if (onTimeChange) {
-            const msValue = mmssToMs(newValue);
-            lastSentMsRef.current = msValue;
-            onTimeChange(msValue);
-          }
-          return newValue;
-        });
+        const wasEditing = isEditingRef.current;
+        beginEditing();
+        const nextDigits = wasEditing ? editableDigitsRef.current.slice(0, -1) : "";
+        editableDigitsRef.current = nextDigits;
+        setEditableDigits(nextDigits);
+        emitTime(clockDigitsToMs(nextDigits));
+        return true;
+      }
+
+      if (key === "Escape" && isEditingRef.current) {
+        preventDefault();
+        const baselineMs = editBaselineMsRef.current;
+        const baselineDigits = msToClockDigits(baselineMs);
+        editableDigitsRef.current = baselineDigits;
+        setEditableDigits(baselineDigits);
+        emitTime(baselineMs);
+        finishEditing();
         return true;
       }
 
       isProcessingKeyRef.current = false;
       return false;
     },
-    [isEditable, onTimeChange, setEditableValue, lastSentMsRef, isLabelDropdownOpen]
+    [
+      beginEditing,
+      editableDigitsRef,
+      editBaselineMsRef,
+      emitTime,
+      finishEditing,
+      isEditable,
+      isEditingRef,
+      isLabelDropdownOpen,
+      maxDurationMs,
+      setEditableDigits,
+    ]
   );
 
-  // Global keyboard listener for when display is editable but not focused
   useEffect(() => {
     if (!isEditable) return;
 
     const handleGlobalKeyDown = (event: globalThis.KeyboardEvent) => {
-      // Don't interfere if user is typing in an input field
       if (isUserTyping()) return;
+      if (displayRef.current && document.activeElement === displayRef.current) return;
 
-      // Don't handle if the display is already focused (let the local handler deal with it)
-      if (displayRef.current && document.activeElement === displayRef.current) {
-        return;
-      }
-
-      // Don't interfere with mode switching shortcuts (T, S, B), Enter (start), or Space (end)
-      const isModifierPressed = event.metaKey || event.ctrlKey;
-      if (
-        event.key === "Enter" ||
-        event.key === " " ||
-        (event.key === "t" && !isModifierPressed) ||
-        (event.key === "s" && !isModifierPressed) ||
-        event.key === "b"
-      ) {
-        return;
-      }
-
-      // Handle number keys and backspace
       const handled = handleKeyInput(
         event.key,
         () => event.preventDefault(),
         () => event.stopImmediatePropagation()
       );
-      if (handled) {
-        // Focus the display when user starts typing
-        if (displayRef.current) {
-          displayRef.current.focus();
-        }
-      }
+      if (handled) displayRef.current?.focus();
     };
 
     window.addEventListener("keydown", handleGlobalKeyDown);
-
-    return () => {
-      window.removeEventListener("keydown", handleGlobalKeyDown);
-    };
-  }, [isEditable, handleKeyInput, displayRef]);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [displayRef, handleKeyInput, isEditable]);
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLDivElement>) => {
-      if (!isEditable) return;
-
-      // If already processing, skip (global handler already handled it)
-      if (isProcessingKeyRef.current) return;
-
-      const handled = handleKeyInput(e.key, () => e.preventDefault());
-
-      // Prevent default behavior for other single-character keys to avoid unwanted input
-      if (!handled && e.key.length === 1) {
-        e.preventDefault();
-      }
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (!isEditable || isProcessingKeyRef.current) return;
+      const handled = handleKeyInput(event.key, () => event.preventDefault());
+      if (!handled && event.key.length === 1) event.preventDefault();
     },
-    [isEditable, handleKeyInput]
+    [handleKeyInput, isEditable]
   );
 
-  return { handleKeyDown, isProcessingKeyRef };
+  return { handleKeyDown, finishEditing };
 }
-

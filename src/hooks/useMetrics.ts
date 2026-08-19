@@ -47,8 +47,9 @@ export function useMetrics() {
 
   const stats = snapshot ? {
     captureCount: snapshot.capture_count,
-    ocrCount: snapshot.ocr_count,
-    ocrSkipCount: snapshot.ocr_skip_count,
+    averageCaptureMs: recentCaptures.length > 0
+      ? recentCaptures.reduce((sum, capture) => sum + capture.total_ms, 0) / recentCaptures.length
+      : 0,
     cpuPercent: snapshot.system.cpu_percent,
     memoryMb: snapshot.system.memory_mb,
   } : null;

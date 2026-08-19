@@ -6,6 +6,7 @@
 export const DEFAULT_COUNTDOWN_DURATION_MS = 25 * 60 * 1000; // 25 minutes
 export const DEFAULT_BREAK_DURATION_MS = 5 * 60 * 1000; // 5 minutes
 export const DEFAULT_STOPWATCH_DURATION_MS = 0; // Stopwatch starts at 0
+export const MAX_TIMER_DURATION_MS = 3 * 60 * 60 * 1000; // 3 hours
 
 // Duration presets (in milliseconds)
 export const TIMER_PRESETS_MS = {
@@ -16,4 +17,3 @@ export const TIMER_PRESETS_MS = {
   FOCUS_45: 45 * 60 * 1000, // 45 minutes
   FOCUS_60: 60 * 60 * 1000, // 60 minutes
 } as const;
-

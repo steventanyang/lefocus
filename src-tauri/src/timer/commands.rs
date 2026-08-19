@@ -2,7 +2,7 @@ use tauri::State;
 
 use crate::{
     db::{
-        models::{Interruption, Segment, SessionSummary},
+        models::{DailyActivity, Interruption, Segment, SessionSummary, StatsRange},
         SessionInfo,
     },
     timer::{TimerController, TimerMode, TimerSnapshot, TimerState},
@@ -54,6 +54,54 @@ pub async fn get_segments_for_session(
 ) -> Result<Vec<Segment>, String> {
     let db = &state.db;
     db.get_segments_for_session(&session_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+fn parse_stats_range(
+    start_time: &str,
+    end_time: &str,
+) -> Result<(chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>), String> {
+    let start = chrono::DateTime::parse_from_rfc3339(start_time)
+        .map_err(|e| format!("invalid stats start time: {e}"))?
+        .with_timezone(&chrono::Utc);
+    let end = chrono::DateTime::parse_from_rfc3339(end_time)
+        .map_err(|e| format!("invalid stats end time: {e}"))?
+        .with_timezone(&chrono::Utc);
+
+    if start > end {
+        return Err("stats start time must not be after end time".to_string());
+    }
+
+    Ok((start, end))
+}
+
+#[tauri::command]
+pub async fn get_stats_in_time_range(
+    state: State<'_, AppState>,
+    start_time: String,
+    end_time: String,
+    label_id: Option<i64>,
+) -> Result<StatsRange, String> {
+    let (start, end) = parse_stats_range(&start_time, &end_time)?;
+    state
+        .db
+        .get_stats_in_range(start, end, label_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_daily_activity_in_time_range(
+    state: State<'_, AppState>,
+    start_time: String,
+    end_time: String,
+    label_id: Option<i64>,
+) -> Result<Vec<DailyActivity>, String> {
+    let (start, end) = parse_stats_range(&start_time, &end_time)?;
+    state
+        .db
+        .get_daily_activity_in_range(start, end, label_id)
         .await
         .map_err(|e| e.to_string())
 }
@@ -110,7 +158,7 @@ pub async fn get_app_details_in_time_range(
     })
 }
 
-/// Kept for backward compatibility with StatsView.
+/// Legacy unpaginated session API. Stats uses bounded range queries.
 #[tauri::command]
 pub async fn list_sessions(state: State<'_, AppState>) -> Result<Vec<SessionSummary>, String> {
     use std::collections::{HashMap, HashSet};

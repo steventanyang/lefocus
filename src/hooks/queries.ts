@@ -14,6 +14,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { SessionSummary, SessionInfo } from "@/types/timer";
 import type { Segment, Interruption, WindowTitleWithDuration } from "@/types/segment";
 import type { Label, LabelInput } from "@/types/label";
+import type { DailyActivity, StatsRange } from "@/types/stats";
 
 // ============================================================================
 // QUERY HOOKS (Data Fetching)
@@ -22,8 +23,7 @@ import type { Label, LabelInput } from "@/types/label";
 /**
  * Fetch list of all sessions
  * @deprecated Use useSessionsListInfinite() for paginated loading instead.
- * This is kept for backward compatibility with StatsView which may need all sessions.
- * TODO: Consider migrating StatsView to use infinite query if performance becomes an issue.
+ * Kept for legacy callers; StatsView uses bounded range queries.
  */
 export function useSessionsList() {
   return useQuery({
@@ -159,6 +159,44 @@ export function useSegmentsForSessions(sessions: SessionSummary[]) {
   };
 }
 
+/** Fetch aggregate stats for exactly one selected time range. */
+export function useStatsRange(
+  startTime: string,
+  endTime: string,
+  labelId: number | null
+) {
+  return useQuery({
+    queryKey: ["stats", startTime, endTime, labelId],
+    queryFn: () =>
+      invoke<StatsRange>("get_stats_in_time_range", {
+        startTime,
+        endTime,
+        labelId,
+      }),
+    staleTime: 60_000,
+  });
+}
+
+/** Fetch lightweight local-day totals only when the activity chart needs them. */
+export function useDailyActivity(
+  startTime: string,
+  endTime: string,
+  labelId: number | null,
+  enabled: boolean
+) {
+  return useQuery({
+    queryKey: ["statsActivity", startTime, endTime, labelId],
+    queryFn: () =>
+      invoke<DailyActivity[]>("get_daily_activity_in_time_range", {
+        startTime,
+        endTime,
+        labelId,
+      }),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
 interface AppDetailsResponse {
   window_titles: Array<[string, number]>;
 }
@@ -226,6 +264,8 @@ export function useEndTimerMutation() {
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
       // Also invalidate infinite query
       queryClient.invalidateQueries({ queryKey: ['sessions', 'infinite'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      queryClient.invalidateQueries({ queryKey: ['statsActivity'] });
     },
   });
 }
@@ -310,6 +350,8 @@ export function useDeleteLabelMutation() {
       // Invalidate sessions since their labelId may have been set to null
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
       queryClient.invalidateQueries({ queryKey: ['sessions', 'infinite'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      queryClient.invalidateQueries({ queryKey: ['statsActivity'] });
     },
   });
 }
@@ -352,6 +394,8 @@ export function useUpdateSessionLabelMutation() {
       // Still invalidate to ensure consistency with server
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
       queryClient.invalidateQueries({ queryKey: ['sessions', 'infinite'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      queryClient.invalidateQueries({ queryKey: ['statsActivity'] });
     },
   });
 }
@@ -369,6 +413,8 @@ export function useDeleteSessionMutation() {
       // Invalidate sessions to refetch (removing the deleted session)
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
       queryClient.invalidateQueries({ queryKey: ['sessions', 'infinite'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      queryClient.invalidateQueries({ queryKey: ['statsActivity'] });
     },
   });
 }
