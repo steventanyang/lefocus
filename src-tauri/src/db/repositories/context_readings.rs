@@ -189,24 +189,41 @@ impl Database {
         &self,
         segment_id: &str,
     ) -> Result<Vec<(String, i64)>> {
-        const READING_INTERVAL_SECS: i64 = 5;
         let segment_id = segment_id.to_string();
         self.execute(move |conn| {
             let mut stmt = conn.prepare(
-                "SELECT window_title, COUNT(*) as reading_count
-                FROM context_readings
-                WHERE segment_id = ?1
-                AND window_title IS NOT NULL
-                AND window_title != ''
-                GROUP BY window_title
-                ORDER BY reading_count DESC",
+                "WITH target AS (
+                    SELECT session_id, start_time, end_time
+                    FROM segments WHERE id = ?1
+                 ), title_samples AS (
+                    SELECT activity_runs.window_title AS title,
+                           activity_runs.sample_count AS samples
+                    FROM activity_runs, target
+                    WHERE activity_runs.session_id = target.session_id
+                      AND activity_runs.start_time >= target.start_time
+                      AND activity_runs.start_time <= target.end_time
+                      AND activity_runs.window_title IS NOT NULL
+                      AND activity_runs.window_title != ''
+                    UNION ALL
+                    SELECT context_readings.window_title AS title, 1 AS samples
+                    FROM context_readings, target
+                    WHERE context_readings.segment_id = ?1
+                      AND context_readings.window_title IS NOT NULL
+                      AND context_readings.window_title != ''
+                      AND NOT EXISTS (
+                          SELECT 1 FROM activity_runs
+                          WHERE activity_runs.session_id = target.session_id
+                      )
+                 )
+                 SELECT title, SUM(samples) * 5 AS duration_secs
+                 FROM title_samples
+                 GROUP BY title
+                 ORDER BY duration_secs DESC",
             )?;
 
             let titles_iter = stmt.query_map(params![segment_id], |row| {
                 let title: String = row.get(0)?;
-                let count: i64 = row.get(1)?;
-                let duration_secs = count * READING_INTERVAL_SECS;
-                Ok((title, duration_secs))
+                Ok((title, row.get(1)?))
             })?;
 
             let mut titles = Vec::new();
@@ -226,28 +243,52 @@ impl Database {
         start_time: DateTime<Utc>,
         end_time: DateTime<Utc>,
     ) -> Result<Vec<(String, i64)>> {
-        const READING_INTERVAL_SECS: i64 = 5;
         let bundle_id = bundle_id.to_string();
         self.execute(move |conn| {
             let mut stmt = conn.prepare(
-                "SELECT window_title, COUNT(*) as reading_count
-                FROM context_readings
-                WHERE bundle_id = ?1
-                AND timestamp >= ?2
-                AND timestamp <= ?3
-                AND window_title IS NOT NULL
-                AND window_title != ''
-                GROUP BY window_title
-                ORDER BY reading_count DESC",
+                "WITH run_titles AS (
+                    SELECT window_title AS title,
+                           CASE
+                             WHEN julianday(start_time) >= julianday(?2)
+                              AND julianday(end_time) <= julianday(?3) + (5.0 / 86400.0)
+                             THEN sample_count * 5
+                             ELSE CAST(ROUND(MAX(0.0,
+                               (MIN(julianday(end_time), julianday(?3) + (5.0 / 86400.0)) -
+                                MAX(julianday(start_time), julianday(?2))) * 86400.0
+                             )) AS INTEGER)
+                           END AS duration_secs
+                    FROM activity_runs
+                    WHERE bundle_id = ?1
+                      AND end_time > ?2
+                      AND start_time <= ?3
+                      AND window_title IS NOT NULL
+                      AND window_title != ''
+                 ), raw_titles AS (
+                    SELECT window_title AS title, 5 AS duration_secs
+                    FROM context_readings
+                    WHERE bundle_id = ?1
+                      AND timestamp >= ?2
+                      AND timestamp <= ?3
+                      AND window_title IS NOT NULL
+                      AND window_title != ''
+                      AND NOT EXISTS (
+                          SELECT 1 FROM activity_runs
+                          WHERE activity_runs.session_id = context_readings.session_id
+                      )
+                 ), all_titles AS (
+                    SELECT * FROM run_titles UNION ALL SELECT * FROM raw_titles
+                 )
+                 SELECT title, SUM(duration_secs) AS duration_secs
+                 FROM all_titles
+                 GROUP BY title
+                 ORDER BY duration_secs DESC",
             )?;
 
             let titles_iter = stmt.query_map(
                 params![bundle_id, start_time.to_rfc3339(), end_time.to_rfc3339()],
                 |row| {
                     let title: String = row.get(0)?;
-                    let count: i64 = row.get(1)?;
-                    let duration_secs = count * READING_INTERVAL_SECS;
-                    Ok((title, duration_secs))
+                    Ok((title, row.get(1)?))
                 },
             )?;
 

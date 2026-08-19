@@ -7,6 +7,7 @@ mod metrics;
 mod segmentation;
 mod sensing;
 mod settings;
+mod storage_compaction;
 mod timer;
 mod utils;
 
@@ -229,6 +230,18 @@ async fn get_metrics_snapshot(state: State<'_, AppState>) -> Result<MetricsSnaps
     Ok(state.metrics.get_snapshot().await)
 }
 
+/// Recovery tool for a verified archive. Normal UI queries use activity runs and
+/// do not need to expand raw readings.
+#[tauri::command]
+async fn restore_session_readings(
+    session_id: String,
+    state: State<'_, AppState>,
+) -> Result<usize, String> {
+    storage_compaction::restore_session_readings(&state.db, &session_id)
+        .await
+        .map_err(|error| error.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize logging (reads RUST_LOG env var)
@@ -288,6 +301,11 @@ pub fn run() {
                                 db_for_recovery
                                     .update_readings_with_segment_ids(&session.id, &ranges)
                                     .await?;
+                                storage_compaction::generate_and_store_runs(
+                                    &db_for_recovery,
+                                    &session.id,
+                                )
+                                .await?;
                                 Ok::<(), anyhow::Error>(())
                             }
                             .await;
@@ -312,6 +330,8 @@ pub fn run() {
                     database.clone(),
                     metrics_collector.clone(),
                 );
+                let archive_db = database.clone();
+                let archive_timer = timer_controller.clone();
 
                 let settings_path = app_data_dir.join("settings.json");
                 let settings_store = SettingsStore::new(settings_path)?;
@@ -323,6 +343,62 @@ pub fn run() {
                     timer: timer_controller,
                     settings: settings_store,
                     metrics: metrics_collector,
+                });
+
+                // Archive only while idle. Each batch is bounded, and CPU-heavy
+                // compression is dispatched through spawn_blocking.
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                    loop {
+                        let mut continue_soon = false;
+                        if archive_timer.get_state().await.status == timer::TimerStatus::Idle {
+                            match archive_db.archive_candidates(10).await {
+                                Ok(candidates) => {
+                                    let full_batch = candidates.len() == 10;
+                                    let mut archived = 0_usize;
+                                    for session_id in candidates {
+                                        if archive_timer.get_state().await.status
+                                            != timer::TimerStatus::Idle
+                                        {
+                                            break;
+                                        }
+                                        match storage_compaction::archive_session(
+                                            &archive_db,
+                                            &session_id,
+                                        )
+                                        .await
+                                        {
+                                            Ok(()) => {
+                                                archived += 1;
+                                                log::info!(
+                                                    "Archived readings for session {session_id}"
+                                                )
+                                            }
+                                            Err(error) => log::error!(
+                                                "Skipping archive for session {session_id}: {error:#}"
+                                            ),
+                                        }
+                                        tokio::time::sleep(std::time::Duration::from_millis(250))
+                                            .await;
+                                    }
+                                    if let Err(error) = archive_db
+                                        .mark_legacy_vacuum_pending_if_complete()
+                                        .await
+                                    {
+                                        log::error!("Could not schedule database compaction: {error:#}");
+                                    }
+                                    continue_soon = full_batch && archived > 0;
+                                }
+                                Err(error) => log::error!("Reading archive job failed: {error:#}"),
+                            }
+                        }
+                        tokio::time::sleep(std::time::Duration::from_secs(if continue_soon {
+                            1
+                        } else {
+                            300
+                        }))
+                        .await;
+                    }
                 });
 
                 // Initialize the island window on macOS to show "00:00" when idle
@@ -408,6 +484,7 @@ pub fn run() {
             set_island_agent_tracking,
             restart_app_instance,
             get_metrics_snapshot,
+            restore_session_readings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

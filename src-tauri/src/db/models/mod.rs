@@ -1,4 +1,5 @@
 pub mod app;
+pub mod activity_run;
 pub mod context_reading;
 pub mod label;
 pub mod segment;
@@ -6,6 +7,7 @@ pub mod session;
 pub mod stats;
 
 pub use app::App;
+pub use activity_run::{ActivityRun, ReadingArchive};
 pub use context_reading::ContextReading;
 pub use label::{Label, LabelInput};
 pub use segment::{Interruption, Segment};

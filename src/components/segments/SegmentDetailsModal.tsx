@@ -18,6 +18,14 @@ function formatDuration(seconds: number): string {
   return `${mins}m ${secs}s`;
 }
 
+function formatClockTime(date: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(date);
+}
+
 export function SegmentDetailsModal({
   segment,
   onClose,
@@ -29,17 +37,9 @@ export function SegmentDetailsModal({
     segment.id
   );
 
-  // Deduplicate interruptions by bundle_id - combine durations and keep first occurrence
-  const deduplicatedInterruptions = interruptions.reduce((acc, interruption) => {
-    const existing = acc.find((i) => i.bundleId === interruption.bundleId);
-    if (existing) {
-      // Combine durations and keep the first timestamp
-      existing.durationSecs += interruption.durationSecs;
-    } else {
-      acc.push({ ...interruption });
-    }
-    return acc;
-  }, [] as typeof interruptions);
+  const sortedInterruptions = [...interruptions].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
 
   // Handle ESC key to close modal
   useEffect(() => {
@@ -59,17 +59,19 @@ export function SegmentDetailsModal({
     };
   }, [onClose]);
 
-  // Calculate total duration for percentage calculations
-  // Sum of window title durations + interruption durations should equal segment duration
   const totalWindowTitleDuration = windowTitles.reduce((sum, wt) => sum + wt.durationSecs, 0);
-  const totalInterruptionDuration = deduplicatedInterruptions.reduce((sum, i) => sum + i.durationSecs, 0);
+  const totalInterruptionDuration = interruptions.reduce((sum, i) => sum + i.durationSecs, 0);
   const totalDuration = totalWindowTitleDuration + totalInterruptionDuration;
-  
-  // Calculate percentages for window titles
   const windowTitlesWithPercentages = windowTitles.map((wt) => ({
     ...wt,
     percentage: totalDuration > 0 ? (wt.durationSecs / totalDuration) * 100 : 0,
   }));
+  const timeAwaySecs = Math.min(segment.durationSecs, totalInterruptionDuration);
+  const focusedSecs = Math.max(0, segment.durationSecs - timeAwaySecs);
+  const blockStart = new Date(segment.startTime);
+  // Segment endTime is the final sample timestamp; duration includes the final
+  // five-second sample, so derive the displayed end from the full duration.
+  const blockEnd = new Date(blockStart.getTime() + segment.durationSecs * 1000);
 
   // Get app color for bars
   const appColor = getAppColor(segment.bundleId, {
@@ -126,16 +128,43 @@ export function SegmentDetailsModal({
         </div>
 
         {/* Main Content */}
-        <div className="p-6 flex flex-col gap-6 flex-1 overflow-y-auto">
-          {/* Window List with Bar Charts */}
-          {windowTitlesLoading ? (
-            <div className="text-base font-light text-center p-8">
-              loading window titles...
-            </div>
-          ) : windowTitlesWithPercentages.length > 0 ? (
+        <div className="px-6 pb-6 flex flex-col gap-6 overflow-y-auto">
+          {/* Compact block summary */}
+          <section aria-labelledby="block-summary-heading" className="flex flex-col gap-3">
+            <h3
+              id="block-summary-heading"
+              className="w-full text-right text-base font-normal text-gray-700 tabular-nums"
+            >
+                {formatClockTime(blockStart)}–{formatClockTime(blockEnd)}
+            </h3>
+
+            <dl className="grid grid-cols-3 gap-8 py-2">
+              <div className="min-w-0">
+                <dt className="text-sm font-light text-gray-500">focused</dt>
+                <dd className="mt-1 text-2xl font-semibold tabular-nums">
+                  {interruptionsLoading ? "—" : formatDuration(focusedSecs)}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-sm font-light text-gray-500">time away</dt>
+                <dd className="mt-1 text-2xl font-semibold tabular-nums">
+                  {interruptionsLoading ? "—" : formatDuration(timeAwaySecs)}
+                </dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-sm font-light text-gray-500">interruptions</dt>
+                <dd className="mt-1 text-2xl font-semibold tabular-nums">
+                  {interruptionsLoading ? "—" : interruptions.length}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          {/* Historical window titles remain available when captured. */}
+          {!windowTitlesLoading && windowTitlesWithPercentages.length > 0 && (
             <div className="flex flex-col gap-4">
               <h3 className="text-sm font-normal tracking-wide text-gray-800">
-                windows
+                window titles
               </h3>
               <div className="flex flex-col gap-3">
                 {windowTitlesWithPercentages.map((wt, index) => (
@@ -190,14 +219,10 @@ export function SegmentDetailsModal({
                 ))}
               </div>
             </div>
-          ) : (
-            <div className="text-base font-light text-center p-8">
-              no window titles found
-            </div>
           )}
 
           {/* Interruptions List */}
-          {deduplicatedInterruptions.length > 0 && (
+          {(interruptionsLoading || sortedInterruptions.length > 0) && (
             <div className="flex flex-col gap-4">
               <h3 className="text-sm font-normal tracking-wide text-gray-800">
                 interruptions
@@ -208,40 +233,53 @@ export function SegmentDetailsModal({
                 </div>
               ) : (
                 <div className="flex flex-col gap-2">
-                  {deduplicatedInterruptions.map((interruption) => {
+                  {sortedInterruptions.map((interruption) => {
                     const interruptionColor = getAppColor(interruption.bundleId, {
                       iconColor: interruption.iconColor,
                     });
+                    const offsetSecs = Math.max(
+                      0,
+                      Math.round(
+                        (new Date(interruption.timestamp).getTime() - blockStart.getTime()) /
+                          1000
+                      )
+                    );
                     return (
                       <div
                         key={interruption.id}
-                        className="flex items-center gap-3"
+                        className="flex items-center justify-between gap-4 py-1"
                       >
-                        {/* App Icon */}
-                        {shouldShowAppleLogo(interruption.bundleId, interruption.appName) ? (
-                          <div className="flex-shrink-0 flex items-center justify-center text-gray-800" style={{ height: '1.25rem' }}>
-                            <AppleLogo className="w-4 h-4" />
-                          </div>
-                        ) : interruption.iconDataUrl ? (
-                          <img
-                            src={interruption.iconDataUrl}
-                            alt={interruption.appName || interruption.bundleId}
-                            className="flex-shrink-0"
-                            style={{ height: '1.25rem', width: '1.25rem' }}
-                          />
-                        ) : (
-                          <div
-                            className="flex-shrink-0 border border-black"
-                            style={{ 
-                              height: '1.25rem',
-                              width: '1.25rem',
-                              backgroundColor: interruptionColor 
-                            }}
-                          />
-                        )}
-                        <span className="text-sm font-normal">
-                          {interruption.appName || interruption.bundleId}
-                        </span>
+                        <div className="flex items-center gap-3 min-w-0">
+                          {shouldShowAppleLogo(interruption.bundleId, interruption.appName) ? (
+                            <div className="w-5 h-5 flex-shrink-0 flex items-center justify-center text-gray-800">
+                              <AppleLogo className="w-4 h-4" />
+                            </div>
+                          ) : interruption.iconDataUrl ? (
+                            <img
+                              src={interruption.iconDataUrl}
+                              alt={interruption.appName || interruption.bundleId}
+                              className="w-5 h-5 flex-shrink-0"
+                            />
+                          ) : (
+                            <div
+                              className="w-5 h-5 flex-shrink-0 border border-black"
+                              style={{ backgroundColor: interruptionColor }}
+                            />
+                          )}
+                          <span className="text-sm font-normal truncate">
+                            {interruption.appName || interruption.bundleId}
+                          </span>
+                        </div>
+                        <div className="flex flex-col items-end flex-shrink-0">
+                          <span className="text-sm font-medium tabular-nums">
+                            {formatDuration(interruption.durationSecs)}
+                          </span>
+                          <span className="text-xs font-light text-gray-500 tabular-nums">
+                            {offsetSecs === 0
+                              ? "at block start"
+                              : `${formatDuration(offsetSecs)} into block`}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}

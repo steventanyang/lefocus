@@ -418,6 +418,7 @@ impl TimerController {
         self.db
             .update_readings_with_segment_ids(session_id, &segment_tuples)
             .await?;
+        crate::storage_compaction::generate_and_store_runs(&self.db, session_id).await?;
 
         info!(
             "Created {} segments and {} interruptions for session {}",
