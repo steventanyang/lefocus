@@ -133,11 +133,13 @@ jobs:
         run: |
           set -euo pipefail
           dmg="src-tauri/target/release/bundle/dmg/lefocus_${APP_VERSION}_aarch64.dmg"
+          stable_dmg="src-tauri/target/release/bundle/dmg/lefocus_aarch64.dmg"
           updater="src-tauri/target/release/bundle/macos/lefocus.app.tar.gz"
           latest="src-tauri/target/release/bundle/latest.json"
+          cp "$dmg" "$stable_dmg"
 
           gh release create "$RELEASE_TAG" \
-            "$dmg" "$updater" "$latest" \
+            "$dmg" "$stable_dmg" "$updater" "$latest" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "LeFocus ${APP_VERSION}" \

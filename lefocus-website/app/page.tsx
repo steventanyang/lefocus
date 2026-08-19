@@ -1,7 +1,7 @@
 import { DesktopPlayground } from "@/components/playground/DesktopPlayground";
 
 const DEFAULT_MACOS_DMG_URL =
-  "https://github.com/steventanyang/lefocus/releases/download/v1.1.7/lefocus_1.1.7_aarch64.dmg";
+  "https://github.com/steventanyang/lefocus/releases/latest/download/lefocus_aarch64.dmg";
 
 const macosDmgUrl =
   process.env.NEXT_PUBLIC_MACOS_DMG_URL ?? DEFAULT_MACOS_DMG_URL;
