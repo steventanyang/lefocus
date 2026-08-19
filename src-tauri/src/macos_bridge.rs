@@ -1,6 +1,5 @@
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use serde_json;
 use std::ffi::{c_char, CStr, CString};
 use std::sync::OnceLock;
 use tauri::{AppHandle, Manager};
@@ -22,7 +21,7 @@ fn get_app_handle() -> Option<&'static AppHandle> {
 #[repr(C)]
 pub struct AgentSessionFFI {
     pub pid: u32,
-    pub state: u8,     // 0=Thinking, 1=Executing, 2=Waiting, 3=Done
+    pub state: u8, // 0=Thinking, 1=Executing, 2=Waiting, 3=Done
     pub age_secs: f32,
 }
 
@@ -95,24 +94,26 @@ pub fn get_active_window_metadata() -> Result<WindowMetadata> {
             bail!("Swift returned null window metadata pointer");
         }
 
-        let ffi_data = &*ptr;
-        let metadata = WindowMetadata {
-            window_id: ffi_data.window_id,
-            bundle_id: c_ptr_to_string(ffi_data.bundle_id_ptr)
-                .context("Failed to decode bundle ID")?,
-            title: c_ptr_to_string(ffi_data.title_ptr).context("Failed to decode window title")?,
-            owner_name: c_ptr_to_string(ffi_data.owner_name_ptr)
-                .context("Failed to decode owner name")?,
-            bounds: WindowBounds {
-                x: ffi_data.bounds_x,
-                y: ffi_data.bounds_y,
-                width: ffi_data.bounds_width,
-                height: ffi_data.bounds_height,
-            },
-        };
-
+        let result = (|| {
+            let ffi_data = &*ptr;
+            Ok(WindowMetadata {
+                window_id: ffi_data.window_id,
+                bundle_id: c_ptr_to_string(ffi_data.bundle_id_ptr)
+                    .context("Failed to decode bundle ID")?,
+                title: c_ptr_to_string(ffi_data.title_ptr)
+                    .context("Failed to decode window title")?,
+                owner_name: c_ptr_to_string(ffi_data.owner_name_ptr)
+                    .context("Failed to decode owner name")?,
+                bounds: WindowBounds {
+                    x: ffi_data.bounds_x,
+                    y: ffi_data.bounds_y,
+                    width: ffi_data.bounds_width,
+                    height: ffi_data.bounds_height,
+                },
+            })
+        })();
         macos_sensing_free_window_metadata(ptr);
-        Ok(metadata)
+        result
     }
 }
 
@@ -298,10 +299,7 @@ unsafe fn c_ptr_to_string(ptr: *mut c_char) -> Result<String> {
     }
 
     let c_str = CStr::from_ptr(ptr);
-    Ok(c_str
-        .to_str()
-        .map(|s| s.to_owned())
-        .map_err(|e| anyhow!(e))?)
+    c_str.to_str().map(str::to_owned).map_err(Into::into)
 }
 
 // Callback functions that will be registered with C layer
@@ -387,20 +385,12 @@ pub fn get_app_icon_and_color(bundle_id: &str) -> Option<(String, String)> {
             return None;
         }
 
-        let c_str = CStr::from_ptr(ptr);
-        let json_str = c_str.to_str().ok()?;
-
-        // Parse JSON response
-        let icon_and_color: IconAndColor = match serde_json::from_str(json_str) {
-            Ok(data) => data,
-            Err(_) => {
-                macos_sensing_swift_free_string(ptr);
-                return None;
-            }
-        };
-
+        let result = CStr::from_ptr(ptr)
+            .to_str()
+            .ok()
+            .and_then(|json| serde_json::from_str::<IconAndColor>(json).ok())
+            .map(|value| (value.icon, value.color));
         macos_sensing_swift_free_string(ptr);
-
-        Some((icon_and_color.icon, icon_and_color.color))
+        result
     }
 }

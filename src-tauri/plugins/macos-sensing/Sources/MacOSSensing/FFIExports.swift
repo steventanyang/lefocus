@@ -4,23 +4,7 @@ import Cocoa
 
 @_cdecl("macos_sensing_swift_get_window")
 public func macos_sensing_swift_get_window() -> UnsafeMutablePointer<WindowMetadataFFI>? {
-    var metadata: WindowMetadataFFI?
-    let semaphore = DispatchSemaphore(value: 0)
-
-    Task.detached(priority: .userInitiated) {
-        defer { semaphore.signal() }
-        do {
-            metadata = try await MacOSSensingPlugin.shared.getActiveWindowMetadata()
-        } catch {
-            metadata = nil
-        }
-    }
-
-    if semaphore.wait(timeout: .now() + 5) == .timedOut {
-        return nil
-    }
-
-    guard let result = metadata else {
+    guard let result = try? MacOSSensingPlugin.shared.getActiveWindowMetadata() else {
         return nil
     }
 

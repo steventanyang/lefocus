@@ -8,7 +8,7 @@ public final class MacOSSensingPlugin {
 
     // MARK: - Window Metadata
 
-    public func getActiveWindowMetadata() async throws -> WindowMetadataFFI {
+    public func getActiveWindowMetadata() throws -> WindowMetadataFFI {
         guard let app = NSWorkspace.shared.frontmostApplication else {
             throw NSError(
                 domain: "MacOSSensing",

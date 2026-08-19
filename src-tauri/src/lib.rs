@@ -1,5 +1,5 @@
-mod audio;
 mod agent_monitor;
+mod audio;
 mod db;
 mod labels;
 mod macos_bridge;
@@ -11,7 +11,6 @@ mod timer;
 mod utils;
 
 use audio::AudioEngineHandle;
-use chrono::Utc;
 use db::Database;
 use labels::commands::{
     create_label, delete_label, get_labels, update_label, update_session_label,
@@ -136,7 +135,10 @@ fn set_island_sound_settings(
 }
 
 #[tauri::command]
-fn preview_island_chime(sound_id: Option<String>, sound_id_camel: Option<String>) -> Result<(), String> {
+fn preview_island_chime(
+    sound_id: Option<String>,
+    sound_id_camel: Option<String>,
+) -> Result<(), String> {
     let sound_id = sound_id
         .or(sound_id_camel)
         .ok_or_else(|| "sound_id is required".to_string())?;
@@ -211,7 +213,8 @@ fn set_island_agent_tracking(
 
 #[tauri::command]
 fn restart_app_instance(app_handle: tauri::AppHandle) -> Result<(), String> {
-    let current_exe = env::current_exe().map_err(|e| format!("Failed to locate executable: {e}"))?;
+    let current_exe =
+        env::current_exe().map_err(|e| format!("Failed to locate executable: {e}"))?;
 
     Command::new(&current_exe)
         .spawn()
@@ -238,7 +241,6 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let result = (|| -> anyhow::Result<()> {
                 let app_data_dir = app
@@ -254,14 +256,50 @@ pub fn run() {
                 {
                     let db_for_recovery = database.clone();
                     tauri::async_runtime::block_on(async move {
-                        if let Some(session) = db_for_recovery.get_incomplete_session().await? {
-                            let now = Utc::now();
+                        for session in db_for_recovery.get_incomplete_sessions().await? {
+                            // The last heartbeat is the last duration we durably observed;
+                            // charging sleep/crash downtime to the session would inflate it.
+                            let stopped_at = session.updated_at;
                             warn!(
-                                "Recovered incomplete session {}; marking as Interrupted",
+                                "Recovering incomplete session {}; marking as Interrupted",
                                 session.id
                             );
+
+                            let recovery_result = async {
+                                use crate::segmentation::{segment_session, SegmentationConfig};
+                                let readings = db_for_recovery
+                                    .get_context_readings_for_session(&session.id)
+                                    .await?;
+                                let (segments, interruptions) =
+                                    segment_session(readings, &SegmentationConfig::default())?;
+                                db_for_recovery
+                                    .insert_segments_and_interruptions(
+                                        &session.id,
+                                        &segments,
+                                        &interruptions,
+                                    )
+                                    .await?;
+                                let ranges = segments
+                                    .iter()
+                                    .map(|segment| {
+                                        (segment.id.clone(), segment.start_time, segment.end_time)
+                                    })
+                                    .collect::<Vec<_>>();
+                                db_for_recovery
+                                    .update_readings_with_segment_ids(&session.id, &ranges)
+                                    .await?;
+                                Ok::<(), anyhow::Error>(())
+                            }
+                            .await;
+                            if let Err(error) = recovery_result {
+                                log::error!(
+                                    "Failed to rebuild activity blocks for recovered session {}: {}",
+                                    session.id,
+                                    error
+                                );
+                            }
                             db_for_recovery
-                                .mark_session_interrupted(&session.id, now)
+                                .mark_session_interrupted(&session.id, stopped_at)
                                 .await?;
                         }
                         Ok::<(), anyhow::Error>(())
@@ -317,12 +355,12 @@ pub fn run() {
                     tauri::async_runtime::spawn(async move {
                         let mut monitor = agent_monitor::AgentMonitor::new();
                         loop {
-                            let sessions = monitor.poll();
                             let enabled = app_handle_for_agents
                                 .try_state::<AppState>()
                                 .map(|s| s.settings.island_agent_tracking_enabled())
                                 .unwrap_or(true);
                             if enabled {
+                                let sessions = monitor.poll();
                                 macos_bridge::island_update_agent_sessions(&sessions);
                             } else {
                                 macos_bridge::island_update_agent_sessions(&[]);
