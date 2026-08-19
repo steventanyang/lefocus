@@ -54,6 +54,7 @@ pub struct TimerController {
     db: Database,
     app_handle: AppHandle,
     ticker: Arc<Mutex<Option<JoinHandle<()>>>>,
+    lifecycle: Arc<Mutex<()>>,
     tick_interval: Duration,
     heartbeat_every_ticks: u32,
     sensing: Arc<Mutex<SensingController>>,
@@ -71,6 +72,7 @@ impl TimerController {
             db,
             app_handle,
             ticker: Arc::new(Mutex::new(None)),
+            lifecycle: Arc::new(Mutex::new(())),
             tick_interval: Duration::from_secs(1),
             heartbeat_every_ticks: if debug_mode { 1 } else { 10 },
             sensing: Arc::new(Mutex::new(SensingController::new())),
@@ -93,7 +95,13 @@ impl TimerController {
         }
     }
 
-    pub async fn start_timer(&self, target_ms: u64, mode: Option<TimerMode>, label_id: Option<i64>) -> Result<TimerState> {
+    pub async fn start_timer(
+        &self,
+        target_ms: u64,
+        mode: Option<TimerMode>,
+        label_id: Option<i64>,
+    ) -> Result<TimerState> {
+        let _lifecycle = self.lifecycle.lock().await;
         let mode = mode.unwrap_or(TimerMode::Countdown);
 
         // For stopwatch mode, use i64::MAX as target (essentially unlimited, but SQLite-safe)
@@ -145,7 +153,31 @@ impl TimerController {
             self.db.insert_session(&session).await?;
         }
 
-        // Initialize state without the anchor yet
+        // Skip sensing start for Break mode
+        if mode != TimerMode::Break {
+            if let Err(error) = self
+                .sensing
+                .lock()
+                .await
+                .start_sensing(
+                    session_id.clone(),
+                    self.db.clone(),
+                    self.metrics.clone(),
+                    self.app_handle.clone(),
+                )
+                .await
+            {
+                if let Err(cleanup_error) = self.db.delete_session(&session_id).await {
+                    error!(
+                        "Failed to roll back session {} after sensing start failed: {}",
+                        session_id, cleanup_error
+                    );
+                }
+                return Err(error);
+            }
+        }
+
+        // Publish running state only after every fallible startup step succeeds.
         {
             let mut state = self.state.lock().await;
             state.begin_session(
@@ -155,20 +187,6 @@ impl TimerController {
                 started_at,
                 Instant::now(),
             );
-        }
-
-        // Skip sensing start for Break mode
-        if mode != TimerMode::Break {
-            self.sensing
-                .lock()
-                .await
-                .start_sensing(
-                    session_id,
-                    self.db.clone(),
-                    self.metrics.clone(),
-                    self.app_handle.clone(),
-                )
-                .await?;
         }
 
         self.spawn_ticker().await;
@@ -210,6 +228,7 @@ impl TimerController {
     }
 
     pub async fn end_timer(&self) -> Result<SessionInfo> {
+        let _lifecycle = self.lifecycle.lock().await;
         let stopped_at = Utc::now();
 
         let (session_snapshot, is_break_mode) = {
@@ -234,7 +253,6 @@ impl TimerController {
             let active_ms = state.current_active_ms().min(target_ms);
 
             state.stop();
-            state.cancel();
 
             (
                 Session {
@@ -252,19 +270,21 @@ impl TimerController {
             )
         };
 
-        // Skip sensing stop for Break mode (it was never started)
-        if !is_break_mode {
-            self.sensing.lock().await.stop_sensing().await?;
-        }
         self.cancel_ticker().await;
 
-        #[cfg(target_os = "macos")]
-        {
-            island_reset();
+        // Skip sensing stop for Break mode (it was never started)
+        if !is_break_mode {
+            if let Err(error) = self.sensing.lock().await.stop_sensing().await {
+                self.emit_state_changed().await?;
+                return Err(error);
+            }
         }
 
         // Skip DB updates and segmentation for Break mode
         if is_break_mode {
+            self.state.lock().await.cancel();
+            #[cfg(target_os = "macos")]
+            island_reset();
             // Emit state change before returning so frontend knows timer is back to idle
             self.emit_state_changed().await?;
 
@@ -279,7 +299,18 @@ impl TimerController {
             });
         }
 
-        self.db
+        // Generate blocks before completion so a crash can retry through startup
+        // recovery. Block generation is enrichment, though, and must not trap a
+        // valid timer in Stopped when a particular reading set cannot be segmented.
+        if let Err(error) = self.segment_session(&session_snapshot.id).await {
+            error!(
+                "Failed to generate activity blocks for completed session {}: {}",
+                session_snapshot.id, error
+            );
+        }
+
+        if let Err(error) = self
+            .db
             .mark_session_status(
                 &session_snapshot.id,
                 SessionStatus::Completed,
@@ -287,84 +318,15 @@ impl TimerController {
                 session_snapshot.stopped_at,
                 stopped_at,
             )
-            .await?;
-
-        // Run segmentation synchronously so UI can render results immediately
+            .await
         {
-            use crate::segmentation::{segment_session, SegmentationConfig};
-
-            let session_id = session_snapshot.id.clone();
-
-            match self.db.get_context_readings_for_session(&session_id).await {
-                Ok(readings) => match segment_session(readings, &SegmentationConfig::default()) {
-                    Ok((segments, interruptions)) => {
-                        // Insert segments and interruptions atomically in a single transaction
-                        // This prevents race conditions where segments might be deleted before interruptions are inserted
-                        if let Err(e) = self
-                            .db
-                            .insert_segments_and_interruptions(
-                                &session_id,
-                                &segments,
-                                &interruptions,
-                            )
-                            .await
-                        {
-                            error!("Failed to insert segments and interruptions: {}", e);
-                            error!(
-                                "Segments count: {}, Interruptions count: {}",
-                                segments.len(),
-                                interruptions.len()
-                            );
-                            if !segments.is_empty() {
-                                error!(
-                                    "Segment IDs: {:?}",
-                                    segments.iter().map(|s| &s.id).collect::<Vec<_>>()
-                                );
-                            }
-                            if !interruptions.is_empty() {
-                                error!(
-                                    "Interruption segment_ids: {:?}",
-                                    interruptions
-                                        .iter()
-                                        .map(|i| &i.segment_id)
-                                        .collect::<Vec<_>>()
-                                );
-                            }
-                        } else {
-                            // Update context_readings with segment_ids
-                            let segment_tuples: Vec<(
-                                String,
-                                chrono::DateTime<chrono::Utc>,
-                                chrono::DateTime<chrono::Utc>,
-                            )> = segments
-                                .iter()
-                                .map(|s| (s.id.clone(), s.start_time, s.end_time))
-                                .collect();
-                            if let Err(e) = self
-                                .db
-                                .update_readings_with_segment_ids(&session_id, &segment_tuples)
-                                .await
-                            {
-                                error!("Failed to update readings with segment_ids: {}", e);
-                            } else {
-                                info!(
-                                    "Created {} segments and {} interruptions for session {}",
-                                    segments.len(),
-                                    interruptions.len(),
-                                    session_id
-                                );
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        error!("Segmentation failed: {}", e);
-                    }
-                },
-                Err(e) => {
-                    error!("Failed to load readings for segmentation: {}", e);
-                }
-            }
+            self.emit_state_changed().await?;
+            return Err(error);
         }
+
+        self.state.lock().await.cancel();
+        #[cfg(target_os = "macos")]
+        island_reset();
 
         self.emit_state_changed().await?;
 
@@ -375,13 +337,16 @@ impl TimerController {
 
         // Skip session_completed event for Break mode (no results modal)
         if !is_break_mode {
-            self.emit_session_completed(&session_info).await?;
+            if let Err(error) = self.emit_session_completed(&session_info).await {
+                error!("Failed to emit completed session event: {}", error);
+            }
         }
 
         Ok(session_info)
     }
 
     pub async fn cancel_timer(&self) -> Result<()> {
+        let _lifecycle = self.lifecycle.lock().await;
         let cancelled_at = Utc::now();
         let (session_id, active_ms, is_break_mode) = {
             let mut state = self.state.lock().await;
@@ -399,24 +364,24 @@ impl TimerController {
                 .clone()
                 .ok_or_else(|| anyhow!("no active session to cancel"))?;
             let active_ms = state.active_ms;
-            state.cancel();
+            state.stop();
             (session_id, active_ms, is_break)
         };
 
-        // Skip sensing stop for Break mode (it was never started)
-        if !is_break_mode {
-            self.sensing.lock().await.stop_sensing().await?;
-        }
         self.cancel_ticker().await;
 
-        #[cfg(target_os = "macos")]
-        {
-            island_reset();
+        // Skip sensing stop for Break mode (it was never started)
+        if !is_break_mode {
+            if let Err(error) = self.sensing.lock().await.stop_sensing().await {
+                self.emit_state_changed().await?;
+                return Err(error);
+            }
         }
 
         // Skip DB update for Break mode
         if !is_break_mode {
-            self.db
+            if let Err(error) = self
+                .db
                 .mark_session_status(
                     &session_id,
                     SessionStatus::Cancelled,
@@ -424,9 +389,42 @@ impl TimerController {
                     Some(cancelled_at),
                     cancelled_at,
                 )
-                .await?;
+                .await
+            {
+                self.emit_state_changed().await?;
+                return Err(error);
+            }
         }
+        self.state.lock().await.cancel();
+        #[cfg(target_os = "macos")]
+        island_reset();
         self.emit_state_changed().await?;
+        Ok(())
+    }
+
+    async fn segment_session(&self, session_id: &str) -> Result<()> {
+        use crate::segmentation::{segment_session, SegmentationConfig};
+
+        let readings = self.db.get_context_readings_for_session(session_id).await?;
+        let (segments, interruptions) = segment_session(readings, &SegmentationConfig::default())?;
+        self.db
+            .insert_segments_and_interruptions(session_id, &segments, &interruptions)
+            .await?;
+
+        let segment_tuples = segments
+            .iter()
+            .map(|segment| (segment.id.clone(), segment.start_time, segment.end_time))
+            .collect::<Vec<_>>();
+        self.db
+            .update_readings_with_segment_ids(session_id, &segment_tuples)
+            .await?;
+
+        info!(
+            "Created {} segments and {} interruptions for session {}",
+            segments.len(),
+            interruptions.len(),
+            session_id
+        );
         Ok(())
     }
 
@@ -522,13 +520,16 @@ impl TimerController {
 
                         tokio::spawn(async move {
                             let now = Utc::now();
-                            let _ = db_clone
+                            if let Err(error) = db_clone
                                 .update_session_progress(
                                     &session_id_clone,
                                     snapshot_clone.active_ms,
                                     now,
                                 )
-                                .await;
+                                .await
+                            {
+                                error!("Failed to persist timer heartbeat: {}", error);
+                            }
 
                             let _ = app_handle_clone.emit("timer-heartbeat", heartbeat_payload);
                         });

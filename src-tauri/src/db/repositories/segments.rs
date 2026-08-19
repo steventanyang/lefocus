@@ -269,18 +269,35 @@ impl Database {
     /// This prevents race conditions where segments might be deleted before interruptions are inserted.
     pub async fn insert_segments_and_interruptions(
         &self,
-        _session_id: &str,
+        session_id: &str,
         segments: &[Segment],
         interruptions: &[Interruption],
     ) -> Result<()> {
         let segments = segments.to_vec();
         let interruptions = interruptions.to_vec();
+        let session_id = session_id.to_string();
 
         // Execute both inserts in a single transaction
         let bundles_missing_icons = self.execute(move |conn| {
             let tx = conn.transaction()?;
             let app_repo = AppRepository::new(&tx);
             let mut bundles_missing_icons = HashSet::new();
+
+            // Make retries and crash recovery idempotent. Readings must be
+            // detached first because schema v9 could not add a foreign key.
+            tx.execute(
+                "UPDATE context_readings SET segment_id = NULL WHERE session_id = ?1",
+                params![session_id],
+            )?;
+            tx.execute(
+                "DELETE FROM interruptions
+                 WHERE segment_id IN (SELECT id FROM segments WHERE session_id = ?1)",
+                params![session_id],
+            )?;
+            tx.execute(
+                "DELETE FROM segments WHERE session_id = ?1",
+                params![session_id],
+            )?;
 
             // Insert segments first
             for segment in &segments {
@@ -340,10 +357,11 @@ impl Database {
 
             // Insert interruptions (now guaranteed to have valid segment_id references)
             // First, collect all segment IDs to validate interruption references
-            let segment_ids: std::collections::HashSet<String> = segments.iter()
+            let segment_ids: std::collections::HashSet<String> = segments
+                .iter()
                 .map(|s| s.id.clone())
                 .collect();
-            
+
             let mut skipped_count = 0;
             for interruption in &interruptions {
                 // Validate that the segment_id exists in the segments we're inserting
@@ -358,7 +376,7 @@ impl Database {
                     skipped_count += 1;
                     continue;
                 }
-                
+
                 tx.execute(
                     "INSERT INTO interruptions (
                         id,
@@ -378,7 +396,7 @@ impl Database {
                     ],
                 )?;
             }
-            
+
             if skipped_count > 0 {
                 log::warn!("Skipped {} invalid interruption(s) during insertion", skipped_count);
             }

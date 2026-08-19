@@ -126,22 +126,21 @@ impl Database {
         .await
     }
 
-    pub async fn get_incomplete_session(&self) -> Result<Option<Session>> {
+    pub async fn get_incomplete_sessions(&self) -> Result<Vec<Session>> {
         self.execute(|conn| {
             let mut stmt = conn.prepare(
                 "SELECT id, started_at, stopped_at, status, target_ms, active_ms, label_id, created_at, updated_at
                  FROM sessions
                  WHERE status = 'Running'
-                 ORDER BY started_at DESC
-                 LIMIT 1",
+                 ORDER BY started_at ASC",
             )?;
 
             let mut rows = stmt.query([])?;
-            let session = match rows.next()? {
-                Some(row) => Some(row_to_session(&row)?),
-                None => None,
-            };
-            Ok(session)
+            let mut sessions = Vec::new();
+            while let Some(row) = rows.next()? {
+                sessions.push(row_to_session(row)?);
+            }
+            Ok(sessions)
         })
         .await
     }
@@ -260,7 +259,7 @@ impl Database {
     }
 
     /// Delete a session and all its related data (segments, interruptions)
-    /// 
+    ///
     /// Note: `context_readings` are automatically deleted via ON DELETE CASCADE
     /// foreign key constraint (defined in schema_v4.sql). No manual deletion needed.
     pub async fn delete_session(&self, session_id: &str) -> Result<()> {
@@ -283,10 +282,8 @@ impl Database {
 
             // 3. Delete the session itself
             // Note: context_readings are automatically deleted via ON DELETE CASCADE
-            let rows_affected = tx.execute(
-                "DELETE FROM sessions WHERE id = ?1",
-                params![session_id],
-            )?;
+            let rows_affected =
+                tx.execute("DELETE FROM sessions WHERE id = ?1", params![session_id])?;
 
             if rows_affected == 0 {
                 // Don't fail if session is already gone, just commit
