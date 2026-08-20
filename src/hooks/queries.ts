@@ -1,5 +1,5 @@
 /**
- * TanStack Query hooks for LeFocus
+ * TanStack Query hooks for Pomodoro
  *
  * Query Key Structure:
  * - ['sessions'] - List of all sessions

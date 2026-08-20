@@ -65,7 +65,7 @@ function AudioPlayer() {
 
   return (
     <main className="container">
-      <h1>LeFocus Audio MVP</h1>
+      <h1>Pomodoro Audio MVP</h1>
 
       <div className="controls">
         <div className="control-group">

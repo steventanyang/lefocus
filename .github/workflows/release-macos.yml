@@ -102,7 +102,7 @@ jobs:
         run: |
           set -euo pipefail
           key_check_file="$RUNNER_TEMP/lefocus-updater-key-check.txt"
-          printf 'lefocus updater key check' > "$key_check_file"
+          printf 'pomodoro updater key check' > "$key_check_file"
           if [[ -n "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" ]]; then
             bun run tauri signer sign -f "$TAURI_SIGNING_PRIVATE_KEY" -p "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "$key_check_file"
           else
@@ -132,9 +132,9 @@ jobs:
           APP_VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
-          dmg="src-tauri/target/release/bundle/dmg/lefocus_${APP_VERSION}_aarch64.dmg"
-          stable_dmg="src-tauri/target/release/bundle/dmg/lefocus_aarch64.dmg"
-          updater="src-tauri/target/release/bundle/macos/lefocus.app.tar.gz"
+          dmg="src-tauri/target/release/bundle/dmg/pomodoro_${APP_VERSION}_aarch64.dmg"
+          stable_dmg="src-tauri/target/release/bundle/dmg/pomodoro_aarch64.dmg"
+          updater="src-tauri/target/release/bundle/macos/pomodoro.app.tar.gz"
           latest="src-tauri/target/release/bundle/latest.json"
           cp "$dmg" "$stable_dmg"
 
@@ -142,6 +142,6 @@ jobs:
             "$dmg" "$stable_dmg" "$updater" "$latest" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "LeFocus ${APP_VERSION}" \
+            --title "Pomodoro ${APP_VERSION}" \
             --generate-notes \
             --draft

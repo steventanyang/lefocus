@@ -56,7 +56,7 @@ export function DownloadBar({ macosDmgUrl, githubRepoUrl }: DownloadBarProps) {
           href={macosDmgUrl}
           className={`${btnBase} ${downloadBtnIcon} bg-black text-white transition-colors hover:bg-white hover:text-black`}
           rel="noopener noreferrer"
-          aria-label="Download LeFocus for macOS (Apple silicon)"
+          aria-label="Download Pomodoro for macOS (Apple silicon)"
         >
           <AppleMark />
           Download
@@ -78,7 +78,7 @@ export function DownloadBar({ macosDmgUrl, githubRepoUrl }: DownloadBarProps) {
         className={`${btnBase} h-11 w-11 shrink-0 bg-white text-black transition-colors hover:bg-black hover:text-white`}
         rel="noopener noreferrer"
         target="_blank"
-        aria-label="LeFocus on GitHub"
+        aria-label="Pomodoro on GitHub"
       >
         <GitHubMark className="h-5 w-5" />
       </a>

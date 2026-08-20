@@ -4,13 +4,13 @@ set -euo pipefail
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-APP_PATH="$PROJECT_ROOT/src-tauri/target/release/bundle/macos/lefocus.app"
+APP_PATH="$PROJECT_ROOT/src-tauri/target/release/bundle/macos/Pomodoro.app"
 
 # Extract version from tauri.conf.json so paths stay correct across releases
 APP_VERSION=$(python3 -c "import json; print(json.load(open('$PROJECT_ROOT/src-tauri/tauri.conf.json'))['version'])")
 echo "Detected app version: $APP_VERSION"
 
-DMG_PATH="$PROJECT_ROOT/src-tauri/target/release/bundle/dmg/lefocus_${APP_VERSION}_aarch64.dmg"
+DMG_PATH="$PROJECT_ROOT/src-tauri/target/release/bundle/dmg/pomodoro_${APP_VERSION}_aarch64.dmg"
 # Original location where Tauri puts the sidecar/resource
 RESOURCE_DYLIB_PATH="$APP_PATH/Contents/Resources/resources/libMacOSSensing.dylib"
 ADAPTER_RESOURCE_DYLIB_PATH="$APP_PATH/Contents/Resources/resources/libMediaRemoteAdapter.dylib"
@@ -112,20 +112,20 @@ spctl --assess --type execute --verbose "$APP_PATH" || echo "⚠️  Note: spctl
 echo "----------------------------------------------------------------"
 echo "Step 4: Repack updater bundle + sign (must match Developer ID app above)"
 echo "----------------------------------------------------------------"
-# tauri build emits lefocus.app.tar.gz from the unsigned bundle; we replace it with an
+# Tauri emits an updater archive from the unsigned bundle; replace it with an
 # archive of this signed .app so in-app updates get the same identity as the DMG (TCC).
-UPDATER_BUNDLE="$PROJECT_ROOT/src-tauri/target/release/bundle/macos/lefocus.app.tar.gz"
+UPDATER_BUNDLE="$PROJECT_ROOT/src-tauri/target/release/bundle/macos/pomodoro.app.tar.gz"
 UPDATER_SIG="${UPDATER_BUNDLE}.sig"
 TAURI_KEY="${TAURI_SIGNING_PRIVATE_KEY:-${TAURI_PRIVATE_KEY:-}}"
 TAURI_KEY_PASS="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-${TAURI_PRIVATE_KEY_PASSWORD:-}}"
 if [ -z "$TAURI_KEY" ]; then
-    echo "Error: Set TAURI_SIGNING_PRIVATE_KEY (or TAURI_PRIVATE_KEY) to minisign lefocus.app.tar.gz."
+    echo "Error: Set TAURI_SIGNING_PRIVATE_KEY (or TAURI_PRIVATE_KEY) to minisign pomodoro.app.tar.gz."
     echo "Use the same key as tauri build (matches pubkey in tauri.conf.json)."
     exit 1
 fi
 echo "Creating $UPDATER_BUNDLE from signed $APP_PATH ..."
-# COPYFILE_DISABLE=1: without this, BSD tar adds AppleDouble files (._lefocus.app) and
-# the Tauri updater fails with: failed to unpack ._lefocus.app into ...
+# COPYFILE_DISABLE=1: without this, BSD tar adds AppleDouble files (._Pomodoro.app)
+# that the Tauri updater cannot unpack correctly.
 COPYFILE_DISABLE=1 tar -czf "$UPDATER_BUNDLE" -C "$(dirname "$APP_PATH")" "$(basename "$APP_PATH")"
 rm -f "$UPDATER_SIG"
 if [ -f "$TAURI_KEY" ]; then
@@ -145,12 +145,12 @@ echo "Step 5: Rebuild the DMG (Required to include the new signature)"
 echo "----------------------------------------------------------------"
 # Remove old DMG
 rm -f "$DMG_PATH"
-# Stage only the .app — bundle/macos/ also holds lefocus.app.tar.gz + .sig for the
-# updater; packing that whole directory would show those files in the DMG window.
+# Stage only the .app — bundle/macos/ also holds the updater archive and signature.
+# Packing that whole directory would show those files in the DMG window.
 DMG_CONTENTS_DIR="$PROJECT_ROOT/src-tauri/target/release/bundle/dmg_contents"
 rm -rf "$DMG_CONTENTS_DIR"
 mkdir -p "$DMG_CONTENTS_DIR"
-ditto "$APP_PATH" "$DMG_CONTENTS_DIR/lefocus.app"
+ditto "$APP_PATH" "$DMG_CONTENTS_DIR/Pomodoro.app"
 
 # Create new DMG using the bundled script
 echo "Creating DMG at $DMG_PATH using bundle_dmg.sh..."
@@ -158,12 +158,12 @@ BUNDLE_DMG_SCRIPT="$PROJECT_ROOT/src-tauri/target/release/bundle/dmg/bundle_dmg.
 ICON_PATH="$PROJECT_ROOT/src-tauri/target/release/bundle/dmg/icon.icns"
 
 "$BUNDLE_DMG_SCRIPT" \
-  --volname "lefocus" \
+  --volname "Pomodoro" \
   --volicon "$ICON_PATH" \
   --window-size 600 400 \
   --icon-size 100 \
-  --icon "lefocus.app" 175 190 \
-  --hide-extension "lefocus.app" \
+  --icon "Pomodoro.app" 175 190 \
+  --hide-extension "Pomodoro.app" \
   --app-drop-link 425 190 \
   "$DMG_PATH" \
   "$DMG_CONTENTS_DIR"
@@ -291,7 +291,7 @@ if [ ! -f "$UPDATER_SIG" ]; then
 fi
 
 SIGNATURE=$(cat "$UPDATER_SIG")
-DOWNLOAD_URL="https://github.com/${RELEASE_REPOSITORY}/releases/download/${RELEASE_TAG}/lefocus.app.tar.gz"
+DOWNLOAD_URL="https://github.com/${RELEASE_REPOSITORY}/releases/download/${RELEASE_TAG}/pomodoro.app.tar.gz"
 
 cat > "$LATEST_JSON" <<EOF
 {

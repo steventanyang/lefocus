@@ -9,7 +9,7 @@ const ibmPlexSans = IBM_Plex_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "LeFocus",
+  title: "Pomodoro",
   description: "Focus tooling for macOS.",
 };
 

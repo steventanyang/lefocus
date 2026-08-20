@@ -1,4 +1,4 @@
-# lefocus
+# Pomodoro
 
 minimalist pomodoro tracker
 

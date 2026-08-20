@@ -3,6 +3,6 @@
 <plist version="1.0">
 <dict>
     <key>NSAppleEventsUsageDescription</key>
-    <string>LeFocus needs to control Apple Music to show playback status.</string>
+    <string>Pomodoro needs to control Apple Music to show playback status.</string>
 </dict>
 </plist>

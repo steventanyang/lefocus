@@ -219,7 +219,7 @@ fn restart_app_instance(app_handle: tauri::AppHandle) -> Result<(), String> {
 
     Command::new(&current_exe)
         .spawn()
-        .map_err(|e| format!("Failed to relaunch LeFocus: {e}"))?;
+        .map_err(|e| format!("Failed to relaunch Pomodoro: {e}"))?;
 
     app_handle.exit(0);
     Ok(())
@@ -249,7 +249,7 @@ pub fn run() {
         .filter_level(log::LevelFilter::Info)
         .init();
 
-    log::info!("LeFocus starting up...");
+    log::info!("Pomodoro starting up...");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_process::init())

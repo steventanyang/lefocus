@@ -1,7 +1,7 @@
 import { DesktopPlayground } from "@/components/playground/DesktopPlayground";
 
 const DEFAULT_MACOS_DMG_URL =
-  "https://github.com/steventanyang/lefocus/releases/latest/download/lefocus_aarch64.dmg";
+  "https://github.com/steventanyang/lefocus/releases/latest/download/pomodoro_aarch64.dmg";
 
 const macosDmgUrl =
   process.env.NEXT_PUBLIC_MACOS_DMG_URL ?? DEFAULT_MACOS_DMG_URL;
@@ -52,7 +52,7 @@ function LaunchVideo() {
         loop
         playsInline
         className="block w-full"
-        aria-label="LeFocus product video"
+        aria-label="Pomodoro product video"
       />
     </div>
   );
@@ -67,7 +67,7 @@ export default function Home() {
           href={macosDmgUrl}
           className="inline-flex h-11 items-center justify-center gap-2.5 border border-black bg-black px-4 text-base font-medium tracking-tight text-white transition-colors hover:bg-white hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 focus-visible:ring-offset-white [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0"
           rel="noopener noreferrer"
-          aria-label="Download LeFocus for macOS (Apple silicon)"
+          aria-label="Download Pomodoro for macOS (Apple silicon)"
         >
           <AppleMark />
           Download
@@ -77,7 +77,7 @@ export default function Home() {
           className="inline-flex h-11 w-11 shrink-0 items-center justify-center border border-black bg-white text-black transition-colors hover:bg-black hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 focus-visible:ring-offset-white"
           rel="noopener noreferrer"
           target="_blank"
-          aria-label="LeFocus on GitHub"
+          aria-label="Pomodoro on GitHub"
         >
           <GitHubMark className="h-5 w-5" />
         </a>

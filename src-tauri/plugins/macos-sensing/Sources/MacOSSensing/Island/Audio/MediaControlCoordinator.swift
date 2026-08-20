@@ -165,7 +165,7 @@ enum AppleScriptRunner {
         }
     }
 
-    /// Execute AppleScript out of process so a compiler/runtime fault cannot crash LeFocus.
+    /// Execute AppleScript out of process so a compiler/runtime fault cannot crash Pomodoro.
     /// The serial queue also guarantees a timed-out poll cannot overlap the next invocation.
     private static func run(
         _ source: String,

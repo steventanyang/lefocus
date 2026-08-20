@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "lefocus",
+  "productName": "Pomodoro",
   "version": "1.2.0",
   "identifier": "com.stevenyang.lefocus",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "lefocus",
+        "title": "Pomodoro",
         "width": 800,
         "height": 600,
         "titleBarStyle": "Transparent",
